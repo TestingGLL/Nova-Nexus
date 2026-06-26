@@ -1,0 +1,159 @@
+.sidebar {
+  height: 100vh;
+  background: var(--bg-sidebar);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-right: 1px solid var(--border);
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  transition: width var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: visible;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.sidebar.open { width: var(--sidebar-width); }
+.sidebar.closed { width: 60px; }
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 16px;
+  min-height: 64px;
+}
+.sidebar.closed .sidebar-header { justify-content: center; padding: 20px 0; }
+
+.logo { display: flex; align-items: center; gap: 0; user-select: none; }
+.logo-text { font-size: 17px; font-weight: 700; letter-spacing: 0.5px; white-space: nowrap; text-transform: uppercase; }
+.logo-nova { color: var(--text-primary); }
+.logo-nexus { color: var(--accent); font-weight: 300; margin-left: 6px; }
+
+.toggle-btn {
+  background: none; border: none; color: var(--text-secondary); cursor: pointer;
+  padding: 6px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+}
+.toggle-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.sidebar-nav {
+  flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 1px; overflow-y: auto;
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: none; background: none;
+  color: var(--text-secondary); cursor: pointer; border-radius: 10px; font-size: 13.5px; font-weight: 450;
+  letter-spacing: 0.1px; transition: all 0.2s; white-space: nowrap; width: 100%; text-align: left;
+}
+.sidebar.closed .nav-item { justify-content: center; padding: 10px; }
+.nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-item.active { background: var(--accent-soft); color: var(--accent); }
+.nav-item.active .nav-icon { color: var(--accent); }
+.nav-item[draggable] { cursor: grab; }
+.nav-item.nav-drag-over { box-shadow: inset 0 2px 0 var(--accent); background: var(--bg-hover); }
+
+/* Bottom section */
+.sidebar-bottom {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.internet-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.internet-status.online { color: #22c55e; }
+.internet-status.offline { color: #ef4444; }
+.sidebar.closed .internet-status { justify-content: center; padding: 6px; }
+.sidebar.closed .internet-status span { display: none; }
+
+.profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  background: var(--bg-hover);
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: all 0.2s;
+  width: 100%;
+}
+.profile-btn:hover { background: var(--bg-active); }
+.sidebar.closed .profile-btn { justify-content: center; padding: 8px; }
+
+.profile-avatar-small {
+  width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
+}
+.profile-info-mini { display: flex; flex-direction: column; overflow: hidden; }
+.profile-name-mini { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Profile panel */
+.profile-panel {
+  position: absolute;
+  bottom: 70px;
+  left: 12px;
+  width: 260px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  padding: 20px;
+  z-index: 100;
+}
+
+.profile-panel-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+}
+.profile-panel-header h3 { font-size: 16px; font-weight: 600; }
+.profile-panel-close {
+  width: 24px; height: 24px; border: none; background: var(--bg-hover); color: var(--text-secondary);
+  border-radius: 6px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;
+}
+.profile-panel-close:hover { background: var(--bg-active); }
+
+.profile-avatar-section { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 16px; }
+.profile-avatar-big { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); }
+.profile-avatar-placeholder { color: var(--text-secondary); }
+
+.avatar-upload-btn {
+  font-size: 11px; color: var(--accent); cursor: pointer; text-decoration: underline;
+}
+
+.profile-edit-fields { display: flex; flex-direction: column; gap: 12px; }
+.profile-edit-fields label { display: flex; flex-direction: column; gap: 4px; }
+.profile-edit-fields span { font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+.profile-edit-fields input {
+  padding: 8px 10px; border: 1px solid var(--border); background: var(--bg-primary);
+  border-radius: 8px; font-size: 13px; color: var(--text-primary); font-family: inherit;
+}
+.profile-edit-fields input:focus { outline: none; border-color: var(--accent); }
+
+.profile-edit-actions { display: flex; gap: 8px; margin-top: 4px; }
+.profile-save-btn {
+  flex: 1; padding: 8px; background: var(--accent); color: white; border: none;
+  border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.profile-save-btn:hover { opacity: 0.9; }
+.profile-cancel-btn {
+  padding: 8px 12px; background: var(--bg-hover); color: var(--text-secondary); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 12px; cursor: pointer;
+}
+
+.profile-view { text-align: center; }
+.profile-view-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.profile-view-email { font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; }
+.profile-edit-btn {
+  padding: 7px 18px; border: 1px solid var(--border); background: none; color: var(--text-primary);
+  border-radius: 8px; font-size: 12px; cursor: pointer; transition: all 0.2s;
+}
+.profile-edit-btn:hover { border-color: var(--accent); color: var(--accent); }
