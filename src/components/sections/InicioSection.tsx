@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell } from 'lucide-react'
+import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy } from 'lucide-react'
 import { loadNotifications } from './AlertasSection'
+import { sfx } from '../../lib/sounds'
 import './InicioSection.css'
 
 // ============ ANIMATED CLOCK ============
@@ -16,11 +17,25 @@ function AnimatedClock() {
   const [showSettings, setShowSettings] = useState(false)
   const [font, setFont] = useState<string>(() => { try { return localStorage.getItem('nn-clock-font') || 'Segoe UI' } catch { return 'Segoe UI' } })
   const [fonts, setFonts] = useState<string[]>(['Segoe UI', 'Arial', 'Georgia', 'Courier New', 'Impact', 'Trebuchet MS', 'Verdana', 'Consolas', 'Tahoma', 'Calibri'])
+  const [showWeather, setShowWeather] = useState<boolean>(() => { try { return localStorage.getItem('nn-clock-weather') === '1' } catch { return false } })
+  const [clockWeather, setClockWeather] = useState<{ temp: number; desc: string } | null>(null)
   const particlesRef = useRef<{ x: number; y: number; vx: number; vy: number; r: number; o: number }[]>([])
   const animRef = useRef<number>(0)
 
   const saveColors = (c: typeof colors) => { setColors(c); localStorage.setItem('nn-clock-colors', JSON.stringify(c)) }
   const saveFont = (f: string) => { setFont(f); localStorage.setItem('nn-clock-font', f) }
+  const toggleWeather = () => { const v = !showWeather; setShowWeather(v); localStorage.setItem('nn-clock-weather', v ? '1' : '0') }
+
+  useEffect(() => {
+    if (!showWeather) return
+    const fetchW = async () => {
+      try {
+        const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-38.7196&longitude=-62.2724&current=temperature_2m,weather_code&timezone=America%2FArgentina%2FBuenos_Aires')
+        const d = await r.json(); setClockWeather({ temp: Math.round(d.current.temperature_2m), desc: weatherCodeDesc(d.current.weather_code) })
+      } catch {}
+    }
+    fetchW(); const id = setInterval(fetchW, 600_000); return () => clearInterval(id)
+  }, [showWeather])
 
   useEffect(() => {
     if ('queryLocalFonts' in window) {
@@ -43,8 +58,12 @@ function AnimatedClock() {
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return
     const ctx = canvas.getContext('2d'); if (!ctx) return
-    const resize = () => { canvas.width = canvas.offsetWidth * 2; canvas.height = canvas.offsetHeight * 2 }
+    const resize = () => { if (canvas.offsetWidth > 0) { canvas.width = canvas.offsetWidth * 2; canvas.height = canvas.offsetHeight * 2 } }
     resize()
+    // The clock can mount while hidden/0-width (login→app transition), leaving the
+    // canvas 0×0 and blank. A ResizeObserver repaints once it gets real dimensions.
+    const ro = new ResizeObserver(resize)
+    ro.observe(canvas)
     if (particlesRef.current.length === 0) {
       for (let i = 0; i < 40; i++) {
         particlesRef.current.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, vx: (Math.random() - 0.5) * 0.8, vy: (Math.random() - 0.5) * 0.8, r: Math.random() * 2 + 0.5, o: Math.random() * 0.4 + 0.1 })
@@ -66,12 +85,21 @@ function AnimatedClock() {
     }
     draw()
     window.addEventListener('resize', resize)
-    return () => { cancelAnimationFrame(animRef.current); window.removeEventListener('resize', resize) }
+    return () => { cancelAnimationFrame(animRef.current); window.removeEventListener('resize', resize); ro.disconnect() }
   }, [colors])
 
   return (
-    <div className="animated-clock">
+    <div className={`animated-clock ${showWeather ? 'with-weather' : ''}`}>
       <canvas ref={canvasRef} className="clock-canvas" />
+      {showWeather && (
+        <div className="clock-weather" style={{ color: colors.text }}>
+          <CloudSun size={26} />
+          {clockWeather ? (
+            <><span className="clock-weather-temp">{clockWeather.temp}°</span><span className="clock-weather-desc">{clockWeather.desc}</span></>
+          ) : <span className="clock-weather-desc">…</span>}
+          <span className="clock-weather-city">Bahía Blanca</span>
+        </div>
+      )}
       <div className="clock-content" style={{ color: colors.text }}>
         <div className="clock-time-animated" style={{ fontFamily: `"${font}", sans-serif` }}>{time}</div>
         <div className="clock-date-animated">{date}</div>
@@ -83,6 +111,7 @@ function AnimatedClock() {
           <label><span>Fondo 2</span><input type="color" value={colors.bg2} onChange={e => saveColors({ ...colors, bg2: e.target.value })} /></label>
           <label><span>Texto</span><input type="color" value={colors.text} onChange={e => saveColors({ ...colors, text: e.target.value })} /></label>
           <label className="clock-font-label"><span>Fuente</span><select value={font} onChange={e => saveFont(e.target.value)}>{fonts.map(f => <option key={f} value={f}>{f}</option>)}</select></label>
+          <label className="clock-weather-toggle"><span>Clima</span><button onClick={toggleWeather} className={showWeather ? 'on' : ''}>{showWeather ? 'Mostrar' : 'Oculto'}</button></label>
         </div>
       )}
     </div>
@@ -123,7 +152,7 @@ function QuotePanel() {
   const gradient = quoteGradients[idx % quoteGradients.length]
   return (
     <div className="quote-panel" style={{ background: gradient }}>
-      <Sparkles size={18} className="quote-icon" />
+      <Sparkles size={22} className="quote-icon" />
       <p className="quote-text">{quote}</p>
     </div>
   )
@@ -275,6 +304,22 @@ function TimerWidget() {
   )
 }
 
+// WMO weather codes (Open-Meteo) → Spanish descriptions.
+function weatherCodeDesc(code: number): string {
+  if (code === 0) return 'Despejado'
+  if (code === 1) return 'Mayormente despejado'
+  if (code === 2) return 'Parcialmente nublado'
+  if (code === 3) return 'Nublado'
+  if (code === 45 || code === 48) return 'Niebla'
+  if (code >= 51 && code <= 57) return 'Llovizna'
+  if (code >= 61 && code <= 67) return 'Lluvia'
+  if (code >= 71 && code <= 77) return 'Nieve'
+  if (code >= 80 && code <= 82) return 'Chaparrones'
+  if (code >= 85 && code <= 86) return 'Nevadas'
+  if (code >= 95) return 'Tormenta'
+  return 'Despejado'
+}
+
 type WeatherKind = 'rain' | 'snow' | 'sun' | 'clouds' | 'storm'
 function weatherKind(desc: string): WeatherKind {
   const d = desc.toLowerCase()
@@ -297,13 +342,31 @@ function WeatherWidget() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [lastUpdate, setLastUpdate] = useState('')
-  const fetchWeather = useCallback(async () => { try { const res = await fetch('https://wttr.in/Bahia+Blanca?format=j1'); if (!res.ok) throw new Error(); const data = await res.json(); const c = data.current_condition[0]; setWeather({ temp: c.temp_C, feelsLike: c.FeelsLikeC, desc: c.lang_es?.[0]?.value || c.weatherDesc[0].value, humidity: c.humidity, wind: c.windspeedKmph }); setLastUpdate(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })); setError(false) } catch { setError(true) }; setLoading(false) }, [])
+  const fetchWeather = useCallback(async () => {
+    try {
+      // Open-Meteo: free, no key, accurate. Bahía Blanca coordinates.
+      const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-38.7196&longitude=-62.2724&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code&timezone=America%2FArgentina%2FBuenos_Aires')
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      const c = data.current
+      setWeather({
+        temp: Math.round(c.temperature_2m),
+        feelsLike: Math.round(c.apparent_temperature),
+        desc: weatherCodeDesc(c.weather_code),
+        humidity: c.relative_humidity_2m,
+        wind: Math.round(c.wind_speed_10m),
+      })
+      setLastUpdate(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }))
+      setError(false)
+    } catch { setError(true) }
+    setLoading(false)
+  }, [])
   useEffect(() => { fetchWeather(); const id = setInterval(fetchWeather, 600_000); return () => clearInterval(id) }, [fetchWeather])
   const kind = weather ? weatherKind(weather.desc) : 'sun'
   return (<div className={`card weather-card weather-${kind}`}>{weather && !loading && <WeatherDecoration kind={kind} />}<div className="card-title"><CloudSun size={16} /> Clima — Bahía Blanca</div>{loading && <p className="weather-loading">Cargando...</p>}{error && !loading && <div className="weather-error"><p>Error.</p><button className="timer-btn" onClick={fetchWeather}><RotateCcw size={14} /></button></div>}{weather && !loading && <div className="weather-data"><div className="weather-main"><span className="weather-temp">{weather.temp}°C</span><span className="weather-desc">{weather.desc}</span></div><div className="weather-details"><div className="weather-detail"><Thermometer size={13} /> Sensación {weather.feelsLike}°C</div><div className="weather-detail"><Droplets size={13} /> Humedad {weather.humidity}%</div><div className="weather-detail"><Wind size={13} /> Viento {weather.wind} km/h</div></div><span className="weather-updated">Act: {lastUpdate}</span></div>}</div>)
 }
 
-interface CalEvent { id: string; date: string; title: string; color: string; type?: string; time?: string; anticipation?: number }
+interface CalEvent { id: string; date: string; title: string; color: string; type?: string; time?: string; anticipation?: number; repeat?: 'none' | 'weekly' | 'biweekly' | 'monthly' }
 const calEventTypes: Record<string, string> = { evento: '#3b82f6', recordatorio: '#f97316', cita: '#8b5cf6', pago: '#ef4444', cumple: '#ec4899' }
 
 function CalendarWidget() {
@@ -314,13 +377,14 @@ function CalendarWidget() {
   const [newType, setNewType] = useState('evento')
   const [newTime, setNewTime] = useState('')
   const [newAntic, setNewAntic] = useState(30)
+  const [newRepeat, setNewRepeat] = useState<CalEvent['repeat']>('none')
   const [showOpts, setShowOpts] = useState(false)
   const save = (evts: CalEvent[]) => { setEvents(evts); localStorage.setItem('nn-cal-events', JSON.stringify(evts)) }
   const year = current.getFullYear(), month = current.getMonth()
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const today = new Date().toISOString().split('T')[0]
-  const addEvent = () => { if (!newTitle.trim() || !selectedDate) return; save([...events, { id: 'evt-' + Date.now(), date: selectedDate, title: newTitle.trim(), color: calEventTypes[newType], type: newType, time: newTime || undefined, anticipation: newAntic }]); setNewTitle(''); setNewTime(''); setShowOpts(false) }
+  const addEvent = () => { if (!newTitle.trim() || !selectedDate) return; save([...events, { id: 'evt-' + Date.now(), date: selectedDate, title: newTitle.trim(), color: calEventTypes[newType], type: newType, time: newTime || undefined, anticipation: newAntic, repeat: newRepeat === 'none' ? undefined : newRepeat }]); setNewTitle(''); setNewTime(''); setNewRepeat('none'); setShowOpts(false) }
   const removeEvent = (id: string) => save(events.filter(e => e.id !== id))
   const dateKey = (d: number) => `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
   const eventsOnDate = (d: string) => events.filter(e => e.date === d)
@@ -333,7 +397,7 @@ function CalendarWidget() {
         {Array.from({ length: firstDay }, (_, i) => <span key={'e' + i} />)}
         {Array.from({ length: daysInMonth }, (_, i) => { const d = i + 1, dk = dateKey(d), hasEvents = eventsOnDate(dk).length > 0, isToday = dk === today, isSelected = dk === selectedDate; return (<button key={d} className={`cal-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${hasEvents ? 'has-event' : ''}`} onClick={() => setSelectedDate(dk === selectedDate ? null : dk)}>{d}</button>) })}
       </div>
-      {selectedDate && (<div className="cal-events"><div className="cal-events-header">{new Date(selectedDate + 'T12:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>{eventsOnDate(selectedDate).map(e => (<div key={e.id} className="cal-event-item" style={{ background: (e.color || '#3b82f6') + '14' }}><span className="cal-event-dot" style={{ background: e.color || '#3b82f6' }} /><span className="cal-event-title">{e.title}</span>{e.time && <span className="cal-event-time">{e.time}</span>}<button onClick={() => removeEvent(e.id)}><Trash2 size={12} /></button></div>))}<div className="cal-add-event"><input placeholder="Nuevo evento..." value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && addEvent()} /><button className="cal-opts-btn" onClick={() => setShowOpts(!showOpts)}><ChevronDown size={13} /></button><button onClick={addEvent} disabled={!newTitle.trim()}><Plus size={14} /></button></div>{showOpts && (<div className="cal-event-opts"><label>Tipo<select value={newType} onChange={e => setNewType(e.target.value)}>{Object.keys(calEventTypes).map(t => <option key={t} value={t}>{t}</option>)}</select></label><label>Hora<input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} /></label><label>Aviso<select value={newAntic} onChange={e => setNewAntic(Number(e.target.value))}><option value={5}>5 min</option><option value={10}>10 min</option><option value={30}>30 min</option><option value={60}>1 h</option><option value={1440}>1 día</option></select></label></div>)}</div>)}
+      {selectedDate && (<div className="cal-events"><div className="cal-events-header">{new Date(selectedDate + 'T12:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>{eventsOnDate(selectedDate).map(e => (<div key={e.id} className="cal-event-item" style={{ background: (e.color || '#3b82f6') + '14' }}><span className="cal-event-dot" style={{ background: e.color || '#3b82f6' }} /><span className="cal-event-title">{e.title}</span>{e.time && <span className="cal-event-time">{e.time}</span>}<button onClick={() => removeEvent(e.id)}><Trash2 size={12} /></button></div>))}<div className="cal-add-event"><input placeholder="Nuevo evento..." value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && addEvent()} /><button className="cal-opts-btn" onClick={() => setShowOpts(!showOpts)}><ChevronDown size={13} /></button><button onClick={addEvent} disabled={!newTitle.trim()}><Plus size={14} /></button></div>{showOpts && (<div className="cal-event-opts"><label>Tipo<select value={newType} onChange={e => setNewType(e.target.value)}>{Object.keys(calEventTypes).map(t => <option key={t} value={t}>{t}</option>)}</select></label><label>Hora<input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} /></label><label>Aviso<select value={newAntic} onChange={e => setNewAntic(Number(e.target.value))}><option value={5}>5 min</option><option value={10}>10 min</option><option value={30}>30 min</option><option value={60}>1 h</option><option value={1440}>1 día</option></select></label><label>Repetir<select value={newRepeat} onChange={e => setNewRepeat(e.target.value as CalEvent['repeat'])}><option value="none">No repetir</option><option value="weekly">Semanal</option><option value="biweekly">Quincenal</option><option value="monthly">Mensual</option></select></label></div>)}</div>)}
     </div>
   )
 }
@@ -352,20 +416,31 @@ function DayRoutineWidget() {
   const dow = new Date().getDay()
   const dayName = FULL_WEEKDAYS[dow]
   let routine: any = null
+  let weekEx: any[] = []
+  const activeWeek = (() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })()
   try {
     const plan = JSON.parse(localStorage.getItem('nn-week-routine') || '{}')
     const routines = JSON.parse(localStorage.getItem('nn-exercise-routines') || 'null')
     const rid = plan[WEEK_KEYS[dow]]
     if (rid && Array.isArray(routines)) routine = routines.find((r: any) => r.id === rid)
+    if (routine) weekEx = (routine.weeks && routine.weeks.length === 4 ? routine.weeks[activeWeek] : routine.exercises) || []
   } catch {}
+  const openRoutine = () => {
+    navTo('personal')
+    setTimeout(() => {
+      const saludTab = document.querySelector('[data-tab="salud"]') as HTMLButtonElement
+      if (saludTab) saludTab.click()
+    }, 100)
+  }
+
   return (
-    <div className="card day-routine-card" onClick={() => navTo('personal')}>
+    <div className="card day-routine-card" onClick={openRoutine}>
       <div className="card-title"><Dumbbell size={16} /> Rutina de hoy</div>
       <div className="day-routine-day">{dayName}</div>
       {routine ? (
         <div className="day-routine-info" style={{ background: `linear-gradient(135deg, ${routine.color}, ${routine.color}aa)` }}>
           <span className="day-routine-emoji">{routine.emoji}</span>
-          <div><span className="day-routine-name">{routine.name}</span><span className="day-routine-count">{(routine.exercises || []).length} ejercicios</span></div>
+          <div><span className="day-routine-name">{routine.name}</span><span className="day-routine-count">{weekEx.length} ejercicios · Semana {activeWeek + 1}</span></div>
         </div>
       ) : (
         <div className="day-routine-empty">Día de descanso · asigná una rutina en Salud</div>
@@ -405,6 +480,168 @@ function NextAlertsWidget() {
   )
 }
 
+// ============ MUNDIAL 2026 ============
+
+interface MundialTeam { name: string; abbr: string; score: number; logo: string }
+interface MundialMatch { id: string; home: MundialTeam; away: MundialTeam; state: string; clock: string; detail: string; startTime: string }
+
+function MundialWidget() {
+  const [matches, setMatches] = useState<MundialMatch[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [goalFlash, setGoalFlash] = useState<string | null>(null)
+  const prevScores = useRef<Record<string, { home: number; away: number }>>({})
+  const mountedRef = useRef(true)
+
+  const triggerGoal = useCallback((teamName: string, match: MundialMatch) => {
+    sfx.goal()
+    setGoalFlash(match.id)
+    setTimeout(() => setGoalFlash(null), 3000)
+    window.electronAPI?.showNotification(
+      '⚽ ¡GOOOL!',
+      `${teamName} marca! ${match.home.abbr} ${match.home.score} - ${match.away.score} ${match.away.abbr} (${match.clock})`
+    )
+  }, [])
+
+  const fetchScores = useCallback(async () => {
+    try {
+      let result: { success: boolean; matches?: MundialMatch[]; message?: string }
+      if (window.electronAPI?.getMundialScores) {
+        result = await window.electronAPI.getMundialScores()
+      } else {
+        const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard')
+        const json = await res.json()
+        const events = json.events || []
+        result = { success: true, matches: events.map((ev: any) => {
+          const comp = ev.competitions?.[0] || {}
+          const comps = comp.competitors || []
+          const h = comps.find((c: any) => c.homeAway === 'home') || comps[0] || {}
+          const a = comps.find((c: any) => c.homeAway === 'away') || comps[1] || {}
+          return {
+            id: ev.id, home: { name: h.team?.displayName || '?', abbr: h.team?.abbreviation || '?', score: parseInt(h.score || '0'), logo: h.team?.logo || '' },
+            away: { name: a.team?.displayName || '?', abbr: a.team?.abbreviation || '?', score: parseInt(a.score || '0'), logo: a.team?.logo || '' },
+            state: ev.status?.type?.state || 'pre', clock: ev.status?.displayClock || '',
+            detail: ev.status?.type?.detail || ev.status?.type?.description || '', startTime: ev.date || '',
+          }
+        })}
+      }
+      if (!mountedRef.current) return
+      if (!result.success) { setError(true); setLoading(false); return }
+
+      const newMatches = (result.matches || []).sort((a, b) => {
+        const ord: Record<string, number> = { 'in': 0, 'pre': 1, 'post': 2 }
+        return (ord[a.state] ?? 1) - (ord[b.state] ?? 1)
+      })
+
+      for (const m of newMatches) {
+        const prev = prevScores.current[m.id]
+        if (prev && m.state === 'in') {
+          if (m.home.score > prev.home) triggerGoal(m.home.name, m)
+          if (m.away.score > prev.away) triggerGoal(m.away.name, m)
+        }
+        prevScores.current[m.id] = { home: m.home.score, away: m.away.score }
+      }
+
+      setMatches(newMatches)
+      setError(false)
+    } catch {
+      if (mountedRef.current) setError(true)
+    }
+    if (mountedRef.current) setLoading(false)
+  }, [triggerGoal])
+
+  useEffect(() => {
+    mountedRef.current = true
+    fetchScores()
+    const id = setInterval(fetchScores, 1000)
+    return () => { mountedRef.current = false; clearInterval(id) }
+  }, [fetchScores])
+
+  const fmtTime = (iso: string) => {
+    try { return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' }) } catch { return '' }
+  }
+
+  const liveCount = matches.filter(m => m.state === 'in').length
+  const argMatches = matches.filter(m => m.home.abbr === 'ARG' || m.away.abbr === 'ARG')
+  const argPlayed = argMatches.filter(m => m.state === 'post')
+  const argLive = argMatches.filter(m => m.state === 'in')
+  const argUpcoming = argMatches.filter(m => m.state === 'pre')
+
+  return (
+    <div className="card mundial-card">
+      <div className="card-title">
+        <Trophy size={16} /> Mundial 2026
+        {liveCount > 0 && <span className="mundial-live-badge"><span className="mundial-live-dot" /> EN VIVO ({liveCount})</span>}
+      </div>
+      <div className="mundial-layout">
+        <div className="mundial-col-main">
+          {loading && <p className="mundial-status">Cargando partidos...</p>}
+          {error && !loading && <p className="mundial-status error">No se pudieron cargar los partidos</p>}
+          {!loading && !error && matches.length === 0 && <p className="mundial-status">No hay partidos programados hoy</p>}
+          {matches.length > 0 && (
+            <div className="mundial-matches">
+              {matches.map(m => (
+                <div key={m.id} className={`mundial-match ${m.state} ${goalFlash === m.id ? 'goal-flash' : ''}`}>
+                  <div className="mundial-row">
+                    <div className="mundial-team home">
+                      {m.home.logo && <img src={m.home.logo} alt="" className="mundial-logo" />}
+                      <span className="mundial-name">{m.home.name}</span>
+                    </div>
+                    <div className="mundial-center">
+                      {m.state !== 'pre' ? (
+                        <span className="mundial-score">{m.home.score} &mdash; {m.away.score}</span>
+                      ) : (
+                        <span className="mundial-vs">VS</span>
+                      )}
+                    </div>
+                    <div className="mundial-team away">
+                      <span className="mundial-name">{m.away.name}</span>
+                      {m.away.logo && <img src={m.away.logo} alt="" className="mundial-logo" />}
+                    </div>
+                  </div>
+                  <div className={`mundial-detail ${m.state === 'in' ? 'live' : ''}`}>
+                    {m.state === 'in' ? (m.clock ? `${m.clock} · ${m.detail}` : m.detail)
+                      : m.state === 'pre' ? fmtTime(m.startTime)
+                      : m.detail || 'Final'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="mundial-col-arg">
+          <div className="mundial-arg-header">🇦🇷 Argentina</div>
+          {argMatches.length === 0 && !loading && <p className="mundial-status">Sin partidos de Argentina hoy</p>}
+          {argPlayed.length > 0 && (
+            <div className="mundial-arg-group">
+              <span className="mundial-arg-label">Resultados</span>
+              {argPlayed.map(m => (
+                <div key={m.id} className="mundial-arg-row">{m.home.abbr} {m.home.score} — {m.away.score} {m.away.abbr}</div>
+              ))}
+            </div>
+          )}
+          {argLive.length > 0 && (
+            <div className="mundial-arg-group live">
+              <span className="mundial-arg-label">En vivo</span>
+              {argLive.map(m => (
+                <div key={m.id} className="mundial-arg-row live">{m.home.abbr} {m.home.score} — {m.away.score} {m.away.abbr} <span>{m.clock}</span></div>
+              ))}
+            </div>
+          )}
+          {argUpcoming.length > 0 && (
+            <div className="mundial-arg-group">
+              <span className="mundial-arg-label">Próximos</span>
+              {argUpcoming.map(m => (
+                <div key={m.id} className="mundial-arg-row">{m.home.abbr} vs {m.away.abbr} <span>{fmtTime(m.startTime)}</span></div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ============ GLOBAL SEARCH ============
 
 const sectionIndex: { key: string; label: string; keywords: string[] }[] = [
@@ -427,7 +664,7 @@ function loadReminders(): ReminderItem[] { try { const s = localStorage.getItem(
 
 // ============ MAIN SECTION ============
 
-type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'routine' | 'alerts'
+type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'routine' | 'alerts' | 'mundial'
 const widgetRegistry: Record<WidgetId, { name: string; component: React.FC; icon: React.ReactNode; defaultSpan: number }> = {
   timer: { name: 'Temporizador', component: TimerWidget, icon: <Timer size={14} />, defaultSpan: 1 },
   weather: { name: 'Clima', component: WeatherWidget, icon: <CloudSun size={14} />, defaultSpan: 1 },
@@ -436,39 +673,68 @@ const widgetRegistry: Record<WidgetId, { name: string; component: React.FC; icon
   chat: { name: 'Chat rápido', component: QuickChat, icon: <MessageSquare size={14} />, defaultSpan: 1 },
   routine: { name: 'Rutina de hoy', component: DayRoutineWidget, icon: <Dumbbell size={14} />, defaultSpan: 1 },
   alerts: { name: 'Próximas alertas', component: NextAlertsWidget, icon: <Bell size={14} />, defaultSpan: 1 },
+  mundial: { name: 'Mundial 2026', component: MundialWidget, icon: <Trophy size={14} />, defaultSpan: 3 },
 }
 
-interface LayoutItem { id: WidgetId; span: number }
-const defaultLayout: LayoutItem[] = [
-  { id: 'routine', span: 1 }, { id: 'alerts', span: 1 }, { id: 'quote', span: 1 },
-  { id: 'chat', span: 1 }, { id: 'timer', span: 1 }, { id: 'weather', span: 1 }, { id: 'calendar', span: 1 },
+// A block is a column slot that can stack up to 3 widgets vertically
+// (3 chicos / 1 mediano + 1 chico / 1 grande, según cuántos apiles).
+interface LayoutBlock { key: string; span: number; widgets: WidgetId[] }
+let blockSeq = 0
+const newKey = () => 'blk-' + (blockSeq++) + '-' + Math.random().toString(36).slice(2, 5)
+const MAX_PER_BLOCK = 3
+// Half-step widths on a 6-column grid: 1x→2, 1.5x→3, 2x→4, 2.5x→5, 3x→6 columns.
+const SPAN_STEPS = [1, 1.5, 2, 2.5, 3]
+const spanCols = (s: number) => Math.max(2, Math.round(s * 2))
+
+const defaultBlocks: LayoutBlock[] = [
+  { key: newKey(), span: 1, widgets: ['routine'] }, { key: newKey(), span: 1, widgets: ['alerts'] }, { key: newKey(), span: 1, widgets: ['quote'] },
+  { key: newKey(), span: 1, widgets: ['chat'] }, { key: newKey(), span: 1, widgets: ['timer'] }, { key: newKey(), span: 1, widgets: ['weather'] }, { key: newKey(), span: 1, widgets: ['calendar'] },
+  { key: newKey(), span: 3, widgets: ['mundial'] },
 ]
-function loadLayout(): LayoutItem[] {
+
+// Mundial must always sit last (full-width, scrollable, at the bottom of the page).
+function mundialLast(blocks: LayoutBlock[]): LayoutBlock[] {
+  const rest: LayoutBlock[] = []; let m: LayoutBlock | null = null
+  for (const b of blocks) {
+    if (b.widgets.includes('mundial')) { m = { key: b.key, span: 3, widgets: ['mundial'] } }
+    const others = b.widgets.filter(w => w !== 'mundial')
+    if (others.length) rest.push({ ...b, widgets: others })
+  }
+  return m ? [...rest, m] : rest
+}
+
+function loadLayout(): LayoutBlock[] {
   try {
     const s = localStorage.getItem('nn-inicio-layout')
     if (s) {
       const parsed = JSON.parse(s)
       if (Array.isArray(parsed) && parsed.length > 0) {
+        let blocks: LayoutBlock[]
         if (typeof parsed[0] === 'string') {
-          const items = (parsed as string[]).filter(id => id in widgetRegistry).map(id => ({ id: id as WidgetId, span: widgetRegistry[id as WidgetId]?.defaultSpan || 1 }))
-          const missing = defaultLayout.filter(d => !items.some(i => i.id === d.id))
-          return [...items, ...missing]
+          blocks = (parsed as string[]).filter(id => id in widgetRegistry).map(id => ({ key: newKey(), span: widgetRegistry[id as WidgetId].defaultSpan || 1, widgets: [id as WidgetId] }))
+        } else if (parsed[0] && Array.isArray(parsed[0].widgets)) {
+          blocks = (parsed as LayoutBlock[]).map(b => ({ key: b.key || newKey(), span: b.span || 1, widgets: b.widgets.filter(w => w in widgetRegistry) })).filter(b => b.widgets.length)
+        } else {
+          // Old { id, span }[] format → one widget per block.
+          blocks = (parsed as { id: WidgetId; span: number }[]).filter(i => i.id in widgetRegistry).map(i => ({ key: newKey(), span: i.span || 1, widgets: [i.id] }))
         }
-        const items = (parsed as LayoutItem[]).filter(i => i.id in widgetRegistry)
-        const missing = defaultLayout.filter(d => !items.some(i => i.id === d.id))
-        return [...items, ...missing]
+        const used = new Set(blocks.flatMap(b => b.widgets))
+        const missing = (Object.keys(widgetRegistry) as WidgetId[]).filter(id => !used.has(id))
+        for (const id of missing) blocks.push({ key: newKey(), span: widgetRegistry[id].defaultSpan || 1, widgets: [id] })
+        return mundialLast(blocks)
       }
     }
   } catch {}
-  return defaultLayout
+  return defaultBlocks
 }
-function saveLayout(l: LayoutItem[]) { localStorage.setItem('nn-inicio-layout', JSON.stringify(l)) }
+function saveLayout(l: LayoutBlock[]) { localStorage.setItem('nn-inicio-layout', JSON.stringify(l)) }
 
 export default function InicioSection() {
-  const [layout, setLayout] = useState<LayoutItem[]>(loadLayout)
+  const [layout, setLayout] = useState<LayoutBlock[]>(loadLayout)
   const [editMode, setEditMode] = useState(false)
   const [dragging, setDragging] = useState<number | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [addToBlock, setAddToBlock] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const [filterType, setFilterType] = useState<'all' | 'notifications' | 'reminders'>('all')
@@ -476,11 +742,22 @@ export default function InicioSection() {
   const notifs = loadNotifications().filter(n => !n.read)
   const reminders = loadReminders().filter(r => !r.done)
 
-  const updateLayout = (l: LayoutItem[]) => { setLayout(l); saveLayout(l) }
-  const hiddenWidgets = (Object.keys(widgetRegistry) as WidgetId[]).filter(id => !layout.some(item => item.id === id))
+  const updateLayout = (l: LayoutBlock[]) => { setLayout(l); saveLayout(l) }
+  const usedWidgets = new Set(layout.flatMap(b => b.widgets))
+  const hiddenWidgets = (Object.keys(widgetRegistry) as WidgetId[]).filter(id => !usedWidgets.has(id))
 
   const swapWidget = (from: number, to: number) => { const a = [...layout]; [a[from], a[to]] = [a[to], a[from]]; updateLayout(a) }
-  const cycleSpan = (index: number) => { const a = [...layout]; a[index] = { ...a[index], span: a[index].span >= 3 ? 1 : a[index].span + 1 }; updateLayout(a) }
+  const cycleSpan = (index: number) => { const a = [...layout]; const i = SPAN_STEPS.indexOf(a[index].span); a[index] = { ...a[index], span: SPAN_STEPS[(i + 1) % SPAN_STEPS.length] }; updateLayout(a) }
+  const addNewBlock = (id: WidgetId) => { updateLayout([...layout, { key: newKey(), span: widgetRegistry[id].defaultSpan || 1, widgets: [id] }]); setShowAdd(false) }
+  // Move any widget into a block (pulled out of whatever block it currently lives in)
+  // so any panels can be combined freely.
+  const moveWidgetToBlock = (targetKey: string, id: WidgetId) => {
+    let a = layout.map(b => ({ ...b, widgets: b.widgets.filter(w => w !== id) }))
+    a = a.map(b => b.key === targetKey && b.widgets.length < MAX_PER_BLOCK ? { ...b, widgets: [...b.widgets, id] } : b)
+    updateLayout(a.filter(b => b.widgets.length > 0))
+    setAddToBlock(null)
+  }
+  const removeWidget = (index: number, id: WidgetId) => { const a = [...layout]; a[index] = { ...a[index], widgets: a[index].widgets.filter(w => w !== id) }; updateLayout(a.filter(b => b.widgets.length > 0)) }
 
   const searchResults = search.trim() ? sectionIndex.filter(s => s.label.toLowerCase().includes(search.toLowerCase()) || s.keywords.some(k => k.includes(search.toLowerCase()))) : []
 
@@ -534,24 +811,43 @@ export default function InicioSection() {
         {editMode && hiddenWidgets.length > 0 && <button className="personal-toolbar-btn" onClick={() => setShowAdd(!showAdd)}><Plus size={14} /> Agregar</button>}
       </div>
       {showAdd && hiddenWidgets.length > 0 && (
-        <div className="personal-add-panel card">{hiddenWidgets.map(id => (<button key={id} className="personal-add-item" onClick={() => { updateLayout([...layout, { id, span: widgetRegistry[id].defaultSpan }]); setShowAdd(false) }}>{widgetRegistry[id].icon} {widgetRegistry[id].name} <Plus size={12} /></button>))}</div>
+        <div className="personal-add-panel card">{hiddenWidgets.map(id => (<button key={id} className="personal-add-item" onClick={() => addNewBlock(id)}>{widgetRegistry[id].icon} {widgetRegistry[id].name} <Plus size={12} /></button>))}</div>
       )}
       <div className="inicio-grid">
-        {layout.map((item, index) => {
-          const w = widgetRegistry[item.id]; if (!w) return null; const W = w.component
+        {layout.map((block, index) => {
+          const isMundial = block.widgets.includes('mundial')
           return (
-            <div key={item.id + '-' + index} className={`inicio-panel ${editMode ? 'edit-mode' : ''} ${dragging === index ? 'dragging' : ''}`}
-              style={{ gridColumn: `span ${item.span}` }}
+            <div key={block.key} className={`inicio-panel ${editMode ? 'edit-mode' : ''} ${dragging === index ? 'dragging' : ''}`}
+              style={{ gridColumn: `span ${isMundial ? 6 : spanCols(block.span)}` }}
               draggable={editMode} onDragStart={() => setDragging(index)} onDragEnd={() => setDragging(null)} onDragOver={e => e.preventDefault()}
               onDrop={() => { if (dragging !== null && dragging !== index) swapWidget(dragging, index); setDragging(null) }}>
               {editMode && (
                 <div className="panel-edit-overlay">
                   <div className="panel-drag-handle"><GripVertical size={16} /></div>
-                  <button className="panel-span-btn" onClick={() => cycleSpan(index)} title={`Ancho: ${item.span}/3`}>{item.span}x</button>
-                  <button className="panel-remove" onClick={() => updateLayout(layout.filter((_, i) => i !== index))}><EyeOff size={14} /></button>
+                  {!isMundial && <button className="panel-span-btn" onClick={() => cycleSpan(index)} title="Ancho del panel">{block.span}x</button>}
+                  {!isMundial && block.widgets.length < MAX_PER_BLOCK && (
+                    <button className="panel-span-btn" onClick={() => setAddToBlock(addToBlock === index ? null : index)} title="Combinar otro panel acá"><Plus size={12} /></button>
+                  )}
                 </div>
               )}
-              <W />
+              {editMode && addToBlock === index && (() => {
+                // Any widget not already in this block can be combined here.
+                const combinable = (Object.keys(widgetRegistry) as WidgetId[]).filter(id => id !== 'mundial' && !block.widgets.includes(id))
+                return combinable.length ? (
+                  <div className="panel-stack-add">{combinable.map(id => (<button key={id} onClick={() => moveWidgetToBlock(block.key, id)}>{widgetRegistry[id].icon} {widgetRegistry[id].name}</button>))}</div>
+                ) : null
+              })()}
+              <div className="inicio-block-stack">
+                {block.widgets.map(wid => {
+                  const w = widgetRegistry[wid]; if (!w) return null; const W = w.component
+                  return (
+                    <div key={wid} className="inicio-block-item">
+                      {editMode && <button className="block-item-remove" onClick={() => removeWidget(index, wid)} title="Quitar panel"><EyeOff size={13} /></button>}
+                      <W />
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )
         })}

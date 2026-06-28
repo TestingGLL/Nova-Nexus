@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, EyeOff, Tag, Sparkles, Plus, X, Volume2 } from 'lucide-react'
+import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, EyeOff, Tag, Sparkles, Plus, X, Volume2, Settings, Lock, GripVertical } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
+import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { getSoundsEnabled, setSoundsEnabled, getSoundsVolume, setSoundsVolume, sfx } from '../../lib/sounds'
 import './ConfiguracionSection.css'
 
@@ -22,7 +23,7 @@ const presets = [
 const DEFAULT_COLOR = '#38bdf8'
 
 interface ProfileData { name: string; email: string; avatar: string }
-function loadProfile(): ProfileData { try { const s = localStorage.getItem('nn-profile'); if (s) return JSON.parse(s) } catch {}; return { name: 'Invitado', email: '', avatar: '' } }
+function loadProfile(): ProfileData { try { const s = localStorage.getItem('nn-profile'); if (s) { const p = JSON.parse(s); if (p.name === 'Invitado' && !p.email) return { name: 'Matías Gallardo', email: 'GallardoTesting@outlook.com', avatar: p.avatar || '' }; return p } } catch {}; return { name: 'Matías Gallardo', email: 'GallardoTesting@outlook.com', avatar: '' } }
 function saveProfile(p: ProfileData) { localStorage.setItem('nn-profile', JSON.stringify(p)) }
 
 interface AlertConfig { anticipationMinutes: number; desktopNotifications: boolean; upcomingDays: number; observationDays: number }
@@ -40,14 +41,38 @@ function saveCategories(c: CustomCategories) { localStorage.setItem('nn-custom-c
 function loadNoteTags(): string[] { try { const s = localStorage.getItem('nn-note-tags'); return s ? JSON.parse(s) : ['recordar', 'curioso', 'revisar'] } catch { return ['recordar', 'curioso', 'revisar'] } }
 function saveNoteTags(t: string[]) { localStorage.setItem('nn-note-tags', JSON.stringify(t)) }
 
-type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat'
-const widgetNames: Record<WidgetId, string> = { timer: 'Temporizador', weather: 'Clima', calendar: 'Calendario', quote: 'Frase del día', chat: 'Chat rápido' }
+type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'routine' | 'alerts' | 'mundial'
+const widgetNames: Record<WidgetId, string> = { timer: 'Temporizador', weather: 'Clima', calendar: 'Calendario', quote: 'Frase del día', chat: 'Chat rápido', routine: 'Rutina de hoy', alerts: 'Próximas alertas', mundial: 'Mundial 2026' }
 
-type ConfigTab = 'personalizacion' | 'paneles' | 'adicionales' | 'prompts' | 'usuario' | 'alertas'
+type ConfigTab = 'personalizacion' | 'paneles' | 'adicionales' | 'prompts' | 'usuario' | 'alertas' | 'sistema'
+
+const LOCKABLE_SECTIONS: { key: string; label: string }[] = [
+  { key: 'personal', label: 'Personal' }, { key: 'finanzas', label: 'Finanzas' }, { key: 'etsy', label: 'Tiendas Etsy' },
+  { key: 'proyectos', label: 'Proyectos' }, { key: 'edicion', label: 'Edición' }, { key: 'notas', label: 'Notas' },
+  { key: 'extras', label: 'Extras' }, { key: 'software', label: 'Software' }, { key: 'alertas', label: 'Alertas' },
+]
+function loadLockedSections(): string[] { try { const s = localStorage.getItem('nn-locked-sections'); return s ? JSON.parse(s) : [] } catch { return [] } }
+
+const CFG_TABS: { id: ConfigTab; label: string; icon: React.ReactNode }[] = [
+  { id: 'personalizacion', label: 'Personalización', icon: <Palette size={13} /> },
+  { id: 'paneles', label: 'Paneles', icon: <Layout size={13} /> },
+  { id: 'adicionales', label: 'Adicionales', icon: <Tag size={13} /> },
+  { id: 'prompts', label: 'Prompts', icon: <Sparkles size={13} /> },
+  { id: 'usuario', label: 'Usuario', icon: <UserCircle size={13} /> },
+  { id: 'alertas', label: 'Alertas', icon: <Bell size={13} /> },
+  { id: 'sistema', label: 'Sistema', icon: <Settings size={13} /> },
+]
 
 export default function ConfiguracionSection() {
   const { accentColor, setAccentColor, darkMode, setDarkMode } = useTheme()
   const [tab, setTab] = useState<ConfigTab>('personalizacion')
+  const { order: cfgOrder, tabProps: cfgTabProps } = useReorderableTabs(CFG_TABS.map(t => t.id), 'nn-config-tab-order')
+  const cfgTabMap = Object.fromEntries(CFG_TABS.map(t => [t.id, t]))
+  const [lockedSections, setLockedSections] = useState<string[]>(loadLockedSections)
+  const toggleLocked = (key: string) => {
+    const next = lockedSections.includes(key) ? lockedSections.filter(k => k !== key) : [...lockedSections, key]
+    setLockedSections(next); localStorage.setItem('nn-locked-sections', JSON.stringify(next))
+  }
   const [profile, setProfile] = useState<ProfileData>(loadProfile)
   const [alertConfig, setAlertConfig] = useState<AlertConfig>(loadAlertConfig)
   const [hiddenWidgets, setHiddenWidgets] = useState<Set<string>>(() => {
@@ -86,18 +111,11 @@ export default function ConfiguracionSection() {
   return (
     <div className="config-section">
       <div className="config-tabs">
-        {([
-          { id: 'personalizacion' as ConfigTab, label: 'Personalización', icon: <Palette size={13} /> },
-          { id: 'paneles' as ConfigTab, label: 'Paneles', icon: <Layout size={13} /> },
-          { id: 'adicionales' as ConfigTab, label: 'Adicionales', icon: <Tag size={13} /> },
-          { id: 'prompts' as ConfigTab, label: 'Prompts', icon: <Sparkles size={13} /> },
-          { id: 'usuario' as ConfigTab, label: 'Usuario', icon: <UserCircle size={13} /> },
-          { id: 'alertas' as ConfigTab, label: 'Alertas', icon: <Bell size={13} /> },
-        ]).map(t => (
-          <button key={t.id} className={`config-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
-            {t.icon} {t.label}
+        {cfgOrder.map((id, i) => { const t = cfgTabMap[id]; if (!t) return null; const dp = cfgTabProps(i); return (
+          <button key={id} className={`config-tab ${tab === id ? 'active' : ''} ${dp.className}`} onClick={() => setTab(id as ConfigTab)} draggable={dp.draggable} onDragStart={dp.onDragStart} onDragOver={dp.onDragOver} onDrop={dp.onDrop} onDragEnd={dp.onDragEnd}>
+            <GripVertical size={10} className="tab-grip" />{t.icon} {t.label}
           </button>
-        ))}
+        ) })}
       </div>
 
       {tab === 'personalizacion' && (
@@ -145,20 +163,6 @@ export default function ConfiguracionSection() {
             </div>
           </div>
 
-          <div className="card config-card">
-            <div className="card-title"><Volume2 size={16} /> Sonidos de interfaz</div>
-            <p className="config-desc">Sonidos sutiles al interactuar con la aplicación.</p>
-            <div className="alert-config-row">
-              <span>Sonidos</span>
-              <button className={`alert-config-toggle ${soundsOn ? 'active' : ''}`} onClick={() => { const v = !soundsOn; setSoundsOn(v); setSoundsEnabled(v); if (v) sfx.toggleOn(); }}>
-                {soundsOn ? 'Activados' : 'Desactivados'}
-              </button>
-            </div>
-            <div className="alert-config-row">
-              <span>Volumen</span>
-              <input type="range" min={0} max={1} step={0.05} value={soundVol} onChange={e => { const v = Number(e.target.value); setSoundVol(v); setSoundsVolume(v) }} onMouseUp={() => sfx.click()} className="sound-vol-slider" />
-            </div>
-          </div>
         </>
       )}
 
@@ -258,6 +262,21 @@ export default function ConfiguracionSection() {
       {tab === 'adicionales' && (
         <>
           <div className="card config-card">
+            <div className="card-title"><Lock size={16} /> Bloqueo de secciones</div>
+            <p className="config-desc">Bloqueá secciones para impedir modificaciones accidentales. Una sección bloqueada se puede ver pero no editar (se puede desbloquear temporalmente).</p>
+            <div className="widgets-list">
+              {LOCKABLE_SECTIONS.map(s => (
+                <div key={s.key} className="widget-toggle-row">
+                  <span className="widget-toggle-name">{s.label}</span>
+                  <button className={`widget-toggle-btn ${lockedSections.includes(s.key) ? '' : 'active'}`} onClick={() => toggleLocked(s.key)}>
+                    {lockedSections.includes(s.key) ? <><Lock size={12} /> Bloqueada</> : <><Eye size={12} /> Editable</>}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card config-card">
             <div className="card-title"><Tag size={16} /> Notas con auto-eliminación</div>
             <p className="config-desc">Días por defecto antes de borrar automáticamente una nota efímera.</p>
             <div className="alert-config-row">
@@ -314,10 +333,54 @@ export default function ConfiguracionSection() {
         </>
       )}
 
+      {tab === 'sistema' && (
+        <>
+          <div className="card config-card">
+            <div className="card-title"><Volume2 size={16} /> Sonidos de interfaz</div>
+            <p className="config-desc">Sonidos sutiles tipo burbuja al interactuar. También podés controlar el volumen de la app desde el mezclador de sonido de Windows.</p>
+            <div className="alert-config-row">
+              <span>Sonido general de la app</span>
+              <button className={`alert-config-toggle ${soundsOn ? 'active' : ''}`} onClick={() => { const v = !soundsOn; setSoundsOn(v); setSoundsEnabled(v); if (v) sfx.toggleOn(); }}>
+                {soundsOn ? 'Activado' : 'Desactivado'}
+              </button>
+            </div>
+            <div className="alert-config-row">
+              <span>Volumen predeterminado</span>
+              <div className="sound-vol-wrap">
+                <input type="range" min={0} max={1} step={0.05} value={soundVol} disabled={!soundsOn} onChange={e => { const v = Number(e.target.value); setSoundVol(v); setSoundsVolume(v) }} onMouseUp={() => soundsOn && sfx.click()} className="sound-vol-slider" />
+                <span className="sound-vol-pct">{Math.round(soundVol * 100)}%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="card config-card">
+            <div className="card-title"><Settings size={16} /> Comportamiento del sistema</div>
+            <div className="alert-config-row">
+              <span>Minimizar a la bandeja del sistema</span>
+              <button className="alert-config-toggle active">Activado</button>
+            </div>
+            <div className="alert-config-row">
+              <span>Abrir Nova Nexus al iniciar Windows</span>
+              <button className="alert-config-toggle">Desactivado</button>
+            </div>
+          </div>
+
+          <div className="card config-card">
+            <div className="card-title"><Bell size={16} /> Notificaciones emergentes</div>
+            <div className="alert-config-row">
+              <span>Notificaciones de escritorio</span>
+              <button className={`alert-config-toggle ${alertConfig.desktopNotifications ? 'active' : ''}`} onClick={() => updateAlertConfig({ desktopNotifications: !alertConfig.desktopNotifications })}>
+                {alertConfig.desktopNotifications ? 'Activadas' : 'Desactivadas'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {tab === 'prompts' && (
         <div className="card config-card">
           <div className="card-title"><Sparkles size={16} /> Grupos de palabras</div>
-          <p className="config-desc">Grupos reutilizables para el reemplazo rápido en los prompts de Tiendas Etsy → Creaciones.</p>
+          <p className="config-desc">Grupos reutilizables para el reemplazo rápido en los prompts de Tiendas Etsy → Creaciones. Se sincronizan automáticamente.</p>
           {wordGroups.map((g, gi) => (
             <div key={gi} className="cfg-wg">
               <div className="cfg-wg-head">

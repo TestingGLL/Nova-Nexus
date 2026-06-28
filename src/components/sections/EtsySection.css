@@ -47,9 +47,11 @@
 /* Grid */
 .etsy-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
+@media (max-width: 900px) { .etsy-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .etsy-grid { grid-template-columns: 1fr; } }
 
 .store-card {
   display: flex;
@@ -65,17 +67,21 @@
 .store-card-banner {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 18px;
-  border-radius: 10px;
+  gap: 14px;
+  padding: 40px 24px;
+  border-radius: 12px;
+  min-height: 150px;
+  position: relative;
+  overflow: hidden;
 }
+.store-card-banner::after { content: ''; position: absolute; inset: 0; background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%); transform: translateX(-100%); animation: bannerShimmer 6s ease-in-out infinite; pointer-events: none; }
+@keyframes bannerShimmer { 0%, 60% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
 
 .store-card-banner.has-image {
-  position: relative;
   background-size: cover;
   background-position: center;
-  padding: 28px 18px;
-  border-radius: 10px;
+  padding: 48px 24px;
+  min-height: 170px;
 }
 .store-card-banner-overlay {
   position: absolute;
@@ -85,7 +91,7 @@
 }
 .store-card-banner.has-image > * { position: relative; z-index: 1; }
 
-.store-card-logo { font-size: 28px; }
+.store-card-logo { font-size: 36px; }
 
 .store-name { font-size: 16px; font-weight: 600; color: var(--text-primary); }
 .store-status { font-size: 11px; font-weight: 500; }
@@ -504,7 +510,7 @@
 .store-stat.rating svg { color: #f59e0b; fill: #f59e0b; }
 
 /* ============ CUSTOM LOGO ============ */
-.store-card-logo-img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+.store-card-logo-img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
 .brand-logo-img { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; }
 .logo-preview { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; margin-top: 6px; }
 .tab-logo-img { width: 16px; height: 16px; border-radius: 4px; object-fit: cover; }
@@ -549,11 +555,15 @@
 .creacion-wg-word:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ============ FINANZAS ============ */
-.finanzas-tab { display: flex; flex-direction: column; gap: 12px; }
-.finanzas-summary { padding: 16px !important; display: flex; align-items: center; justify-content: space-between; }
-.finanzas-total { display: flex; align-items: center; gap: 8px; font-size: 16px; color: var(--text-primary); }
-.finanzas-total strong { color: #22c55e; }
-.finanzas-count { font-size: 12px; color: var(--text-secondary); }
+.finanzas-tab { display: flex; flex-direction: column; gap: 14px; }
+.finanzas-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.finanzas-stat-card { padding: 16px !important; display: flex; flex-direction: column; gap: 4px; text-align: center; }
+.finanzas-stat-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+.finanzas-stat-value { font-size: 22px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.finanzas-stat-sub { font-size: 10px; color: var(--text-secondary); opacity: 0.6; }
+.finanzas-add-card { padding: 14px !important; }
+.finanzas-filter { display: flex; }
+.finanzas-filter select { padding: 6px 12px; border: 1px solid var(--border); background: var(--bg-card); border-radius: 8px; font-size: 12px; color: var(--text-primary); outline: none; cursor: pointer; font-family: inherit; text-transform: capitalize; }
 .finanzas-add { display: flex; flex-direction: column; gap: 8px; }
 .finanzas-add-row { display: flex; gap: 8px; align-items: center; }
 .finanzas-amount-wrap { display: flex; align-items: center; gap: 2px; font-size: 14px; color: var(--text-secondary); }
@@ -626,3 +636,42 @@
 .article-cover-thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; }
 .article-media-remove { display: flex; border: none; background: none; color: var(--text-secondary); cursor: pointer; }
 .article-media-remove:hover { color: #ef4444; }
+
+/* Article banner preview */
+.article-banner-preview { width: 100%; max-height: 120px; object-fit: cover; border-radius: 8px; margin-top: 8px; }
+
+/* Lanzamientos → Seleccionables */
+.seleccionables-list { display: flex; flex-direction: column; gap: 8px; }
+.seleccionable-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; transition: all 0.15s; }
+.seleccionable-item.on { border-color: var(--accent); background: var(--accent-soft); }
+.seleccionable-check { width: 22px; height: 22px; border: 2px solid var(--border); border-radius: 6px; background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; }
+.seleccionable-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.seleccionable-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.seleccionable-subs { font-size: 11px; color: var(--text-secondary); }
+.seleccionable-badge { font-size: 10px; font-weight: 600; color: white; padding: 3px 10px; border-radius: 8px; }
+
+/* Creaciones interactive token replacement */
+.creacion-interactive { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-hover); }
+.creacion-tokens { margin-top: 6px; font-size: 13px; line-height: 2; color: var(--text-primary); word-break: break-word; }
+.creacion-token-plain { white-space: pre-wrap; }
+.creacion-token-wrap { position: relative; display: inline-block; }
+.creacion-token { border: none; background: var(--accent-soft); color: var(--accent); border-radius: 5px; padding: 1px 6px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.creacion-token:hover { background: var(--accent); color: white; }
+.creacion-token-menu { position: absolute; top: 100%; left: 0; z-index: 40; margin-top: 4px; display: flex; flex-direction: column; gap: 2px; padding: 6px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.18); min-width: 120px; }
+.creacion-token-menu button { text-align: left; padding: 6px 10px; border: none; background: none; color: var(--text-primary); font-size: 13px; cursor: pointer; border-radius: 6px; font-family: inherit; }
+.creacion-token-menu button:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* Planificación enhancements */
+.plan-search { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid var(--border); background: var(--bg-card); border-radius: 10px; }
+.plan-search input { flex: 1; border: none; background: none; font-size: 13px; color: var(--text-primary); outline: none; font-family: inherit; }
+.plan-search svg { color: var(--text-secondary); }
+.plan-continent-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 4px; border: none; background: none; cursor: pointer; color: var(--text-primary); font-family: inherit; }
+.plan-continent-count { margin-left: auto; font-size: 11px; color: var(--text-secondary); }
+.plan-date-card.clickable { cursor: pointer; transition: all 0.15s; }
+.plan-date-card.clickable:hover { border-color: var(--accent); }
+.plan-date-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); grid-column: 1 / -1; }
+.plan-date-detail { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.plan-date-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 10px; }
+.plan-date-prod-label { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.plan-date-prods { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.plan-date-prod { font-size: 11px; padding: 4px 10px; background: var(--accent-soft); color: var(--accent); border-radius: 12px; font-weight: 500; }

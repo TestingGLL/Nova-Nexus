@@ -15,6 +15,7 @@ import {
   Wifi,
   WifiOff,
   UserCircle,
+  Puzzle,
 } from 'lucide-react'
 import type { Section } from '../App'
 import './Sidebar.css'
@@ -34,6 +35,7 @@ const sections: { id: Section; label: string; icon: typeof User }[] = [
   { id: 'proyectos', label: 'Proyectos', icon: FolderKanban },
   { id: 'edicion', label: 'Edición', icon: Film },
   { id: 'notas', label: 'Notas', icon: StickyNote },
+  { id: 'extras', label: 'Extras', icon: Puzzle },
   { id: 'software', label: 'Software', icon: Code2 },
   { id: 'configuracion', label: 'Configuración', icon: Settings },
   { id: 'alertas', label: 'Alertas', icon: Bell },
@@ -70,12 +72,18 @@ interface ProfileData {
   avatar: string
 }
 
+const DEFAULT_PROFILE: ProfileData = { name: 'Matías Gallardo', email: 'GallardoTesting@outlook.com', avatar: '' }
 function loadProfile(): ProfileData {
   try {
     const saved = localStorage.getItem('nn-profile')
-    if (saved) return JSON.parse(saved)
+    if (saved) {
+      const p = JSON.parse(saved)
+      // Migrate the old "Invitado" placeholder to the real default user.
+      if (p.name === 'Invitado' && !p.email) return { ...DEFAULT_PROFILE, avatar: p.avatar || '' }
+      return p
+    }
   } catch {}
-  return { name: 'Invitado', email: '', avatar: '' }
+  return DEFAULT_PROFILE
 }
 
 function saveProfile(p: ProfileData) {

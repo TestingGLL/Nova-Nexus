@@ -1,13 +1,64 @@
 import { useState, useRef, useEffect } from 'react'
-import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Bold, Italic, Underline, List, Palette, Type } from 'lucide-react'
+import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Bold, Italic, Underline, List, Palette, Type, Eye, EyeOff, Search, Save } from 'lucide-react'
 import { addNotification } from './AlertasSection'
 import './PersonalSection.css'
 
 // ============ SALUD ============
+function playWaterSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    // Quick "water drop" — descending sine blip with a soft plop.
+    const osc = ctx.createOscillator(); const gain = ctx.createGain()
+    osc.type = 'sine'; osc.frequency.setValueAtTime(880, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.18)
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25)
+    osc.connect(gain); gain.connect(ctx.destination)
+    osc.start(); osc.stop(ctx.currentTime + 0.28)
+    setTimeout(() => ctx.close(), 400)
+  } catch {}
+}
+
 function WaterCounter() {
-  const [glasses, setGlasses] = useState(0); const goal = 8
-  const handleAdd = () => { if (glasses >= goal) { setGlasses(0) } else { setGlasses(glasses + 1) } }
-  return (<div className="card water-card"><div className="card-title"><Droplets size={16} /> Agua</div><div className="water-count"><span className="water-number">{glasses}</span><span className="water-goal">/ {goal}</span></div><div className="water-glasses">{Array.from({ length: goal }, (_, i) => (<div key={i} className={`water-glass ${i < glasses ? 'filled' : ''}`}><Droplets size={14} /></div>))}</div><div className="water-controls"><button onClick={() => setGlasses(Math.max(0, glasses - 1))} className="timer-btn" disabled={glasses === 0}>−</button><button onClick={handleAdd} className="timer-btn">+</button><button onClick={() => setGlasses(0)} className="timer-btn"><RotateCcw size={14} /></button></div></div>)
+  const goal = 8
+  const [glasses, setGlasses] = useState<number>(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem('nn-water') || '{}')
+      if (s.date === new Date().toDateString()) return s.glasses || 0
+    } catch {}
+    return 0
+  })
+  const [soundOn, setSoundOn] = useState<boolean>(() => { try { return localStorage.getItem('nn-water-sound') !== '0' } catch { return true } })
+  const save = (g: number) => { setGlasses(g); localStorage.setItem('nn-water', JSON.stringify({ date: new Date().toDateString(), glasses: g })) }
+  const handleAdd = () => {
+    const next = glasses >= goal ? 0 : glasses + 1
+    save(next)
+    if (soundOn && next > glasses) playWaterSound()
+  }
+  const toggleSound = () => { const v = !soundOn; setSoundOn(v); localStorage.setItem('nn-water-sound', v ? '1' : '0') }
+  const pct = Math.min(100, (glasses / goal) * 100)
+  return (
+    <div className="card water-card">
+      <div className="card-title">
+        <Droplets size={16} /> Agua
+        <button className="water-sound-btn" onClick={toggleSound} title={soundOn ? 'Sonido activado' : 'Sonido desactivado'}>{soundOn ? '🔊' : '🔇'}</button>
+      </div>
+      <div className="water-visual" onClick={handleAdd} title="Clic para sumar un vaso">
+        <div className="water-fill" style={{ height: `${pct}%` }}>
+          <div className="water-wave" />
+          <div className="water-wave water-wave2" />
+        </div>
+        <div className="water-visual-text"><span className="water-number">{glasses}</span><span className="water-goal">/ {goal} vasos</span></div>
+      </div>
+      <div className="water-glasses">{Array.from({ length: goal }, (_, i) => (<div key={i} className={`water-glass ${i < glasses ? 'filled' : ''}`}><Droplets size={14} /></div>))}</div>
+      <div className="water-controls">
+        <button onClick={() => save(Math.max(0, glasses - 1))} className="timer-btn" disabled={glasses === 0}>−</button>
+        <button onClick={handleAdd} className="timer-btn">+</button>
+        <button onClick={() => save(0)} className="timer-btn"><RotateCcw size={14} /></button>
+      </div>
+    </div>
+  )
 }
 
 interface ExerciseData { name: string; sets: number; reps: string; rest: string; tip: string }
@@ -45,6 +96,8 @@ function ExercisePanel() {
   const [showNewPanel, setShowNewPanel] = useState(false)
   const [newPanelName, setNewPanelName] = useState('')
   const [weekPlan, setWeekPlan] = useState<Record<string, string>>(() => { try { const s = localStorage.getItem('nn-week-routine'); return s ? JSON.parse(s) : {} } catch { return {} } })
+  const [activeWeek, setActiveWeek] = useState<number>(() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })
+  const saveActiveWeek = (w: number) => { setActiveWeek(w); localStorage.setItem('nn-active-week', String(w)) }
 
   const isStretch = showSection === 'estiramientos'
   const list = isStretch ? stretches : routines
@@ -148,20 +201,35 @@ function ExercisePanel() {
       <div className="exercise-section-toggle">
         <button className={`exercise-section-btn ${showSection === 'ejercicios' ? 'active' : ''}`} onClick={() => { setShowSection('ejercicios'); setActiveRoutine(null) }}><Dumbbell size={14} /> Ejercicios</button>
         <button className={`exercise-section-btn ${showSection === 'estiramientos' ? 'active' : ''}`} onClick={() => { setShowSection('estiramientos'); setActiveRoutine(null) }}><Flame size={14} /> Estiramientos</button>
-        <button className={`exercise-section-btn ${showSection === 'semana' ? 'active' : ''}`} onClick={() => setShowSection('semana')}><CalendarClock size={14} /> Semana</button>
+        <button className={`exercise-section-btn ${showSection === 'semana' ? 'active' : ''}`} onClick={() => setShowSection('semana')}><CalendarClock size={14} /> Creador de Rutinas</button>
       </div>
 
       {showSection === 'semana' ? (
-        <div className="week-routine">
-          {WEEKDAYS.map(d => (
-            <div key={d} className="week-day">
-              <span className="week-day-name">{d}</span>
-              <select value={weekPlan[d] || ''} onChange={e => saveWeek({ ...weekPlan, [d]: e.target.value })} style={weekPlan[d] ? { borderColor: routines.find(r => r.id === weekPlan[d])?.color } : undefined}>
-                <option value="">Descanso</option>
-                {routines.map(r => <option key={r.id} value={r.id}>{r.emoji} {r.name}</option>)}
-              </select>
+        <div className="creador-rutinas">
+          <div className="creador-banner">
+            <CalendarClock size={22} />
+            <div><span className="creador-banner-title">Creador de Rutinas</span><span className="creador-banner-sub">Asigná rutinas y semana — se sincroniza con Inicio</span></div>
+          </div>
+          <div className="creador-week-selector">
+            <span className="creador-label">Semana activa (se sincroniza con Inicio)</span>
+            <div className="creador-week-btns">
+              {[0, 1, 2, 3].map(w => (
+                <button key={w} className={`creador-week-btn ${activeWeek === w ? 'active' : ''}`} onClick={() => saveActiveWeek(w)}>Semana {w + 1}</button>
+              ))}
             </div>
-          ))}
+          </div>
+          <span className="creador-label">Asigná una rutina a cada día</span>
+          <div className="week-routine">
+            {WEEKDAYS.map(d => (
+              <div key={d} className="week-day">
+                <span className="week-day-name">{d}</span>
+                <select value={weekPlan[d] || ''} onChange={e => saveWeek({ ...weekPlan, [d]: e.target.value })} style={weekPlan[d] ? { borderColor: routines.find(r => r.id === weekPlan[d])?.color } : undefined}>
+                  <option value="">Descanso</option>
+                  {routines.map(r => <option key={r.id} value={r.id}>{r.emoji} {r.name}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
         <>
@@ -180,7 +248,25 @@ function ExercisePanel() {
 }
 
 // ============ TARJETAS ============
-interface CardData { id: string; label: string; bank: string; type: 'visa' | 'mastercard'; number: string; holder: string; expiry: string; cvv: string }
+interface CardData { id: string; label: string; bank: string; type: 'visa' | 'mastercard' | 'amex'; number: string; holder: string; expiry: string; cvv: string; color: string }
+
+// Dark tones — card text/fields are white for contrast.
+const CARD_COLORS = [
+  '#1a1a2e', '#16213e', '#0f3460', '#1b1b2f', '#162447', '#0d1b2a', '#1f2833', '#212121',
+  '#2d132c', '#3a0ca3', '#240046', '#10002b', '#03071e', '#1b263b', '#22223b', '#2b2d42',
+  '#0b132b', '#1c2541', '#231942', '#1d3557',
+]
+
+function formatCardNumber(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 16)
+  return digits.replace(/(.{4})/g, '$1 - ').replace(/ - $/, '').trim()
+}
+
+function formatExpiry(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 4)
+  if (digits.length > 2) return digits.slice(0, 2) + '/' + digits.slice(2)
+  return digits
+}
 
 function TarjetasTab() {
   const [unlocked, setUnlocked] = useState(false)
@@ -188,25 +274,76 @@ function TarjetasTab() {
   const [error, setError] = useState(false)
   const [cards, setCards] = useState<CardData[]>(() => { try { const s = localStorage.getItem('nn-cards'); return s ? JSON.parse(s) : [] } catch { return [] } })
   const [copied, setCopied] = useState<string | null>(null)
+  const [showCvv, setShowCvv] = useState<Record<string, boolean>>({})
+  const [search, setSearch] = useState('')
+  const [filterType, setFilterType] = useState<string>('all')
   const save = (c: CardData[]) => { setCards(c); localStorage.setItem('nn-cards', JSON.stringify(c)) }
-  const copyText = (text: string, field: string) => { navigator.clipboard.writeText(text); setCopied(field); setTimeout(() => setCopied(null), 1500) }
+  const copyText = (text: string, field: string) => { navigator.clipboard.writeText(text.replace(/\s-\s/g, '')); setCopied(field); setTimeout(() => setCopied(null), 1500) }
   const tryUnlock = () => { if (password === 'A5/911') { setUnlocked(true); setError(false) } else { setError(true) } }
-  const addCard = () => { save([...cards, { id: 'card-' + Date.now(), label: 'Nueva tarjeta', bank: '', type: 'visa', number: '', holder: '', expiry: '', cvv: '' }]) }
+  const addCard = () => { save([...cards, { id: 'card-' + Date.now(), label: '', bank: '', type: 'visa', number: '', holder: '', expiry: '', cvv: '', color: CARD_COLORS[cards.length % CARD_COLORS.length] }]) }
   const updateCard = (id: string, updates: Partial<CardData>) => save(cards.map(c => c.id === id ? { ...c, ...updates } : c))
   const removeCard = (id: string) => save(cards.filter(c => c.id !== id))
+
   if (!unlocked) return (<div className="tarjetas-lock"><Lock size={32} /><p>Ingresá la contraseña para acceder</p><div className="tarjetas-lock-form"><input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(false) }} onKeyDown={e => e.key === 'Enter' && tryUnlock()} placeholder="Contraseña" /><button onClick={tryUnlock}>Ingresar</button></div>{error && <span className="tarjetas-error">Contraseña incorrecta</span>}</div>)
+
+  const filtered = cards.filter(c => {
+    if (filterType !== 'all' && c.type !== filterType) return false
+    if (search && !c.bank.toLowerCase().includes(search.toLowerCase()) && !c.holder.toLowerCase().includes(search.toLowerCase()) && !c.label.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
+
   return (
-    <div className="tarjetas-content"><div className="tarjetas-grid">
-      {cards.map(card => (
-        <div key={card.id} className={`card tarjeta-card ${card.type}`}>
-          <div className="tarjeta-header"><input className="tarjeta-label-input" value={card.label} onChange={e => updateCard(card.id, { label: e.target.value })} /><select value={card.type} onChange={e => updateCard(card.id, { type: e.target.value as 'visa' | 'mastercard' })}><option value="visa">Visa</option><option value="mastercard">Mastercard</option></select><button className="tarjeta-delete" onClick={() => removeCard(card.id)}><Trash2 size={14} /></button></div>
-          <div className="tarjeta-field"><span className="tarjeta-field-label">Número</span><div className="tarjeta-field-row"><input value={card.number} onChange={e => updateCard(card.id, { number: e.target.value })} placeholder="0000 0000 0000 0000" /><button className="copy-btn" onClick={() => copyText(card.number, card.id + '-num')}>{copied === card.id + '-num' ? <Check size={12} /> : <Copy size={12} />}</button></div></div>
-          <div className="tarjeta-row"><div className="tarjeta-field"><span className="tarjeta-field-label">Titular</span><input value={card.holder} onChange={e => updateCard(card.id, { holder: e.target.value })} placeholder="Nombre completo" /></div><div className="tarjeta-field"><span className="tarjeta-field-label">Banco</span><input value={card.bank} onChange={e => updateCard(card.id, { bank: e.target.value })} placeholder="Banco" /></div></div>
-          <div className="tarjeta-row"><div className="tarjeta-field"><span className="tarjeta-field-label">Vencimiento</span><div className="tarjeta-field-row"><input value={card.expiry} onChange={e => updateCard(card.id, { expiry: e.target.value })} placeholder="MM/AA" /><button className="copy-btn" onClick={() => copyText(card.expiry, card.id + '-exp')}>{copied === card.id + '-exp' ? <Check size={12} /> : <Copy size={12} />}</button></div></div><div className="tarjeta-field"><span className="tarjeta-field-label">CVV</span><div className="tarjeta-field-row"><input value={card.cvv} onChange={e => updateCard(card.id, { cvv: e.target.value })} placeholder="000" type="password" /><button className="copy-btn" onClick={() => copyText(card.cvv, card.id + '-cvv')}>{copied === card.id + '-cvv' ? <Check size={12} /> : <Copy size={12} />}</button></div></div></div>
+    <div className="tarjetas-content">
+      <div className="tarjetas-toolbar">
+        <div className="tarjetas-search"><Search size={14} /><input placeholder="Buscar por nombre o banco..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <div className="tarjetas-filters">
+          {['all', 'visa', 'mastercard', 'amex'].map(t => (
+            <button key={t} className={filterType === t ? 'active' : ''} onClick={() => setFilterType(t)}>{t === 'all' ? 'Todas' : t === 'amex' ? 'Amex' : t.charAt(0).toUpperCase() + t.slice(1)}</button>
+          ))}
         </div>
-      ))}
-      <button className="card tarjeta-add" onClick={addCard}><Plus size={24} /><span>Agregar tarjeta</span></button>
-    </div></div>
+      </div>
+      <div className="tarjetas-grid">
+        {filtered.map(card => (
+          <div key={card.id} className="tarjeta-card-v2" style={{ background: `linear-gradient(135deg, ${card.color || '#1a1a2e'}, ${card.color || '#1a1a2e'}cc)` }}>
+            <div className="tarjeta-v2-top">
+              <span className="tarjeta-v2-bank">{card.bank || 'Banco'}</span>
+              <select className="tarjeta-v2-type" value={card.type} onChange={e => updateCard(card.id, { type: e.target.value as CardData['type'] })}><option value="visa">Visa</option><option value="mastercard">Mastercard</option><option value="amex">Amex</option></select>
+            </div>
+            <div className="tarjeta-v2-number" onClick={() => copyText(formatCardNumber(card.number), card.id + '-num')}>
+              {formatCardNumber(card.number) || 'XXXX - XXXX - XXXX - XXXX'}
+              {copied === card.id + '-num' && <span className="tarjeta-v2-copied">Copiado</span>}
+            </div>
+            <div className="tarjeta-v2-bottom">
+              <div className="tarjeta-v2-field"><span>TITULAR</span><span>{card.holder || '—'}</span></div>
+              <div className="tarjeta-v2-field"><span>VENCE</span><span>{formatExpiry(card.expiry) || 'MM/AA'}</span></div>
+              <div className="tarjeta-v2-field cvv-field">
+                <span>CVV</span>
+                <span className="tarjeta-v2-cvv">
+                  {showCvv[card.id] ? card.cvv || '—' : '***'}
+                  <button onClick={() => setShowCvv({ ...showCvv, [card.id]: !showCvv[card.id] })}>{showCvv[card.id] ? <EyeOff size={11} /> : <Eye size={11} />}</button>
+                </span>
+              </div>
+            </div>
+            <div className="tarjeta-v2-actions">
+              <input className="tarjeta-v2-edit-field" value={card.bank} onChange={e => updateCard(card.id, { bank: e.target.value })} placeholder="Banco *" />
+              <input className="tarjeta-v2-edit-field" value={card.number} onChange={e => updateCard(card.id, { number: e.target.value.replace(/\D/g, '').slice(0, 16) })} placeholder="Número *" />
+              <input className="tarjeta-v2-edit-field" value={card.holder} onChange={e => updateCard(card.id, { holder: e.target.value })} placeholder="Titular *" />
+              <div className="tarjeta-v2-edit-row">
+                <input className="tarjeta-v2-edit-field" value={card.expiry} onChange={e => updateCard(card.id, { expiry: e.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="MMAA *" />
+                <input className="tarjeta-v2-edit-field" value={card.cvv} onChange={e => updateCard(card.id, { cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="CVV *" />
+              </div>
+              <div className="tarjeta-v2-palette">
+                {CARD_COLORS.map(c => (
+                  <button key={c} className={`tarjeta-v2-swatch ${card.color === c ? 'active' : ''}`} style={{ background: c }} onClick={() => updateCard(card.id, { color: c })} title="Color de tarjeta" />
+                ))}
+              </div>
+              <button className="tarjeta-v2-delete" onClick={() => removeCard(card.id)}><Trash2 size={12} /> Eliminar</button>
+            </div>
+          </div>
+        ))}
+        <button className="card tarjeta-add" onClick={addCard}><Plus size={24} /><span>Agregar tarjeta</span></button>
+      </div>
+    </div>
   )
 }
 
@@ -287,7 +424,10 @@ function RecordatoriosTab() {
   return (
     <div className="anotaciones-content">
       <div className="bloques-toolbar">
-        <button className="bloques-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h2')} title="Título"><Type size={15} /></button>
+        <button className="bloques-btn bloques-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h1')} title="Encabezado 1">H1</button>
+        <button className="bloques-btn bloques-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h2')} title="Encabezado 2">H2</button>
+        <button className="bloques-btn bloques-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h3')} title="Encabezado 3">H3</button>
+        <button className="bloques-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'p')} title="Texto normal"><Type size={15} /></button>
         <button className="bloques-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('bold')} title="Negrita"><Bold size={15} /></button>
         <button className="bloques-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('italic')} title="Cursiva"><Italic size={15} /></button>
         <button className="bloques-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('underline')} title="Subrayado"><Underline size={15} /></button>
@@ -359,15 +499,17 @@ function ListaComprasTab() {
   const [editingGroup, setEditingGroup] = useState<string | null>(null)
   const [editingColor, setEditingColor] = useState<string | null>(null)
   const [filterCat, setFilterCat] = useState<string | null>(null)
+  const [activeGroup, setActiveGroup] = useState<string | null>(null)
 
   const save = (g: ShoppingGroup[]) => { setGroups(g); localStorage.setItem('nn-shopping', JSON.stringify(g)) }
 
   const addGroup = () => {
     if (!newGroupName.trim()) return
-    save([...groups, { id: 'sg-' + Date.now(), name: newGroupName.trim(), color: newGroupColor, items: [] }])
-    setNewGroupName(''); setShowNewGroup(false); setNewGroupColor(defaultGroupColors[groups.length % defaultGroupColors.length])
+    const id = 'sg-' + Date.now()
+    save([...groups, { id, name: newGroupName.trim(), color: newGroupColor, items: [] }])
+    setNewGroupName(''); setShowNewGroup(false); setNewGroupColor(defaultGroupColors[groups.length % defaultGroupColors.length]); setActiveGroup(id)
   }
-  const removeGroup = (id: string) => save(groups.filter(g => g.id !== id))
+  const removeGroup = (id: string) => { save(groups.filter(g => g.id !== id)); if (activeGroup === id) setActiveGroup(null) }
   const updateGroup = (id: string, u: Partial<ShoppingGroup>) => save(groups.map(g => g.id === id ? { ...g, ...u } : g))
   const duplicateGroup = (id: string) => {
     const g = groups.find(g => g.id === id); if (!g) return
@@ -420,8 +562,20 @@ function ListaComprasTab() {
 
       {groups.length === 0 && !showNewGroup && (<div className="shopping-empty"><ShoppingCart size={32} /><p>Sin listas de compras</p><p className="shopping-empty-hint">Creá tu primera lista</p></div>)}
 
+      {groups.length > 0 && (
+        <div className="shopping-subtabs">
+          {groups.map(g => (
+            <button key={g.id} className={`shopping-subtab ${(activeGroup || groups[0].id) === g.id ? 'active' : ''}`} onClick={() => setActiveGroup(g.id)} style={(activeGroup || groups[0].id) === g.id ? { borderColor: g.color, color: g.color } : undefined}>
+              <span className="shopping-subtab-dot" style={{ background: g.color }} />
+              {g.name}
+              <span className="shopping-subtab-count">{g.items.filter(i => !i.done).length}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="shopping-groups">
-        {groups.map(g => {
+        {groups.filter(g => g.id === (activeGroup || (groups[0] && groups[0].id))).map(g => {
           const filteredItems = filterCat ? g.items.filter(i => i.category === filterCat) : g.items
           return (
             <div key={g.id} className="card shopping-group" style={{ borderLeft: `4px solid ${g.color}` }}>
@@ -490,7 +644,8 @@ function WishlistTab() {
   const update = (id: string, u: Partial<WishItem>) => save(items.map(i => i.id === id ? { ...i, ...u } : i))
   const duplicate = (id: string) => { const it = items.find(i => i.id === id); if (!it) return; const idx = items.findIndex(i => i.id === id); const dup = { ...it, id: 'wish-' + Date.now(), name: it.name + ' (copia)' }; const next = [...items]; next.splice(idx + 1, 0, dup); save(next) }
 
-  const grouped = cats.reduce<Record<string, WishItem[]>>((acc, c) => { acc[c] = items.filter(i => i.category === c); return acc }, {})
+  const sorted = [...items].sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  const grouped = cats.reduce<Record<string, WishItem[]>>((acc, c) => { acc[c] = sorted.filter(i => i.category === c); return acc }, {})
 
   return (
     <div className="wishlist-content">
@@ -514,6 +669,7 @@ function WishlistTab() {
               ) : (
                 <span className={item.done ? 'struck' : ''} onDoubleClick={() => setEditingId(item.id)}>{item.name}</span>
               )}
+              <select className="wishlist-cat-change" value={item.category} onChange={e => update(item.id, { category: e.target.value })}>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>
               <button className="shopping-group-edit" onClick={() => setEditingId(item.id)} title="Editar"><Edit3 size={11} /></button>
               <button className="shopping-group-edit" onClick={() => duplicate(item.id)} title="Duplicar"><Copy size={11} /></button>
               <button className="shopping-item-delete" onClick={() => remove(item.id)}><X size={11} /></button>
@@ -526,21 +682,69 @@ function WishlistTab() {
   )
 }
 
+// ============ RICH TEXT EDITOR (reusable) ============
+const RICH_COLORS = ['#1d1d1f', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899']
+
+function RichTextEditor({ entryId, html, onChange, placeholder }: { entryId: string; html: string; onChange: (html: string) => void; placeholder?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [showColors, setShowColors] = useState(false)
+  // Set innerHTML only when switching entries, to preserve caret while typing.
+  useEffect(() => { if (ref.current && ref.current.innerHTML !== html) ref.current.innerHTML = html }, [entryId])
+  const exec = (cmd: string, val?: string) => { try { document.execCommand('styleWithCSS', false, 'true') } catch {}; document.execCommand(cmd, false, val); ref.current?.focus(); onChange(ref.current?.innerHTML || '') }
+  return (
+    <div className="rich-editor">
+      <div className="rich-toolbar">
+        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h1')} className="rich-h" title="Encabezado 1">H1</button>
+        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h2')} className="rich-h" title="Encabezado 2">H2</button>
+        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h3')} className="rich-h" title="Encabezado 3">H3</button>
+        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'p')} title="Texto normal"><Type size={14} /></button>
+        <span className="rich-sep" />
+        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('bold')} title="Negrita"><Bold size={14} /></button>
+        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('italic')} title="Cursiva"><Italic size={14} /></button>
+        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('underline')} title="Subrayado"><Underline size={14} /></button>
+        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('insertUnorderedList')} title="Lista"><List size={14} /></button>
+        <div className="rich-color-wrap">
+          <button onMouseDown={e => e.preventDefault()} onClick={() => setShowColors(!showColors)} title="Color"><Palette size={14} /></button>
+          {showColors && <div className="rich-color-pop">{RICH_COLORS.map(c => <button key={c} style={{ background: c }} onMouseDown={e => e.preventDefault()} onClick={() => { exec('foreColor', c); setShowColors(false) }} />)}</div>}
+        </div>
+      </div>
+      <div ref={ref} className="rich-content" contentEditable suppressContentEditableWarning data-ph={placeholder || 'Escribí...'} onInput={() => onChange(ref.current?.innerHTML || '')} />
+    </div>
+  )
+}
+
 // ============ DIARIO ============
 interface DiaryEntry { id: string; title: string; content: string; date: string; chapter: string }
 
 function DiarioTab() {
   const [entries, setEntries] = useState<DiaryEntry[]>(() => { try { const s = localStorage.getItem('nn-diary'); return s ? JSON.parse(s) : [] } catch { return [] } })
   const [activeEntry, setActiveEntry] = useState<string | null>(null)
-  const [chapters] = useState(['Reflexiones', 'Gratitud', 'Metas', 'Aprendizajes', 'Libre'])
+  const [chapters, setChapters] = useState<string[]>(() => { try { const s = localStorage.getItem('nn-diary-chapters'); return s ? JSON.parse(s) : ['Reflexiones', 'Gratitud', 'Metas', 'Aprendizajes', 'Libre'] } catch { return ['Reflexiones', 'Gratitud', 'Metas', 'Aprendizajes', 'Libre'] } })
+  const [newChapter, setNewChapter] = useState('')
+  const [showNewChapter, setShowNewChapter] = useState(false)
+  const [snapshot, setSnapshot] = useState<{ title: string; content: string } | null>(null)
 
   const save = (e: DiaryEntry[]) => { setEntries(e); localStorage.setItem('nn-diary', JSON.stringify(e)) }
+  const saveChapters = (c: string[]) => { setChapters(c); localStorage.setItem('nn-diary-chapters', JSON.stringify(c)) }
+  const addChapter = () => { if (!newChapter.trim() || chapters.includes(newChapter.trim())) return; saveChapters([...chapters, newChapter.trim()]); setNewChapter(''); setShowNewChapter(false) }
   const add = (chapter: string) => {
     const entry: DiaryEntry = { id: 'diary-' + Date.now(), title: '', content: '', date: new Date().toISOString(), chapter }
-    save([entry, ...entries]); setActiveEntry(entry.id)
+    save([entry, ...entries]); setActiveEntry(entry.id); setSnapshot({ title: '', content: '' })
   }
-  const update = (id: string, u: Partial<DiaryEntry>) => save(entries.map(e => e.id === id ? { ...e, ...u } : e))
-  const remove = (id: string) => { save(entries.filter(e => e.id !== id)); if (activeEntry === id) setActiveEntry(null) }
+  const update = (id: string, u: Partial<DiaryEntry>) => { setEntries(entries.map(e => e.id === id ? { ...e, ...u } : e)) }
+  const saveCurrent = () => { localStorage.setItem('nn-diary', JSON.stringify(entries)); setSnapshot(null) }
+  const cancelEdit = () => {
+    if (snapshot && activeEntry) {
+      setEntries(entries.map(e => e.id === activeEntry ? { ...e, ...snapshot } : e))
+      localStorage.setItem('nn-diary', JSON.stringify(entries.map(e => e.id === activeEntry ? { ...e, ...snapshot } : e)))
+    }
+    setSnapshot(null); setActiveEntry(null)
+  }
+  const remove = (id: string) => { save(entries.filter(e => e.id !== id)); if (activeEntry === id) { setActiveEntry(null); setSnapshot(null) } }
+  const selectEntry = (id: string) => {
+    const entry = entries.find(e => e.id === id)
+    if (entry) { setActiveEntry(id); setSnapshot({ title: entry.title, content: entry.content }) }
+  }
 
   const current = entries.find(e => e.id === activeEntry)
 
@@ -556,13 +760,22 @@ function DiarioTab() {
                 <button className="diary-chapter-add" onClick={() => add(ch)}><Plus size={11} /></button>
               </div>
               {entries.filter(e => e.chapter === ch).map(e => (
-                <button key={e.id} className={`diary-entry-btn ${activeEntry === e.id ? 'active' : ''}`} onClick={() => setActiveEntry(e.id)}>
+                <button key={e.id} className={`diary-entry-btn ${activeEntry === e.id ? 'active' : ''}`} onClick={() => selectEntry(e.id)}>
                   <span>{e.title || 'Sin título'}</span>
                   <span className="diary-entry-date">{new Date(e.date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>
                 </button>
               ))}
             </div>
           ))}
+          {showNewChapter ? (
+            <div className="diary-new-chapter">
+              <input value={newChapter} onChange={e => setNewChapter(e.target.value)} placeholder="Nombre del grupo..." onKeyDown={e => e.key === 'Enter' && addChapter()} autoFocus />
+              <button onClick={addChapter} disabled={!newChapter.trim()}><Check size={11} /></button>
+              <button onClick={() => { setShowNewChapter(false); setNewChapter('') }}><X size={11} /></button>
+            </div>
+          ) : (
+            <button className="diary-add-chapter" onClick={() => setShowNewChapter(true)}><Plus size={11} /> Nuevo grupo</button>
+          )}
         </div>
       </div>
       <div className="diary-editor">
@@ -573,7 +786,11 @@ function DiarioTab() {
               <button className="nota-action-btn danger" onClick={() => remove(current.id)}><Trash2 size={14} /></button>
             </div>
             <span className="diary-date-label">{new Date(current.date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-            <textarea className="diary-textarea" value={current.content} onChange={e => update(current.id, { content: e.target.value })} placeholder="Escribí tus pensamientos..." />
+            <RichTextEditor entryId={current.id} html={current.content} onChange={c => update(current.id, { content: c })} placeholder="Escribí tus pensamientos..." />
+            <div className="diary-save-actions">
+              <button className="diary-save-btn" onClick={saveCurrent}><Save size={13} /> Guardar</button>
+              <button className="diary-cancel-btn" onClick={cancelEdit}>Cancelar</button>
+            </div>
           </>
         ) : (
           <div className="editor-placeholder"><p>Seleccioná o creá una entrada</p></div>
@@ -611,12 +828,16 @@ function ObjetivosTab() {
   const globalPct = goals.length > 0 ? Math.round(goals.reduce((a, g) => a + g.progress, 0) / goals.length) : 0
   const completed = goals.filter(g => g.progress >= 100).length
 
+  const toggleDone = (id: string) => update(id, { progress: goals.find(g => g.id === id)?.progress === 100 ? 0 : 100 })
+
   const renderGoal = (g: Goal) => (
     <div key={g.id} className="card goal-item">
       <div className="goal-header">
-        <Target size={16} className="goal-icon" style={{ color: g.progress >= 100 ? '#22c55e' : 'var(--accent)' }} />
+        <button className={`goal-check ${g.progress >= 100 ? 'done' : ''}`} onClick={() => toggleDone(g.id)}>
+          {g.progress >= 100 && <Check size={12} />}
+        </button>
         <div className="goal-info">
-          <input className="goal-title" value={g.title} onChange={e => update(g.id, { title: e.target.value })} />
+          <input className={`goal-title ${g.progress >= 100 ? 'struck' : ''}`} value={g.title} onChange={e => update(g.id, { title: e.target.value })} />
           <textarea className="goal-desc" value={g.description} onChange={e => update(g.id, { description: e.target.value })} placeholder="Descripción..." rows={1} />
         </div>
         <select className="goal-cat-select" value={g.category} onChange={e => update(g.id, { category: e.target.value })}>
@@ -628,11 +849,6 @@ function ObjetivosTab() {
         </div>
         <button className="shopping-item-delete" onClick={() => remove(g.id)}><Trash2 size={13} /></button>
       </div>
-      <div className="goal-progress">
-        <input type="range" min={0} max={100} value={g.progress} onChange={e => update(g.id, { progress: Number(e.target.value) })} className="goal-slider" />
-        <span className={`goal-pct ${g.progress >= 100 ? 'done' : ''}`}>{g.progress}%</span>
-      </div>
-      <div className="goal-bar"><div className="goal-bar-fill" style={{ width: `${g.progress}%`, background: g.progress >= 100 ? '#22c55e' : 'var(--accent)' }} /></div>
     </div>
   )
 
@@ -680,13 +896,55 @@ function ObjetivosTab() {
   )
 }
 
+// ============ HOY PANEL (today's routine) ============
+const FULL_WEEKDAYS_ES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+const WEEK_KEYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'] // index by getDay()
+
+function HoyPanel() {
+  const now = new Date()
+  const dow = now.getDay()
+  const activeWeek = (() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })()
+  let routine: Routine | null = null
+  try {
+    const plan = JSON.parse(localStorage.getItem('nn-week-routine') || '{}')
+    const routines: Routine[] = JSON.parse(localStorage.getItem('nn-exercise-routines') || 'null') || []
+    const rid = plan[WEEK_KEYS_ES[dow]]
+    if (rid) routine = routines.find(r => r.id === rid) || null
+  } catch {}
+  const weekEx = routine ? (routine.weeks && routine.weeks.length === 4 ? routine.weeks[activeWeek] : routine.exercises) || [] : []
+
+  return (
+    <div className="card hoy-panel">
+      <div className="card-title"><CalendarClock size={16} /> Hoy</div>
+      <div className="hoy-date">{FULL_WEEKDAYS_ES[dow]}</div>
+      <div className="hoy-subdate">{now.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+      {routine ? (
+        <div className="hoy-routine" style={{ background: `linear-gradient(135deg, ${routine.color}, ${routine.color}aa)` }}>
+          <span className="hoy-routine-emoji">{routine.emoji}</span>
+          <div><span className="hoy-routine-name">{routine.name} — Semana {activeWeek + 1}</span><span className="hoy-routine-week">{weekEx.length} ejercicios</span></div>
+        </div>
+      ) : (
+        <div className="hoy-rest">Día de descanso · asigná una rutina en el Creador</div>
+      )}
+      {weekEx.length > 0 && (
+        <div className="hoy-exercises">
+          <span className="hoy-ex-label">Ejercicios de hoy</span>
+          {weekEx.map((e, i) => (
+            <div key={i} className="hoy-ex-item"><span className="hoy-ex-dot" style={{ background: routine?.color }} />{e.name}<span className="hoy-ex-meta">{e.sets}×{e.reps}</span></div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ============ MAIN ============
 type PersonalTab = 'salud' | 'tarjetas' | 'anotaciones' | 'compras' | 'wishlist' | 'diario' | 'objetivos'
 
 const defaultTabOrder: { id: PersonalTab; label: string; iconName: string }[] = [
   { id: 'salud', label: 'Salud', iconName: 'heart' },
   { id: 'tarjetas', label: 'Tarjetas', iconName: 'creditcard' },
-  { id: 'anotaciones', label: 'Recordatorios', iconName: 'stickynote' },
+  { id: 'anotaciones', label: 'Anotaciones', iconName: 'stickynote' },
   { id: 'compras', label: 'Lista de compras', iconName: 'shoppingcart' },
   { id: 'wishlist', label: 'Compras', iconName: 'shoppingbag' },
   { id: 'diario', label: 'Diario', iconName: 'book' },
@@ -738,7 +996,15 @@ export default function PersonalSection() {
           </button>
         ))}
       </div>
-      {tab === 'salud' && (<div className="salud-content"><div className="personal-grid"><div className="personal-panel"><WaterCounter /></div><div className="personal-panel"><ExercisePanel /></div></div></div>)}
+      {tab === 'salud' && (
+        <div className="salud-content">
+          <div className="salud-top-row">
+            <div className="salud-half"><WaterCounter /></div>
+            <div className="salud-half"><HoyPanel /></div>
+          </div>
+          <ExercisePanel />
+        </div>
+      )}
       {tab === 'tarjetas' && <TarjetasTab />}
       {tab === 'anotaciones' && <RecordatoriosTab />}
       {tab === 'compras' && <ListaComprasTab />}

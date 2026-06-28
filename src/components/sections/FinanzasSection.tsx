@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Percent, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter } from 'lucide-react'
+import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical } from 'lucide-react'
+import CriptomonedasSection from './CriptomonedasSection'
+import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import './FinanzasSection.css'
 
 // ============ DATA MODEL ============
@@ -22,7 +24,7 @@ interface RentData {
 }
 
 const defaultExpenseColors = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
-const defaultServices = ['Luz', 'Gas', 'Expensas', 'Internet']
+const defaultServices = ['Luz', 'Gas', 'Expensas', 'Internet', 'Alimentos']
 
 function loadRent(): RentData {
   try {
@@ -51,6 +53,7 @@ function AlquilerView() {
   const [newCatName, setNewCatName] = useState('')
   const [showNewCat, setShowNewCat] = useState(false)
   const [view, setView] = useState<'dashboard' | 'servicios' | 'historial' | 'mantenimiento' | 'extras'>('dashboard')
+  const [splitOpen, setSplitOpen] = useState(false)
   const [newMaintText, setNewMaintText] = useState('')
   const [newExtraName, setNewExtraName] = useState('')
   const [newExtraAmount, setNewExtraAmount] = useState('')
@@ -158,7 +161,21 @@ function AlquilerView() {
               </div>
             </div>
             {data.people > 1 && (
-              <div className="alquiler-per-person"><Percent size={14} /><span>Cada persona: <strong>${perPerson.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</strong></span></div>
+              <>
+                <button className="alquiler-per-person alquiler-split-toggle" onClick={() => setSplitOpen(!splitOpen)}>
+                  {splitOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  <span>Total por persona: <strong>${perPerson.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</strong></span>
+                  <span className="alquiler-split-hint">{splitOpen ? 'Ocultar detalle' : 'Ver detalle'}</span>
+                </button>
+                {splitOpen && (
+                  <div className="alquiler-split-detail">
+                    <div className="alquiler-split-row"><span>Alquiler</span><span>${(data.monthlyRent / data.people).toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span></div>
+                    {data.categories.filter(c => c.amount > 0).map(c => (
+                      <div key={c.id} className="alquiler-split-row"><span style={{ color: c.color }}>{c.name}</span><span>${(c.amount / data.people).toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span></div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -379,7 +396,7 @@ function GastosPropiosView() {
       <div className="card gastos-add-card">
         <input className="gastos-add-name" value={newName} onChange={e => setNewName(e.target.value)} placeholder="¿En qué gastaste / vas a gastar?" onKeyDown={e => e.key === 'Enter' && add()} autoFocus />
         <div className="gastos-add-row2">
-          <div className="extras-amount-wrap"><span>$</span><input type="number" value={newAmount || ''} onChange={e => setNewAmount(Number(e.target.value))} placeholder="0 (opcional)" /></div>
+          <div className="extras-amount-wrap"><span>$</span><input type="number" value={newAmount || ''} onChange={e => setNewAmount(Number(e.target.value))} placeholder="0 (Opcional)" /></div>
           <div className="gastos-quick">
             {quickAmounts.map(q => <button key={q} onClick={() => setNewAmount(a => a + q)}>+{(q / 1000)}k</button>)}
             {newAmount > 0 && <button className="gastos-quick-clear" onClick={() => setNewAmount(0)}><X size={11} /></button>}
@@ -410,17 +427,28 @@ function GastosPropiosView() {
 }
 
 // ============ MAIN ============
-type FinTab = 'alquiler' | 'gastos'
+const FIN_TABS: { id: string; label: string; icon: React.ReactNode }[] = [
+  { id: 'alquiler', label: 'Alquiler', icon: <Home size={14} /> },
+  { id: 'gastos', label: 'Gastos Propios', icon: <Wallet size={14} /> },
+  { id: 'cripto', label: 'Criptomonedas', icon: <Bitcoin size={14} /> },
+]
 
 export default function FinanzasSection() {
-  const [tab, setTab] = useState<FinTab>('alquiler')
+  const [tab, setTab] = useState<string>('alquiler')
+  const { order, tabProps } = useReorderableTabs(FIN_TABS.map(t => t.id), 'nn-finanzas-tab-order')
+  const tabMap = Object.fromEntries(FIN_TABS.map(t => [t.id, t]))
   return (
     <div className="finanzas-section">
       <div className="finanzas-tabs">
-        <button className={`finanzas-tab ${tab === 'alquiler' ? 'active' : ''}`} onClick={() => setTab('alquiler')}><Home size={14} /> Alquiler</button>
-        <button className={`finanzas-tab ${tab === 'gastos' ? 'active' : ''}`} onClick={() => setTab('gastos')}><Wallet size={14} /> Gastos Propios</button>
+        {order.map((id, i) => { const t = tabMap[id]; if (!t) return null; const dp = tabProps(i); return (
+          <button key={id} className={`finanzas-tab ${tab === id ? 'active' : ''} ${dp.className}`} onClick={() => setTab(id)} draggable={dp.draggable} onDragStart={dp.onDragStart} onDragOver={dp.onDragOver} onDrop={dp.onDrop} onDragEnd={dp.onDragEnd}>
+            <GripVertical size={10} className="tab-grip" />{t.icon} {t.label}
+          </button>
+        ) })}
       </div>
-      {tab === 'alquiler' ? <AlquilerView /> : <GastosPropiosView />}
+      {tab === 'alquiler' && <AlquilerView />}
+      {tab === 'gastos' && <GastosPropiosView />}
+      {tab === 'cripto' && <CriptomonedasSection />}
     </div>
   )
 }

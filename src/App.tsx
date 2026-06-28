@@ -11,9 +11,9 @@ import { loadNotifications } from './components/sections/AlertasSection'
 import { Bell } from 'lucide-react'
 import './App.css'
 
-export type Section = 'inicio' | 'personal' | 'finanzas' | 'etsy' | 'proyectos' | 'software' | 'edicion' | 'notas' | 'alertas' | 'configuracion'
+export type Section = 'inicio' | 'personal' | 'finanzas' | 'etsy' | 'proyectos' | 'software' | 'edicion' | 'notas' | 'extras' | 'alertas' | 'configuracion'
 
-export const APP_VERSION = '1.00.42'
+export const APP_VERSION = '1.00.56'
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)

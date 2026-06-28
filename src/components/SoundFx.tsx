@@ -1,10 +1,14 @@
 import { useEffect } from 'react'
-import { sfx } from '../lib/sounds'
+import { sfx, initSounds } from '../lib/sounds'
 
 // Plays a subtle click sound when interactive elements are pressed.
 // Uses pointerdown (capture) so it fires even when handlers stopPropagation.
 export default function SoundFx() {
   useEffect(() => {
+    // Start the audio session early so the app shows in the Windows volume mixer.
+    initSounds()
+    const resume = () => initSounds()
+    window.addEventListener('pointerdown', resume, { once: true })
     const handler = (e: PointerEvent) => {
       const t = e.target as HTMLElement
       if (!t || !t.closest) return
@@ -21,7 +25,7 @@ export default function SoundFx() {
       }
     }
     document.addEventListener('pointerdown', handler, true)
-    return () => document.removeEventListener('pointerdown', handler, true)
+    return () => { document.removeEventListener('pointerdown', handler, true); window.removeEventListener('pointerdown', resume) }
   }, [])
   return null
 }

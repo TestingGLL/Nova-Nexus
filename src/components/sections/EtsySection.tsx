@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Clock, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, HelpCircle } from 'lucide-react'
+import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Clock, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace } from 'lucide-react'
 import './EtsySection.css'
 
 // ============ TYPES ============
@@ -163,14 +163,15 @@ function ArticlesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
                 <input className="article-desc-input" placeholder="Descripción..." value={art.description} onChange={e => updateArticle(art.id, { description: e.target.value })} />
                 <div className="article-date-group">
                   <label className="article-date-label"><Calendar size={12} /> Creación <input type="date" value={articleCreatedDate(art)} onChange={e => updateArticle(art.id, { createdAt: e.target.value })} /></label>
-                  <label className="article-date-label"><Calendar size={12} /> Lanzamiento <input type="date" value={art.launchDate || ''} onChange={e => updateArticle(art.id, { launchDate: e.target.value })} /></label>
                   <label className="article-date-label"><DollarSign size={12} /> Precio <input className="article-price-input" value={art.price || ''} onChange={e => updateArticle(art.id, { price: e.target.value })} placeholder="$0.00" /></label>
-                  <label className="article-launch-toggle"><input type="checkbox" checked={!!art.inLaunches} onChange={e => updateArticle(art.id, { inLaunches: e.target.checked })} /> En lanzamientos</label>
                 </div>
                 <div className="article-media-row">
                   <label className="article-media-btn"><Image size={12} /> {art.cover ? 'Cambiar portada' : 'Portada'}<input type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => updateArticle(art.id, { cover: r.result as string }); r.readAsDataURL(f); e.target.value = '' }} /></label>
                   {art.cover && <><img src={art.cover} alt="" className="article-cover-thumb" /><button className="article-media-remove" onClick={() => updateArticle(art.id, { cover: undefined })}><X size={11} /></button></>}
+                  <label className="article-media-btn"><Image size={12} /> {art.banner ? 'Cambiar banner' : 'Banner'}<input type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => updateArticle(art.id, { banner: r.result as string }); r.readAsDataURL(f); e.target.value = '' }} /></label>
+                  {art.banner && <><img src={art.banner} alt="" className="article-cover-thumb" /><button className="article-media-remove" onClick={() => updateArticle(art.id, { banner: undefined })}><X size={11} /></button></>}
                 </div>
+                {art.banner && <img src={art.banner} alt="" className="article-banner-preview" />}
                 <div className="subarticles">
                   <div className="subarticles-header"><span className="subarticles-label">Sub-artículos ({art.subArticles.length})</span><button className="subarticle-add-btn" onClick={() => addSubArticle(art.id)}><Plus size={12} /> Añadir</button></div>
                   {art.subArticles.map(sub => (
@@ -196,9 +197,10 @@ function ArticlesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
 const ordinals = ['1º', '2º', '3º', '4º', '5º', '6º', '7º', '8º', '9º', '10º']
 
 function LaunchesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
-  const [view, setView] = useState<'flujo' | 'board' | 'timeline'>('flujo')
+  const [view, setView] = useState<'seleccionables' | 'flujo' | 'board' | 'timeline'>('seleccionables')
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
+  const toggleInLaunches = (id: string) => onUpdate({ ...store, articles: store.articles.map(a => a.id === id ? { ...a, inLaunches: !a.inLaunches } : a) })
   // Only articles explicitly marked "En lanzamientos" appear here — not every article.
   const launchArticles = store.articles.filter(a => a.inLaunches)
   const boardOrder = [...launchArticles].sort((a, b) => { const oa = a.order ?? launchArticles.indexOf(a) + 1000; const ob = b.order ?? launchArticles.indexOf(b) + 1000; return oa - ob })
@@ -211,7 +213,27 @@ function LaunchesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
 
   return (
     <div className="launches-tab">
-      <div className="launches-view-toggle"><button className={view === 'flujo' ? 'active' : ''} onClick={() => setView('flujo')}><TrendingUp size={13} /> Flujo</button><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}><Layers size={13} /> Mapa de orden</button><button className={view === 'timeline' ? 'active' : ''} onClick={() => setView('timeline')}><Clock size={13} /> Línea de tiempo</button></div>
+      <div className="launches-view-toggle"><button className={view === 'seleccionables' ? 'active' : ''} onClick={() => setView('seleccionables')}><Check size={13} /> Seleccionables</button><button className={view === 'flujo' ? 'active' : ''} onClick={() => setView('flujo')}><TrendingUp size={13} /> Flujo</button><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}><Layers size={13} /> Mapa de orden</button><button className={view === 'timeline' ? 'active' : ''} onClick={() => setView('timeline')}><Clock size={13} /> Línea de tiempo</button></div>
+
+      {view === 'seleccionables' && (
+        store.articles.length === 0 ? <div className="articles-empty"><Package size={24} /><p>No hay artículos. Crealos en la pestaña Artículos.</p></div> : (
+          <>
+            <p className="board-hint">Elegí qué artículos entran en los lanzamientos. Se generan automáticamente en el resto de pestañas y la línea de tiempo.</p>
+            <div className="seleccionables-list">
+              {store.articles.map(art => (
+                <div key={art.id} className={`seleccionable-item ${art.inLaunches ? 'on' : ''}`}>
+                  <button className={`seleccionable-check ${art.inLaunches ? 'on' : ''}`} style={art.inLaunches ? { background: store.accentColor, borderColor: store.accentColor } : undefined} onClick={() => toggleInLaunches(art.id)}>{art.inLaunches && <Check size={12} />}</button>
+                  <div className="seleccionable-info">
+                    <span className="seleccionable-title">{art.title}</span>
+                    {art.subArticles.length > 0 && <span className="seleccionable-subs">{art.subArticles.length} sub-artículos</span>}
+                  </div>
+                  {art.inLaunches && <span className="seleccionable-badge" style={{ background: store.accentColor }}>En lanzamientos</span>}
+                </div>
+              ))}
+            </div>
+          </>
+        )
+      )}
 
       {view === 'flujo' ? (
         pending.length === 0 ? <div className="articles-empty"><TrendingUp size={24} /><p>{boardOrder.length === 0 ? 'Marcá artículos con "En lanzamientos" en Artículos' : '¡Todos los artículos fueron lanzados!'}</p></div> : (
@@ -260,12 +282,12 @@ function LaunchesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
             ))}
           </div></>
         )
-      ) : (
+      ) : view === 'timeline' ? (
         <>{withDate.length === 0 && withoutDate.length === 0 && <div className="articles-empty"><Clock size={24} /><p>Sin artículos</p></div>}
           {withDate.length > 0 && (<div className="timeline">{withDate.map((art, i) => (<div key={art.id} className="timeline-item"><div className="timeline-dot" style={{ background: store.accentColor }} />{i < withDate.length - 1 && <div className="timeline-line" />}<div className="timeline-content"><span className="timeline-date">{new Date(art.launchDate! + 'T12:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}</span><span className="timeline-title">{art.title}</span>{art.description && <span className="timeline-desc">{art.description}</span>}</div></div>))}</div>)}
           {withoutDate.length > 0 && (<div className="launches-undated"><span className="undated-label">Sin fecha</span>{withoutDate.map(art => (<div key={art.id} className="undated-item">{art.title}</div>))}</div>)}
         </>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -277,7 +299,12 @@ function CreacionesPanel({ panel, save, panels }: { panel: PromptPanel; save: (p
   const [activeSub, setActiveSub] = useState<string>('__main')
   const [replaceFrom, setReplaceFrom] = useState('')
   const [replaceTo, setReplaceTo] = useState('')
+  const [wordMenu, setWordMenu] = useState<number | null>(null)
   const wordGroups = loadWordGroups()
+
+  // Map each group word (lowercased) → its sibling options, for click-to-replace.
+  const wordGroupMap: Record<string, string[]> = {}
+  for (const g of wordGroups) for (const w of g.words) wordGroupMap[w.toLowerCase()] = g.words
 
   const updatePanel = (u: Partial<PromptPanel>) => save(panels.map(p => p.id === panel.id ? { ...p, ...u } : p))
   const addSub = () => { const sub = { id: 'pr-' + Date.now(), text: '', variables: [] }; updatePanel({ prompts: [...panel.prompts, sub] }); setActiveSub(sub.id) }
@@ -320,6 +347,38 @@ function CreacionesPanel({ panel, save, panels }: { panel: PromptPanel; save: (p
               <button className="creacion-prompt-del" onClick={() => removeSub(activeSub)}><Trash2 size={11} /></button>
             </div>
           )}
+
+          {(() => {
+            const currentText = activeSub === '__main' ? (panel.mainPrompt || '') : (panel.prompts.find(p => p.id === activeSub)?.text || '')
+            const setCurrentText = (t: string) => activeSub === '__main' ? updatePanel({ mainPrompt: t }) : updateSub(activeSub, t)
+            const tokens = currentText.split(/(\s+)/)
+            const replaceToken = (idx: number, w: string) => { const t = [...tokens]; t[idx] = w; setCurrentText(t.join('')); setWordMenu(null) }
+            if (!currentText.trim() || wordGroups.length === 0) return null
+            return (
+              <div className="creacion-interactive">
+                <span className="creacion-wg-label">Clic en una palabra de un grupo para reemplazarla:</span>
+                <div className="creacion-tokens">
+                  {tokens.map((tok, i) => {
+                    if (/^\s+$/.test(tok)) return <span key={i}>{tok}</span>
+                    const opts = wordGroupMap[tok.toLowerCase()]
+                    if (!opts) return <span key={i} className="creacion-token-plain">{tok}</span>
+                    return (
+                      <span key={i} className="creacion-token-wrap">
+                        <button className="creacion-token" onClick={() => setWordMenu(wordMenu === i ? null : i)}>{tok}</button>
+                        {wordMenu === i && (
+                          <span className="creacion-token-menu">
+                            {opts.filter(o => o.toLowerCase() !== tok.toLowerCase()).map(o => (
+                              <button key={o} onClick={() => replaceToken(i, o)}>{o}</button>
+                            ))}
+                          </span>
+                        )}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
 
           <div className="creacion-replace">
             <Replace size={12} />
@@ -380,6 +439,7 @@ function FinanzasTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const income = store.income || []
   const [newAmount, setNewAmount] = useState('')
   const [newNote, setNewNote] = useState('')
+  const [filterMonth, setFilterMonth] = useState('')
 
   const addEntry = () => {
     if (!newAmount) return
@@ -389,29 +449,53 @@ function FinanzasTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const removeEntry = (id: string) => onUpdate({ ...store, income: income.filter(e => e.id !== id) })
   const total = income.reduce((a, e) => a + e.amount, 0)
 
+  const thisMonth = new Date().toISOString().slice(0, 7)
+  const monthTotal = income.filter(e => e.date.startsWith(thisMonth)).reduce((a, e) => a + e.amount, 0)
+  const months = [...new Set(income.map(e => e.date.slice(0, 7)))].sort().reverse()
+  const filtered = filterMonth ? income.filter(e => e.date.startsWith(filterMonth)) : income
+
   return (
     <div className="finanzas-tab">
-      <div className="card finanzas-summary">
-        <div className="finanzas-total"><DollarSign size={18} /><span>Total: <strong>${total.toLocaleString('es-AR')}</strong></span></div>
-        <span className="finanzas-count">{income.length} registros</span>
-      </div>
-      <div className="finanzas-add">
-        <div className="finanzas-add-row">
-          <div className="finanzas-amount-wrap"><span>$</span><input type="number" value={newAmount} onChange={e => setNewAmount(e.target.value)} placeholder="0" /></div>
-          <input value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Nota (opcional)..." className="finanzas-note-input" />
-          <button className="modal-submit" onClick={addEntry} disabled={!newAmount}>Registrar</button>
+      <div className="finanzas-stats-grid">
+        <div className="card finanzas-stat-card">
+          <span className="finanzas-stat-label">Ingresos totales</span>
+          <span className="finanzas-stat-value" style={{ color: '#22c55e' }}>${total.toLocaleString('es-AR')}</span>
+          <span className="finanzas-stat-sub">{income.length} registros</span>
+        </div>
+        <div className="card finanzas-stat-card">
+          <span className="finanzas-stat-label">Este mes</span>
+          <span className="finanzas-stat-value">${monthTotal.toLocaleString('es-AR')}</span>
+          <span className="finanzas-stat-sub">{income.filter(e => e.date.startsWith(thisMonth)).length} registros</span>
+        </div>
+        <div className="card finanzas-stat-card">
+          <span className="finanzas-stat-label">Promedio mensual</span>
+          <span className="finanzas-stat-value">${months.length > 0 ? Math.round(total / months.length).toLocaleString('es-AR') : '0'}</span>
+          <span className="finanzas-stat-sub">{months.length} meses</span>
         </div>
       </div>
+      <div className="card finanzas-add-card">
+        <div className="finanzas-add-row">
+          <div className="finanzas-amount-wrap"><span>$</span><input type="number" value={newAmount} onChange={e => setNewAmount(e.target.value)} placeholder="0" /></div>
+          <input value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Nota (Opcional)..." className="finanzas-note-input" onKeyDown={e => e.key === 'Enter' && addEntry()} />
+          <button className="modal-submit" onClick={addEntry} disabled={!newAmount}><Plus size={14} /> Registrar</button>
+        </div>
+      </div>
+      <div className="finanzas-filter">
+        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>
+          <option value="">Todos los meses</option>
+          {months.map(m => <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</option>)}
+        </select>
+      </div>
       <div className="finanzas-list">
-        {income.map(e => (
-          <div key={e.id} className="finanzas-item card">
+        {filtered.map(e => (
+          <div key={e.id} className="finanzas-item">
             <span className="finanzas-item-amount" style={{ color: e.amount >= 0 ? '#22c55e' : '#ef4444' }}>${e.amount.toLocaleString('es-AR')}</span>
             <span className="finanzas-item-note">{e.note || '—'}</span>
             <span className="finanzas-item-date">{new Date(e.date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
             <button className="shopping-item-delete" onClick={() => removeEntry(e.id)}><Trash2 size={12} /></button>
           </div>
         ))}
-        {income.length === 0 && <div className="articles-empty"><DollarSign size={24} /><p>Sin registros de ingresos</p></div>}
+        {filtered.length === 0 && <div className="articles-empty"><DollarSign size={24} /><p>Sin registros{filterMonth ? ' en este período' : ''}</p></div>}
       </div>
     </div>
   )
@@ -481,17 +565,36 @@ const continents: { name: string; countries: string[] }[] = [
   { name: 'Asia', countries: ['jp'] },
 ]
 
+// Heuristic product suggestions per commercial date (for Etsy sellers).
+function recommendedProducts(label: string, desc: string): string[] {
+  const t = (label + ' ' + desc).toLowerCase()
+  if (/valent|romance|amor|pareja/.test(t)) return ['Arte romántico', 'Tarjetas imprimibles', 'Regalos personalizados', 'Stickers de amor']
+  if (/madre|mother|mamá/.test(t)) return ['Regalos personalizados', 'Tarjetas para mamá', 'Arte para imprimir', 'Cupones de regalo']
+  if (/navidad|christmas|noël|weihnacht/.test(t)) return ['Decoración navideña', 'Tarjetas de Navidad', 'Planners de fin de año', 'Stickers festivos']
+  if (/halloween/.test(t)) return ['Imprimibles de Halloween', 'Decoración spooky', 'Stickers', 'Disfraces digitales']
+  if (/black friday|cyber/.test(t)) return ['Packs con descuento', 'Bundles', 'Best-sellers en oferta']
+  if (/año nuevo|new year|nouvel|propósit/.test(t)) return ['Planners', 'Calendarios', 'Arte motivacional', 'Trackers de hábitos']
+  if (/independ|nacional|patri|bastille/.test(t)) return ['Arte patriótico', 'Decoración temática', 'Banderas imprimibles']
+  if (/trabajo|travail|labor/.test(t)) return ['Arte para oficina', 'Planners de productividad']
+  return ['Arte temático', 'Imprimibles relacionados', 'Stickers de temporada']
+}
+
 function PlanificacionTab() {
   const [country, setCountry] = useState('us')
+  const [openConts, setOpenConts] = useState<Record<string, boolean>>({ 'América': true })
+  const [search, setSearch] = useState('')
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const data = commercialDates[country]
   const now = new Date()
   const currentMMDD = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
-  // Next upcoming date per country for the highlight panel.
   const upcomingByCountry = Object.entries(commercialDates).map(([key, val]) => {
     const next = [...val.dates].sort((a, b) => a.date.localeCompare(b.date)).find(d => d.date >= currentMMDD) || val.dates[0]
     return { key, name: val.name, next }
   }).sort((a, b) => a.next.date.localeCompare(b.next.date))
+
+  const q = search.trim().toLowerCase()
+  const filteredDates = data.dates.filter(d => !q || d.label.toLowerCase().includes(q) || d.desc.toLowerCase().includes(q))
 
   return (
     <div className="planificacion-tab">
@@ -508,36 +611,55 @@ function PlanificacionTab() {
         </div>
       </div>
 
-      {continents.map(cont => (
-        <div key={cont.name} className="plan-continent">
-          <span className="plan-continent-name">{cont.name}</span>
-          <div className="plan-country-tabs">
-            {cont.countries.map(key => (
-              <button key={key} className={`plan-country-btn ${country === key ? 'active' : ''}`} onClick={() => setCountry(key)}>
-                <Globe size={13} /> {commercialDates[key].name}
-              </button>
-            ))}
+      <div className="plan-search"><Search size={14} /><input placeholder="Buscar fecha o evento..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+
+      {continents.map(cont => {
+        const open = openConts[cont.name]
+        return (
+          <div key={cont.name} className="plan-continent">
+            <button className="plan-continent-toggle" onClick={() => setOpenConts({ ...openConts, [cont.name]: !open })}>
+              {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <span className="plan-continent-name">{cont.name}</span>
+              <span className="plan-continent-count">{cont.countries.length} países</span>
+            </button>
+            {open && (
+              <div className="plan-country-tabs">
+                {cont.countries.map(key => (
+                  <button key={key} className={`plan-country-btn ${country === key ? 'active' : ''}`} onClick={() => { setCountry(key); setSelectedDate(null) }}>
+                    <Globe size={13} /> {commercialDates[key].name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        )
+      })}
 
       <div className="plan-dates-grid">
-        {data.dates.map(d => {
+        {filteredDates.map(d => {
           const isPast = d.date < currentMMDD
+          const key = d.date + d.label
+          const sel = selectedDate === key
           return (
-            <div key={d.date + d.label} className={`card plan-date-card ${isPast ? 'past' : ''}`}>
+            <div key={key} className={`card plan-date-card clickable ${isPast ? 'past' : ''} ${sel ? 'selected' : ''}`} onClick={() => setSelectedDate(sel ? null : key)}>
               <div className="plan-date-top">
                 <span className="plan-date-month">{new Date(`2024-${d.date}`).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })}</span>
-                <span className="plan-date-help" tabIndex={0}>
-                  <HelpCircle size={13} />
-                  <span className="plan-date-tooltip">{d.desc}</span>
-                </span>
+                {!isPast && <span className="plan-date-upcoming">Próximo</span>}
               </div>
               <span className="plan-date-label">{d.label}</span>
-              {!isPast && <span className="plan-date-upcoming">Próximo</span>}
+              {sel && (
+                <div className="plan-date-detail">
+                  <p className="plan-date-desc">{d.desc}</p>
+                  <span className="plan-date-prod-label">🛍️ Productos para vender</span>
+                  <div className="plan-date-prods">
+                    {recommendedProducts(d.label, d.desc).map(p => <span key={p} className="plan-date-prod">{p}</span>)}
+                  </div>
+                </div>
+              )}
             </div>
           )
         })}
+        {filteredDates.length === 0 && <div className="articles-empty"><Search size={20} /><p>Sin resultados</p></div>}
       </div>
     </div>
   )
