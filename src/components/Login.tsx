@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Mail, Lock, Eye, EyeOff, KeyRound } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, KeyRound, Loader } from 'lucide-react'
 import { APP_VERSION } from '../App'
+import { supabase, supabaseEnabled } from '../lib/supabase'
+import { startCloudSync } from '../lib/cloudSync'
 import './Login.css'
 
 const VALID_EMAIL = 'GallardoTesting@outlook.com'
@@ -31,6 +33,7 @@ export default function Login({ onLogin }: LoginProps) {
   const [codeSent, setCodeSent] = useState(false)
   const [newPass, setNewPass] = useState('')
   const [recoveryDone, setRecoveryDone] = useState(false)
+  const [connecting, setConnecting] = useState(false)
 
   useEffect(() => {
     try {
@@ -46,18 +49,31 @@ export default function Login({ onLogin }: LoginProps) {
     } catch {}
   }, [])
 
-  const handleLogin = () => {
-    if (email.toLowerCase() === VALID_EMAIL.toLowerCase() && password === VALID_PASS) {
-      if (remember) {
-        localStorage.setItem(LS_REMEMBER, JSON.stringify({ email, password }))
-      } else {
-        localStorage.removeItem(LS_REMEMBER)
-      }
-      setError('')
-      onLogin()
-    } else {
+  const handleLogin = async () => {
+    if (email.toLowerCase() !== VALID_EMAIL.toLowerCase() || password !== VALID_PASS) {
       setError('Correo o contraseña incorrectos')
+      return
     }
+    if (remember) localStorage.setItem(LS_REMEMBER, JSON.stringify({ email, password }))
+    else localStorage.removeItem(LS_REMEMBER)
+    setError('')
+
+    // Cloud sync (optional): authenticate with Supabase and pull/push data.
+    // If Supabase isn't configured or auth fails, continue in local-only mode.
+    if (supabaseEnabled && supabase) {
+      setConnecting(true)
+      try {
+        let res = await supabase.auth.signInWithPassword({ email: VALID_EMAIL, password: VALID_PASS })
+        if (res.error) {
+          // First run: create the single user, then sign in.
+          await supabase.auth.signUp({ email: VALID_EMAIL, password: VALID_PASS })
+          res = await supabase.auth.signInWithPassword({ email: VALID_EMAIL, password: VALID_PASS })
+        }
+        if (!res.error) await startCloudSync()
+      } catch {}
+      setConnecting(false)
+    }
+    onLogin()
   }
 
   const sendRecoveryCode = () => {
@@ -168,8 +184,8 @@ export default function Login({ onLogin }: LoginProps) {
             <span>Recordar este dispositivo</span>
           </label>
           {error && <span className="login-error">{error}</span>}
-          <button className="login-btn primary" onClick={handleLogin} disabled={!email.trim() || !password}>
-            Iniciar sesión
+          <button className="login-btn primary" onClick={handleLogin} disabled={!email.trim() || !password || connecting}>
+            {connecting ? <><Loader size={16} className="spin" /> Conectando…</> : 'Iniciar sesión'}
           </button>
           <button className="login-link" onClick={() => { setRecovery(true); setError('') }}>¿Olvidaste tu contraseña?</button>
         </div>

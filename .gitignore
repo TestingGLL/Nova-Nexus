@@ -34,3 +34,6 @@ out
 
 # Windows reserved-name artifact
 NUL
+
+# Supabase credentials (local only — never commit)
+.env

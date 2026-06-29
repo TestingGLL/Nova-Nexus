@@ -146,6 +146,9 @@
   margin: 0 0 4px;
 }
 
+.login-btn .spin { animation: loginSpin 1s linear infinite; }
+@keyframes loginSpin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
 .login-version {
   position: fixed;
   bottom: 16px;

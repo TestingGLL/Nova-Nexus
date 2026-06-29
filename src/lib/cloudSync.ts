@@ -1,0 +1,127 @@
+import { supabase, supabaseEnabled, CLOUD_TABLE } from './supabase'
+
+// Offline-first localStorage <-> Supabase sync.
+// Every `nn-*` change goes into a PERSISTENT outbox (survives app restarts and
+// offline use). A drainer uploads the outbox whenever we're online + authed,
+// retrying on reconnect and periodically. On login we pull the cloud copy down
+// (without overwriting local changes that are still pending upload).
+
+const PREFIX = 'nn-'
+const OUTBOX_KEY = '__nn_outbox' // intentionally NOT nn- so it never syncs itself
+const origSetItem = window.localStorage.setItem.bind(window.localStorage)
+const origRemoveItem = window.localStorage.removeItem.bind(window.localStorage)
+const origGetItem = window.localStorage.getItem.bind(window.localStorage)
+
+let userId: string | null = null
+let pullDone = false
+let draining = false
+let drainTimer: ReturnType<typeof setTimeout> | null = null
+
+type Outbox = Record<string, { v: string | null; ts: number }>
+
+function loadOutbox(): Outbox { try { return JSON.parse(origGetItem(OUTBOX_KEY) || '{}') } catch { return {} } }
+function saveOutbox(o: Outbox) { try { origSetItem(OUTBOX_KEY, JSON.stringify(o)) } catch {} }
+function outboxSize() { return Object.keys(loadOutbox()).length }
+
+function shouldSync(key: string) { return key.startsWith(PREFIX) }
+function safeParse(v: string): unknown { try { return JSON.parse(v) } catch { return v } }
+
+function queueChange(key: string, value: string | null) {
+  const o = loadOutbox()
+  o[key] = { v: value, ts: Date.now() }
+  saveOutbox(o)
+  scheduleDrain()
+}
+
+function scheduleDrain(delay = 700) {
+  if (drainTimer) clearTimeout(drainTimer)
+  drainTimer = setTimeout(() => { void drain() }, delay)
+}
+
+async function ensureAuth(): Promise<string | null> {
+  if (userId) return userId
+  if (!supabase) return null
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user) { userId = session.user.id; return userId }
+  } catch {}
+  return null
+}
+
+// Upload everything in the outbox; only clear entries that weren't re-touched meanwhile.
+async function drain() {
+  if (draining || !supabaseEnabled || !supabase) return
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+  const uid = await ensureAuth(); if (!uid) return
+  const snapshot = loadOutbox()
+  const keys = Object.keys(snapshot)
+  if (keys.length === 0) return
+  draining = true
+  try {
+    const upserts = keys.filter(k => snapshot[k].v !== null).map(k => ({ user_id: uid, key: k, value: safeParse(snapshot[k].v as string), updated_at: new Date(snapshot[k].ts).toISOString() }))
+    const deletes = keys.filter(k => snapshot[k].v === null)
+    if (upserts.length) { const { error } = await supabase.from(CLOUD_TABLE).upsert(upserts, { onConflict: 'user_id,key' }); if (error) throw error }
+    for (const k of deletes) { const { error } = await supabase.from(CLOUD_TABLE).delete().eq('user_id', uid).eq('key', k); if (error) throw error }
+    // Clear drained keys, but keep any that changed again during the upload.
+    const current = loadOutbox()
+    for (const k of keys) { if (current[k] && current[k].ts <= snapshot[k].ts) delete current[k] }
+    saveOutbox(current)
+  } catch {
+    scheduleDrain(5000) // network/server issue → retry later
+  } finally {
+    draining = false
+    if (outboxSize() > 0) scheduleDrain(5000)
+  }
+}
+
+// Intercept localStorage so every nn-* change is captured into the outbox,
+// regardless of connection/auth state (so offline edits are never lost).
+window.localStorage.setItem = (key: string, value: string) => {
+  origSetItem(key, value)
+  if (shouldSync(key)) queueChange(key, value)
+}
+window.localStorage.removeItem = (key: string) => {
+  origRemoveItem(key)
+  if (shouldSync(key)) queueChange(key, null)
+}
+
+// Retry when the connection comes back, and periodically as a safety net.
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => { if (pullDone) scheduleDrain(300); else void startCloudSync() })
+  setInterval(() => { if (outboxSize() > 0) scheduleDrain(300) }, 30000)
+}
+
+// Pull cloud data into localStorage on login. Keys with pending local changes
+// (in the outbox) are NOT overwritten — your offline edits win and get uploaded.
+export async function startCloudSync(): Promise<boolean> {
+  if (!supabaseEnabled || !supabase) return false
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) { scheduleDrain(2000); return false }
+  const uid = await ensureAuth(); if (!uid) return false
+  try {
+    const { data, error } = await supabase.from(CLOUD_TABLE).select('key,value').eq('user_id', uid)
+    if (error) throw error
+    const outbox = loadOutbox()
+    if (data && data.length > 0) {
+      for (const row of data) {
+        if (outbox[row.key]) continue // pending local change wins
+        const str = typeof row.value === 'string' ? row.value : JSON.stringify(row.value)
+        origSetItem(row.key, str)
+      }
+    } else {
+      // First run with an empty cloud: seed it from current local data.
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i)
+        if (key && shouldSync(key) && !outbox[key]) queueChange(key, origGetItem(key))
+      }
+    }
+    pullDone = true
+    scheduleDrain(100)
+    return true
+  } catch {
+    scheduleDrain(5000) // will retry pull/drain later
+    return false
+  }
+}
+
+// True when there are local changes still waiting to upload.
+export function hasPendingSync() { return outboxSize() > 0 }
