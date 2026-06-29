@@ -19,6 +19,7 @@ interface ElectronAPI {
   getBluetoothDevices: () => Promise<Array<{ id: string; name: string; battery: number | null; class: string }>>
   getCryptoPrices: () => Promise<{ success: boolean; data?: Record<string, { ars: number; usd: number; ars_24h_change?: number; last_updated_at?: number }>; message?: string }>
   getCryptoChart: (coinId: string, days: number) => Promise<{ success: boolean; data?: { prices: [number, number][] }; message?: string }>
+  getDolarBlue: () => Promise<{ success: boolean; compra?: number; venta?: number; message?: string }>
   getMundialScores: () => Promise<{
     success: boolean
     matches?: Array<{

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Bold, Italic, Underline, List, Palette, Type, Eye, EyeOff, Search, Save } from 'lucide-react'
-import { addNotification } from './AlertasSection'
+import { addNotification } from '../../lib/notifications'
 import './PersonalSection.css'
 
 // ============ SALUD ============

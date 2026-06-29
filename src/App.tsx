@@ -7,13 +7,14 @@ import MainContent from './components/MainContent'
 import ControllerStatus from './components/ControllerStatus'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
 import SoundFx from './components/SoundFx'
-import { loadNotifications } from './components/sections/AlertasSection'
+import BackgroundServices from './components/BackgroundServices'
+import { loadNotifications } from './lib/notifications'
 import { Bell } from 'lucide-react'
 import './App.css'
 
 export type Section = 'inicio' | 'personal' | 'finanzas' | 'etsy' | 'proyectos' | 'software' | 'edicion' | 'notas' | 'extras' | 'alertas' | 'configuracion'
 
-export const APP_VERSION = '1.00.58'
+export const APP_VERSION = '1.00.65'
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -49,6 +50,7 @@ function App() {
         <ControllerStatus />
         <KeyboardShortcuts />
         <SoundFx />
+        <BackgroundServices />
         <button
           className={`global-bell ${unreadCount > 0 ? 'has-unread' : ''}`}
           onClick={() => setActiveSection('alertas')}

@@ -1,7 +1,7 @@
 .notas-section {
   display: flex;
   gap: 0;
-  height: calc(100vh - 120px);
+  height: calc(100vh / var(--ui-zoom, 1) - 120px);
   margin: -28px -32px;
 }
 

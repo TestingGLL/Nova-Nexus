@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical } from 'lucide-react'
+import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical, Search } from 'lucide-react'
 import CriptomonedasSection from './CriptomonedasSection'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
+import { useDolarBlue, toArs } from '../../lib/dolarBlue'
 import './FinanzasSection.css'
 
 // ============ DATA MODEL ============
@@ -426,10 +427,124 @@ function GastosPropiosView() {
   )
 }
 
+// ============ GASTOS EN USD ============
+type UsdTab = 'fijos' | 'pendientes' | 'futuros'
+type UsdPayType = 'unico' | 'semanal' | 'mensual' | 'trimestral' | 'anual'
+interface UsdExpense { id: string; name: string; amountUsd: number; payType: UsdPayType; tab: UsdTab; date: string }
+
+const usdTabs: { id: UsdTab; label: string; color: string }[] = [
+  { id: 'fijos', label: 'Gastos fijos', color: '#3b82f6' },
+  { id: 'pendientes', label: 'Gastos pendientes', color: '#f59e0b' },
+  { id: 'futuros', label: 'Gastos futuros', color: '#8b5cf6' },
+]
+// perMonth normaliza cada tipo a un costo mensual equivalente (pago único = 0 recurrente).
+const usdPayTypes: { v: UsdPayType; label: string; perMonth: number }[] = [
+  { v: 'unico', label: 'Pago único', perMonth: 0 },
+  { v: 'semanal', label: 'Suscripción semanal', perMonth: 52 / 12 },
+  { v: 'mensual', label: 'Suscripción mensual', perMonth: 1 },
+  { v: 'trimestral', label: 'Suscripción trimestral', perMonth: 1 / 3 },
+  { v: 'anual', label: 'Suscripción anual', perMonth: 1 / 12 },
+]
+const usdPayLabel = (v: UsdPayType) => usdPayTypes.find(p => p.v === v)?.label || v
+
+function loadUsdExpenses(): UsdExpense[] { try { const s = localStorage.getItem('nn-gastos-usd'); return s ? JSON.parse(s) : [] } catch { return [] } }
+
+function GastosUsdView() {
+  const rate = useDolarBlue()
+  const [expenses, setExpenses] = useState<UsdExpense[]>(loadUsdExpenses)
+  const [subtab, setSubtab] = useState<UsdTab>('fijos')
+  const [name, setName] = useState('')
+  const [amount, setAmount] = useState('')
+  const [payType, setPayType] = useState<UsdPayType>('mensual')
+  const [search, setSearch] = useState('')
+  const [filterPay, setFilterPay] = useState<UsdPayType | 'all'>('all')
+
+  const save = (e: UsdExpense[]) => { setExpenses(e); localStorage.setItem('nn-gastos-usd', JSON.stringify(e)) }
+  const add = () => {
+    if (!name.trim()) return
+    const amt = parseFloat(amount.replace(',', '.')) || 0
+    save([{ id: 'usd-' + Date.now(), name: name.trim(), amountUsd: amt, payType, tab: subtab, date: new Date().toISOString() }, ...expenses])
+    setName(''); setAmount('')
+  }
+  const remove = (id: string) => save(expenses.filter(e => e.id !== id))
+
+  const tabColor = usdTabs.find(t => t.id === subtab)!.color
+  const inTab = expenses.filter(e => e.tab === subtab)
+  const totalUsd = inTab.reduce((a, e) => a + e.amountUsd, 0)
+  const monthlyUsd = inTab.reduce((a, e) => a + e.amountUsd * (usdPayTypes.find(p => p.v === e.payType)?.perMonth || 0), 0)
+  const q = search.trim().toLowerCase()
+  const list = inTab.filter(e => (filterPay === 'all' || e.payType === filterPay) && (!q || e.name.toLowerCase().includes(q)))
+
+  return (
+    <div className="gastos-propios">
+      <div className="gastos-tabs-new">
+        {usdTabs.map(t => {
+          const tot = expenses.filter(e => e.tab === t.id).reduce((a, e) => a + e.amountUsd, 0)
+          return (
+            <button key={t.id} className={`gastos-tab-card ${subtab === t.id ? 'active' : ''}`} onClick={() => setSubtab(t.id)} style={{ '--cat': t.color } as React.CSSProperties}>
+              <span className="gastos-tab-name">{t.label}</span>
+              <span className="gastos-tab-total">US$ {tot.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {rate === null && <div className="usd-rate-note">Cotización del dólar blue no disponible (sin conexión). Los montos se muestran solo en USD.</div>}
+
+      <div className="alquiler-stats-grid usd-dashboard">
+        <div className="card alquiler-stat"><span className="alquiler-stat-label">Total listado</span><span className="alquiler-stat-value" style={{ color: tabColor }}>US$ {totalUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span><span className="usd-stat-sub">{toArs(totalUsd, rate)}</span></div>
+        <div className="card alquiler-stat"><span className="alquiler-stat-label">Gasto mensual estimado</span><span className="alquiler-stat-value">US$ {monthlyUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span><span className="usd-stat-sub">{toArs(monthlyUsd, rate)}</span></div>
+        <div className="card alquiler-stat"><span className="alquiler-stat-label">Gasto anual estimado</span><span className="alquiler-stat-value">US$ {(monthlyUsd * 12).toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span><span className="usd-stat-sub">{toArs(monthlyUsd * 12, rate)}</span></div>
+        <div className="card alquiler-stat"><span className="alquiler-stat-label">Cantidad</span><span className="alquiler-stat-value">{inTab.length}</span><span className="usd-stat-sub">{inTab.length === 1 ? 'gasto' : 'gastos'}</span></div>
+      </div>
+
+      <div className="card gastos-add-card">
+        <input className="gastos-add-name" value={name} onChange={e => setName(e.target.value)} placeholder="¿Qué gasto en dólares?" onKeyDown={e => e.key === 'Enter' && add()} />
+        <div className="gastos-add-row2">
+          <div className="extras-amount-wrap"><span>US$</span><input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></div>
+          {amount && rate && <span className="usd-conv-hint">≈ {toArs(parseFloat(amount.replace(',', '.')) || 0, rate)}</span>}
+        </div>
+        <div className="gastos-add-row3">
+          <select value={payType} onChange={e => setPayType(e.target.value as UsdPayType)}>{usdPayTypes.map(p => <option key={p.v} value={p.v}>{p.label}</option>)}</select>
+          <button className="gastos-add-btn" onClick={add} disabled={!name.trim()} style={{ background: tabColor }}><Plus size={14} /> Agregar</button>
+        </div>
+      </div>
+
+      <div className="usd-toolbar">
+        <div className="usd-search"><Search size={14} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar gasto..." /></div>
+        <div className="usd-filter">
+          <Filter size={12} />
+          <button className={filterPay === 'all' ? 'active' : ''} onClick={() => setFilterPay('all')}>Todos</button>
+          {usdPayTypes.map(p => <button key={p.v} className={filterPay === p.v ? 'active' : ''} onClick={() => setFilterPay(p.v)}>{p.label}</button>)}
+        </div>
+      </div>
+
+      <div className="gastos-list">
+        {list.map(e => (
+          <div key={e.id} className="gastos-item-new usd-item" style={{ borderLeft: `3px solid ${tabColor}` }}>
+            <div className="gastos-item-main">
+              <span className="gastos-item-name">{e.name}</span>
+              <span className="gastos-repeat-tag">{usdPayLabel(e.payType)}</span>
+            </div>
+            <div className="usd-item-amounts">
+              <span className="gastos-item-amount">US$ {e.amountUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span>
+              {rate && <span className="usd-item-ars">{toArs(e.amountUsd, rate)}</span>}
+            </div>
+            <span className="gastos-item-date">{new Date(e.date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>
+            <button className="shopping-item-delete" onClick={() => remove(e.id)}><X size={11} /></button>
+          </div>
+        ))}
+        {list.length === 0 && <p className="maint-empty">{q || filterPay !== 'all' ? 'Sin resultados' : `Sin ${usdTabs.find(t => t.id === subtab)!.label.toLowerCase()}`}</p>}
+      </div>
+    </div>
+  )
+}
+
 // ============ MAIN ============
 const FIN_TABS: { id: string; label: string; icon: React.ReactNode }[] = [
   { id: 'alquiler', label: 'Alquiler', icon: <Home size={14} /> },
   { id: 'gastos', label: 'Gastos Propios', icon: <Wallet size={14} /> },
+  { id: 'gastos-usd', label: 'Gastos en USD', icon: <DollarSign size={14} /> },
   { id: 'cripto', label: 'Criptomonedas', icon: <Bitcoin size={14} /> },
 ]
 
@@ -448,6 +563,7 @@ export default function FinanzasSection() {
       </div>
       {tab === 'alquiler' && <AlquilerView />}
       {tab === 'gastos' && <GastosPropiosView />}
+      {tab === 'gastos-usd' && <GastosUsdView />}
       {tab === 'cripto' && <CriptomonedasSection />}
     </div>
   )

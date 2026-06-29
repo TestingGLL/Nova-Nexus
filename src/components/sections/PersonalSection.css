@@ -555,7 +555,7 @@
 .wishlist-item span:not(.struck) { flex: 1; font-size: 13px; }
 
 /* ============ DIARIO ============ */
-.diary-content { display: flex; gap: 0; height: calc(100vh - 200px); margin: 0 -32px -28px; }
+.diary-content { display: flex; gap: 0; height: calc(100vh / var(--ui-zoom, 1) - 200px); margin: 0 -32px -28px; }
 .diary-sidebar { width: 220px; border-right: 1px solid var(--border); background: var(--bg-secondary); overflow-y: auto; flex-shrink: 0; }
 .diary-chapters { padding: 8px; }
 .diary-chapter { margin-bottom: 8px; }

@@ -22,5 +22,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getMundialScores: () => ipcRenderer.invoke('get-mundial-scores'),
   getCryptoPrices: () => ipcRenderer.invoke('get-crypto-prices'),
   getCryptoChart: (coinId, days) => ipcRenderer.invoke('get-crypto-chart', coinId, days),
+  getDolarBlue: () => ipcRenderer.invoke('get-dolar-blue'),
   isDesktop: true,
 });

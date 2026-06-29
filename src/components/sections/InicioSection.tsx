@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
 import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy } from 'lucide-react'
-import { loadNotifications } from './AlertasSection'
-import { sfx } from '../../lib/sounds'
+import { loadNotifications } from '../../lib/notifications'
+import { subscribeMundial, getMundialSnapshot } from '../../lib/mundialStore'
+import { subscribeTimer, getTimerSnapshot, toggleTimer, resetTimer, setTimerTotal } from '../../lib/timerStore'
 import './InicioSection.css'
 
 // ============ ANIMATED CLOCK ============
@@ -196,39 +197,15 @@ function QuickChat() {
 function TimerWidget() {
   const [presets, setPresets] = useState<number[]>(() => { try { const s = localStorage.getItem('nn-timer-presets'); return s ? JSON.parse(s) : [1, 5, 10, 15, 25, 30] } catch { return [1, 5, 10, 15, 25, 30] } })
   const [defaultPreset, setDefaultPreset] = useState<number>(() => { try { const s = localStorage.getItem('nn-timer-default'); return s ? Number(s) : 15 } catch { return 15 } })
-  const [totalSeconds, setTotalSeconds] = useState(() => defaultPreset * 60)
-  const [remaining, setRemaining] = useState(() => defaultPreset * 60)
-  const [running, setRunning] = useState(false)
+  // Timer state lives in the global timerStore so it keeps running (and chimes /
+  // notifies on finish) even off-section and while minimized/in tray.
+  const { totalSeconds, remaining, running } = useSyncExternalStore(subscribeTimer, getTimerSnapshot)
   const [showConfig, setShowConfig] = useState(false)
   const [newPreset, setNewPreset] = useState('')
   const [timerFullscreen, setTimerFullscreen] = useState(false)
   const [editingTime, setEditingTime] = useState(false)
   const [timeDraft, setTimeDraft] = useState('')
   const [soundOn, setSoundOn] = useState<boolean>(() => { try { return localStorage.getItem('nn-timer-sound') !== '0' } catch { return true } })
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const clear = useCallback(() => { if (intervalRef.current) clearInterval(intervalRef.current) }, [])
-
-  // Gentle chime on finish using the Web Audio API (no asset needed).
-  const playChime = useCallback(() => {
-    if (!soundOn) return
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-      const notes = [523.25, 659.25, 783.99]
-      notes.forEach((f, i) => {
-        const osc = ctx.createOscillator(); const gain = ctx.createGain()
-        osc.frequency.value = f; osc.type = 'sine'
-        osc.connect(gain); gain.connect(ctx.destination)
-        const t = ctx.currentTime + i * 0.18
-        gain.gain.setValueAtTime(0.0001, t)
-        gain.gain.exponentialRampToValueAtTime(0.25, t + 0.04)
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.7)
-        osc.start(t); osc.stop(t + 0.7)
-      })
-      setTimeout(() => ctx.close(), 1600)
-    } catch {}
-  }, [soundOn])
-
-  useEffect(() => { if (running && remaining > 0) { intervalRef.current = setInterval(() => setRemaining(r => { if (r <= 1) { setRunning(false); playChime(); return 0 }; return r - 1 }), 1000) } else { clear() }; return clear }, [running, remaining, clear, playChime])
 
   const commitTimeEdit = () => {
     setEditingTime(false)
@@ -236,7 +213,7 @@ function TimerWidget() {
     let total = 0
     if (parts.length === 2) total = (Number(parts[0]) || 0) * 60 + (Number(parts[1]) || 0)
     else total = (Number(timeDraft) || 0) * 60
-    if (total > 0) { setTotalSeconds(total); setRemaining(total); setRunning(false) }
+    if (total > 0) setTimerTotal(total)
   }
   const toggleSound = () => { const v = !soundOn; setSoundOn(v); localStorage.setItem('nn-timer-sound', v ? '1' : '0') }
 
@@ -247,7 +224,7 @@ function TimerWidget() {
   const addPreset = () => { const n = Number(newPreset); if (n > 0 && !presets.includes(n)) { savePresets([...presets, n].sort((a, b) => a - b)); setNewPreset('') } }
   const removePreset = (m: number) => savePresets(presets.filter(p => p !== m))
 
-  const selectPreset = (m: number) => { setTotalSeconds(m * 60); setRemaining(m * 60); setRunning(false) }
+  const selectPreset = (m: number) => setTimerTotal(m * 60)
 
   return (
     <div className="card timer-card">
@@ -280,8 +257,8 @@ function TimerWidget() {
       )}
       <div className="timer-bar-bg"><div className="timer-bar-fill" style={{ width: `${pct}%` }} /></div>
       <div className="timer-controls">
-        <button onClick={() => setRunning(!running)} className="timer-btn">{running ? <Pause size={16} /> : <Play size={16} />}</button>
-        <button onClick={() => { setRunning(false); setRemaining(totalSeconds) }} className="timer-btn"><RotateCcw size={16} /></button>
+        <button onClick={toggleTimer} className="timer-btn">{running ? <Pause size={16} /> : <Play size={16} />}</button>
+        <button onClick={resetTimer} className="timer-btn"><RotateCcw size={16} /></button>
       </div>
       <div className="timer-presets">
         {presets.map(m => (<button key={m} className={`preset-btn ${totalSeconds === m * 60 ? 'active' : ''}`} onClick={() => selectPreset(m)}>{m}m</button>))}
@@ -293,8 +270,8 @@ function TimerWidget() {
             <div className="timer-fs-time">{String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}</div>
             <div className="timer-fs-bar"><div className="timer-fs-bar-fill" style={{ width: `${pct}%` }} /></div>
             <div className="timer-fs-controls">
-              <button onClick={() => setRunning(!running)}>{running ? <Pause size={24} /> : <Play size={24} />}</button>
-              <button onClick={() => { setRunning(false); setRemaining(totalSeconds) }}><RotateCcw size={24} /></button>
+              <button onClick={toggleTimer}>{running ? <Pause size={24} /> : <Play size={24} />}</button>
+              <button onClick={resetTimer}><RotateCcw size={24} /></button>
               <button onClick={() => setTimerFullscreen(false)}><X size={24} /></button>
             </div>
           </div>
@@ -482,80 +459,10 @@ function NextAlertsWidget() {
 
 // ============ MUNDIAL 2026 ============
 
-interface MundialTeam { name: string; abbr: string; score: number; logo: string }
-interface MundialMatch { id: string; home: MundialTeam; away: MundialTeam; state: string; clock: string; detail: string; startTime: string }
-
+// Goal detection + adaptive polling live in the global mundialStore so they run
+// app-wide (any section, minimized/tray). This widget is just the Inicio display.
 function MundialWidget() {
-  const [matches, setMatches] = useState<MundialMatch[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [goalFlash, setGoalFlash] = useState<string | null>(null)
-  const prevScores = useRef<Record<string, { home: number; away: number }>>({})
-  const mountedRef = useRef(true)
-
-  const triggerGoal = useCallback((teamName: string, match: MundialMatch) => {
-    sfx.goal()
-    setGoalFlash(match.id)
-    setTimeout(() => setGoalFlash(null), 3000)
-    window.electronAPI?.showNotification(
-      '⚽ ¡GOOOL!',
-      `${teamName} marca! ${match.home.abbr} ${match.home.score} - ${match.away.score} ${match.away.abbr} (${match.clock})`
-    )
-  }, [])
-
-  const fetchScores = useCallback(async () => {
-    try {
-      let result: { success: boolean; matches?: MundialMatch[]; message?: string }
-      if (window.electronAPI?.getMundialScores) {
-        result = await window.electronAPI.getMundialScores()
-      } else {
-        const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard')
-        const json = await res.json()
-        const events = json.events || []
-        result = { success: true, matches: events.map((ev: any) => {
-          const comp = ev.competitions?.[0] || {}
-          const comps = comp.competitors || []
-          const h = comps.find((c: any) => c.homeAway === 'home') || comps[0] || {}
-          const a = comps.find((c: any) => c.homeAway === 'away') || comps[1] || {}
-          return {
-            id: ev.id, home: { name: h.team?.displayName || '?', abbr: h.team?.abbreviation || '?', score: parseInt(h.score || '0'), logo: h.team?.logo || '' },
-            away: { name: a.team?.displayName || '?', abbr: a.team?.abbreviation || '?', score: parseInt(a.score || '0'), logo: a.team?.logo || '' },
-            state: ev.status?.type?.state || 'pre', clock: ev.status?.displayClock || '',
-            detail: ev.status?.type?.detail || ev.status?.type?.description || '', startTime: ev.date || '',
-          }
-        })}
-      }
-      if (!mountedRef.current) return
-      if (!result.success) { setError(true); setLoading(false); return }
-
-      const newMatches = (result.matches || []).sort((a, b) => {
-        const ord: Record<string, number> = { 'in': 0, 'pre': 1, 'post': 2 }
-        return (ord[a.state] ?? 1) - (ord[b.state] ?? 1)
-      })
-
-      for (const m of newMatches) {
-        const prev = prevScores.current[m.id]
-        if (prev && m.state === 'in') {
-          if (m.home.score > prev.home) triggerGoal(m.home.name, m)
-          if (m.away.score > prev.away) triggerGoal(m.away.name, m)
-        }
-        prevScores.current[m.id] = { home: m.home.score, away: m.away.score }
-      }
-
-      setMatches(newMatches)
-      setError(false)
-    } catch {
-      if (mountedRef.current) setError(true)
-    }
-    if (mountedRef.current) setLoading(false)
-  }, [triggerGoal])
-
-  useEffect(() => {
-    mountedRef.current = true
-    fetchScores()
-    const id = setInterval(fetchScores, 1000)
-    return () => { mountedRef.current = false; clearInterval(id) }
-  }, [fetchScores])
+  const { matches, loading, error, goalFlash } = useSyncExternalStore(subscribeMundial, getMundialSnapshot)
 
   const fmtTime = (iso: string) => {
     try { return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' }) } catch { return '' }

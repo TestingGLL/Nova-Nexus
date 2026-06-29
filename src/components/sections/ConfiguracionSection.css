@@ -234,3 +234,12 @@
 .cfg-wg-name:focus { background: var(--bg-hover); }
 .cfg-wg-del { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid var(--border); background: none; color: var(--text-secondary); border-radius: 6px; cursor: pointer; }
 .cfg-wg-del:hover { border-color: #ef4444; color: #ef4444; }
+
+/* UI typography scale selector */
+.ui-scale-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 8px; }
+.ui-scale-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 10px; border: 1px solid var(--border); background: var(--bg-card); border-radius: 10px; cursor: pointer; transition: all 0.15s; }
+.ui-scale-btn:hover { border-color: var(--accent); }
+.ui-scale-btn.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+.ui-scale-sample { font-weight: 700; color: var(--text-primary); line-height: 1; }
+.ui-scale-label { font-size: 12px; color: var(--text-secondary); text-align: center; }
+.ui-scale-btn.active .ui-scale-label { color: var(--accent); font-weight: 600; }

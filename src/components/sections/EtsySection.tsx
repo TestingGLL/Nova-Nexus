@@ -1,11 +1,27 @@
 import { useState, useRef } from 'react'
-import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Clock, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace } from 'lucide-react'
+import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Clock, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, Smile } from 'lucide-react'
+import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import './EtsySection.css'
 
 // ============ TYPES ============
 
-interface SubArticle { id: string; title: string; description: string }
-interface Article { id: string; title: string; description: string; subArticles: SubArticle[]; launchDate?: string; order?: number; createdAt?: string; inLaunches?: boolean; launched?: boolean; banner?: string; cover?: string; price?: string }
+interface SubArticle { id: string; title: string; description: string; inLaunches?: boolean }
+interface Article { id: string; title: string; description: string; subArticles: SubArticle[]; launchDate?: string; order?: number; createdAt?: string; inLaunches?: boolean; launched?: boolean; cover?: string; price?: string; groupId?: string; icon?: string }
+interface ArticleGroup { id: string; name: string; color?: string; defaultPrice?: string }
+interface ClientInfo { id: string; name: string; gender: string; country: string; favGroupId?: string }
+
+const UNGROUPED_ID = '__ungrouped'
+
+// Preset dark palettes for group banners — all contrast well with white text.
+const GROUP_COLOR_PALETTES: { name: string; colors: string[] }[] = [
+  { name: 'Terroso', colors: ['#6b4226', '#8b5e3c', '#a0522d', '#5c4033', '#7c4a32'] },
+  { name: 'Acuoso', colors: ['#155e75', '#0e7490', '#1e5f74', '#1d4e6b', '#0f6e8c'] },
+  { name: 'Bosque', colors: ['#1b5e20', '#2e5d34', '#33691e', '#356859', '#2f4f4f'] },
+  { name: 'Vino', colors: ['#722f37', '#8e1f3a', '#641e3a', '#7b2d40', '#5c1a2e'] },
+  { name: 'Noche', colors: ['#312e81', '#3730a3', '#1e1b4b', '#4338ca', '#27305e'] },
+  { name: 'Carbón', colors: ['#1f2937', '#374151', '#334155', '#111827', '#0f172a'] },
+]
+const DEFAULT_GROUP_COLOR = '#312e81'
 
 // Derive the real creation date from the article id timestamp when not overridden.
 function articleCreatedDate(a: Article): string {
@@ -23,6 +39,7 @@ interface StoreData {
   bannerColor: string; accentColor: string; logo: string; articles: Article[]
   reviews: number; sales: number; clients: number; bannerImage?: string; brand?: BrandInfo
   starSeller?: boolean; logoImage?: string; creaciones?: PromptPanel[]; income?: IncomeEntry[]
+  articleGroups?: ArticleGroup[]; clientList?: ClientInfo[]
 }
 
 const defaultStores: StoreData[] = [
@@ -36,7 +53,7 @@ function loadStores(): StoreData[] {
     const saved = localStorage.getItem('nn-etsy-stores')
     if (saved) {
       const parsed = JSON.parse(saved)
-      const stores = parsed.map((s: any) => ({ ...s, articles: s.articles || [], reviews: s.reviews ?? 0, sales: s.sales ?? 0, clients: s.clients ?? 0, creaciones: s.creaciones || [], income: s.income || [] }))
+      const stores = parsed.map((s: any) => ({ ...s, articles: s.articles || [], reviews: s.reviews ?? 0, sales: s.sales ?? 0, clients: s.clients ?? 0, creaciones: s.creaciones || [], income: s.income || [], articleGroups: s.articleGroups || [], clientList: s.clientList || [] }))
       const migrated = localStorage.getItem('nn-etsy-migrated-v2')
       if (!migrated) {
         for (const store of stores) {
@@ -61,11 +78,17 @@ function storeRating(store: StoreData): number {
 
 // ============ ADD ARTICLE MODAL ============
 
-function AddArticleModal({ onAdd, onClose }: { onAdd: (a: Article) => void; onClose: () => void }) {
+function AddArticleModal({ onAdd, onClose, groups, defaultGroupId }: { onAdd: (a: Article) => void; onClose: () => void; groups: ArticleGroup[]; defaultGroupId?: string }) {
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
   const [launchDate, setLaunchDate] = useState('')
-  const submit = () => { if (!title.trim()) return; onAdd({ id: 'art-' + Date.now(), title: title.trim(), description: desc.trim(), subArticles: [], launchDate: launchDate || undefined }); onClose() }
+  const [groupId, setGroupId] = useState(defaultGroupId || '')
+  const submit = () => {
+    if (!title.trim()) return
+    const grp = groups.find(g => g.id === groupId)
+    onAdd({ id: 'art-' + Date.now(), title: title.trim(), description: desc.trim(), subArticles: [], launchDate: launchDate || undefined, groupId: groupId || undefined, price: grp?.defaultPrice || undefined })
+    onClose()
+  }
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -73,6 +96,7 @@ function AddArticleModal({ onAdd, onClose }: { onAdd: (a: Article) => void; onCl
         <div className="modal-body">
           <label className="modal-field"><span>Título *</span><input value={title} onChange={e => setTitle(e.target.value)} placeholder="Nombre del artículo" autoFocus onKeyDown={e => e.key === 'Enter' && submit()} /></label>
           <label className="modal-field"><span>Descripción</span><textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción del artículo..." rows={3} /></label>
+          {groups.length > 0 && <label className="modal-field"><span><Layers size={12} /> Grupo</span><select value={groupId} onChange={e => setGroupId(e.target.value)}><option value="">Sin grupo</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>}
           <label className="modal-field"><span><Calendar size={12} /> Fecha de lanzamiento</span><input type="date" value={launchDate} onChange={e => setLaunchDate(e.target.value)} /></label>
         </div>
         <div className="modal-footer"><button className="modal-cancel" onClick={onClose}>Cancelar</button><button className="modal-submit" onClick={submit} disabled={!title.trim()}>Crear artículo</button></div>
@@ -125,69 +149,154 @@ function BrandPanel({ store, onUpdate }: { store: StoreData; onUpdate: (s: Store
 
 // ============ ARTICLES TAB ============
 
-function ArticlesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [showModal, setShowModal] = useState(false)
-  const [search, setSearch] = useState('')
+function ArticleItem({ art, store, groups, rate, updateArticle, removeArticle }: {
+  art: Article; store: StoreData; groups: ArticleGroup[]; rate: number | null
+  updateArticle: (id: string, u: Partial<Article>) => void
+  removeArticle: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
   const [editingSub, setEditingSub] = useState<string | null>(null)
+  const addSubArticle = () => { const sub: SubArticle = { id: 'sub-' + Date.now(), title: '', description: '' }; updateArticle(art.id, { subArticles: [...art.subArticles, sub] }); setEditingSub(sub.id) }
+  const updateSubArticle = (subId: string, title: string) => updateArticle(art.id, { subArticles: art.subArticles.map(s => s.id === subId ? { ...s, title } : s) })
+  const removeSubArticle = (subId: string) => updateArticle(art.id, { subArticles: art.subArticles.filter(s => s.id !== subId) })
+  const priceLabel = fmtUsdArs(art.price, rate)
+  return (
+    <div className={`article-item card ${open ? 'open' : ''}`}>
+      <div className="article-header" onClick={() => setOpen(!open)}>
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <span className="article-icon">{art.icon || '📄'}</span>
+        <span className="article-title">{art.title}</span>
+        {priceLabel && <span className="article-price-badge">{priceLabel}</span>}
+        {art.launchDate && <span className="article-date-badge"><Calendar size={10} /> {new Date(art.launchDate + 'T12:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>}
+        <span className="article-sub-count">{art.subArticles.length} sub</span>
+        <button className="article-delete" onClick={e => { e.stopPropagation(); removeArticle(art.id) }}><Trash2 size={12} /></button>
+      </div>
+      {open && (
+        <div className="article-body">
+          <input className="article-desc-input" placeholder="Descripción..." value={art.description} onChange={e => updateArticle(art.id, { description: e.target.value })} />
+          <div className="article-date-group">
+            <label className="article-date-label"><Smile size={12} /> Icono <input className="article-icon-input" value={art.icon || ''} onChange={e => updateArticle(art.id, { icon: e.target.value.slice(0, 2) })} placeholder="📄" maxLength={2} /></label>
+            <label className="article-date-label"><Calendar size={12} /> Creación <input type="date" value={articleCreatedDate(art)} onChange={e => updateArticle(art.id, { createdAt: e.target.value })} /></label>
+            <label className="article-date-label"><DollarSign size={12} /> Precio (USD) <input className="article-price-input" value={art.price || ''} onChange={e => updateArticle(art.id, { price: e.target.value })} placeholder="0.00" /></label>
+            <label className="article-date-label"><Layers size={12} /> Grupo <select value={art.groupId || ''} onChange={e => updateArticle(art.id, { groupId: e.target.value || undefined })}><option value="">Sin grupo</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
+          </div>
+          {priceLabel && rate && <span className="article-price-ars">≈ {priceLabel}</span>}
+          <div className="subarticles">
+            <div className="subarticles-header"><span className="subarticles-label">Sub-artículos ({art.subArticles.length})</span><button className="subarticle-add-btn" onClick={addSubArticle}><Plus size={12} /> Añadir</button></div>
+            {art.subArticles.map(sub => (
+              <div key={sub.id} className="subarticle-item">
+                <span className="subarticle-bullet" style={{ background: store.accentColor }} />
+                {editingSub === sub.id ? (<input className="subarticle-edit" value={sub.title} placeholder="Nombre..." autoFocus onChange={e => updateSubArticle(sub.id, e.target.value)} onBlur={() => setEditingSub(null)} onKeyDown={e => { if (e.key === 'Enter') setEditingSub(null) }} />) : (<span className="subarticle-name" onClick={() => setEditingSub(sub.id)}>{sub.title || <em>Sin nombre</em>}</span>)}
+                <button className="subarticle-edit-btn" onClick={() => setEditingSub(sub.id)}><Edit3 size={11} /></button>
+                <button className="subarticle-del-btn" onClick={() => removeSubArticle(sub.id)}><Trash2 size={11} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
-  const addArticle = (a: Article) => { onUpdate({ ...store, articles: [...store.articles, a] }); setExpanded(a.id) }
+function GroupPanel({ group, store, groups, groupArticles, rate, readOnly, updateArticle, removeArticle, onUpdateGroup, onRemoveGroup, onAddArticle }: {
+  group: ArticleGroup; store: StoreData; groups: ArticleGroup[]; groupArticles: Article[]; rate: number | null; readOnly?: boolean
+  updateArticle: (id: string, u: Partial<Article>) => void
+  removeArticle: (id: string) => void
+  onUpdateGroup: (u: Partial<ArticleGroup>) => void
+  onRemoveGroup: () => void
+  onAddArticle: (groupId: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const color = group.color || DEFAULT_GROUP_COLOR
+  const bannerStyle = readOnly
+    ? { background: 'linear-gradient(135deg, #475569, #64748b)' }
+    : { background: `linear-gradient(135deg, ${color}, ${color}cc)` }
+  const priceLabel = fmtUsdArs(group.defaultPrice, rate)
+  return (
+    <div className="article-group card">
+      <div className="article-group-banner" style={bannerStyle}>
+        <button type="button" className="article-group-toggle" onClick={() => setOpen(o => !o)}>
+          {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <span className="article-group-name">{group.name}</span>
+          <span className="article-group-count">{groupArticles.length} artículos</span>
+        </button>
+        <div className="article-group-actions">
+          {priceLabel && <span className="article-group-price"><DollarSign size={12} /> {priceLabel}</span>}
+          {!readOnly && <button type="button" className="article-group-edit" onClick={() => setEditing(e => !e)} title="Editar grupo"><Edit3 size={14} /></button>}
+          {!readOnly && <button type="button" className="article-group-delete" onClick={onRemoveGroup} title="Eliminar grupo"><Trash2 size={14} /></button>}
+        </div>
+      </div>
+      {editing && !readOnly && (
+        <div className="article-group-edit-form">
+          <label className="modal-field"><span><Type size={12} /> Nombre del grupo</span><input value={group.name} onChange={e => onUpdateGroup({ name: e.target.value })} placeholder="Nombre del grupo" /></label>
+          <label className="modal-field"><span><DollarSign size={12} /> Precio predeterminado (USD)</span><input value={group.defaultPrice || ''} onChange={e => onUpdateGroup({ defaultPrice: e.target.value })} placeholder="0.00" /></label>
+          <div className="modal-field">
+            <span><Palette size={12} /> Color del banner</span>
+            <div className="group-color-palettes">
+              {GROUP_COLOR_PALETTES.map(pal => (
+                <div key={pal.name} className="group-color-palette">
+                  <span className="group-color-palette-name">{pal.name}</span>
+                  <div className="group-color-swatches">
+                    {pal.colors.map(c => (
+                      <button key={c} type="button" className={`group-color-swatch ${color.toLowerCase() === c.toLowerCase() ? 'selected' : ''}`} style={{ background: c }} onClick={() => onUpdateGroup({ color: c })} title={c} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {open && (
+        <div className="article-group-body">
+          {groupArticles.length === 0 && <p className="article-group-empty">Este grupo no tiene artículos todavía.</p>}
+          {groupArticles.map(art => <ArticleItem key={art.id} art={art} store={store} groups={groups} rate={rate} updateArticle={updateArticle} removeArticle={removeArticle} />)}
+          <button className="articles-add-btn-small" onClick={() => onAddArticle(group.id)}><Plus size={13} /> Agregar artículo a este grupo</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ArticlesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
+  const [showModal, setShowModal] = useState(false)
+  const [modalGroup, setModalGroup] = useState<string>('')
+  const [search, setSearch] = useState('')
+  const groups = store.articleGroups || []
+  const rate = useDolarBlue()
+
+  const addArticle = (a: Article) => onUpdate({ ...store, articles: [...store.articles, a] })
   const removeArticle = (id: string) => onUpdate({ ...store, articles: store.articles.filter(a => a.id !== id) })
   const updateArticle = (id: string, u: Partial<Article>) => onUpdate({ ...store, articles: store.articles.map(a => a.id === id ? { ...a, ...u } : a) })
-  const addSubArticle = (artId: string) => {
-    const art = store.articles.find(a => a.id === artId); if (!art) return
-    const sub: SubArticle = { id: 'sub-' + Date.now(), title: '', description: '' }
-    updateArticle(artId, { subArticles: [...art.subArticles, sub] }); setEditingSub(sub.id)
-  }
-  const updateSubArticle = (artId: string, subId: string, title: string) => { const art = store.articles.find(a => a.id === artId); if (!art) return; updateArticle(artId, { subArticles: art.subArticles.map(s => s.id === subId ? { ...s, title } : s) }) }
-  const removeSubArticle = (artId: string, subId: string) => { const art = store.articles.find(a => a.id === artId); if (!art) return; updateArticle(artId, { subArticles: art.subArticles.filter(s => s.id !== subId) }) }
-  const filtered = search.trim() ? store.articles.filter(a => a.title.toLowerCase().includes(search.toLowerCase()) || a.subArticles.some(s => s.title.toLowerCase().includes(search.toLowerCase()))) : store.articles
+
+  const addGroup = () => onUpdate({ ...store, articleGroups: [...groups, { id: 'grp-' + Date.now(), name: 'Nuevo grupo', color: DEFAULT_GROUP_COLOR }] })
+  const updateGroup = (id: string, u: Partial<ArticleGroup>) => onUpdate({ ...store, articleGroups: groups.map(g => g.id === id ? { ...g, ...u } : g) })
+  const removeGroup = (id: string) => onUpdate({ ...store, articleGroups: groups.filter(g => g.id !== id), articles: store.articles.map(a => a.groupId === id ? { ...a, groupId: undefined } : a) })
+
+  // The modal treats the synthetic "Sin grupo" panel as no group.
+  const openAddModal = (groupId?: string) => { setModalGroup(groupId && groupId !== UNGROUPED_ID ? groupId : ''); setShowModal(true) }
+
+  const matches = (a: Article) => !search.trim() || a.title.toLowerCase().includes(search.toLowerCase()) || a.subArticles.some(s => s.title.toLowerCase().includes(search.toLowerCase()))
+  const ungrouped = store.articles.filter(a => !a.groupId || !groups.some(g => g.id === a.groupId))
 
   return (
     <div className="articles-tab">
-      <div className="articles-toolbar"><div className="articles-search"><Search size={14} /><input placeholder="Buscar artículos..." value={search} onChange={e => setSearch(e.target.value)} /></div><button className="articles-add-btn-big" onClick={() => setShowModal(true)}><Plus size={16} /> Nuevo artículo</button></div>
-      {showModal && <AddArticleModal onAdd={addArticle} onClose={() => setShowModal(false)} />}
-      {filtered.length === 0 && <div className="articles-empty"><Package size={24} /><p>{search ? 'Sin resultados' : 'Sin artículos. Creá el primero con el botón de arriba.'}</p></div>}
-      <div className="articles-list">
-        {filtered.map(art => (
-          <div key={art.id} className={`article-item card ${expanded === art.id ? 'open' : ''}`}>
-            <div className="article-header" onClick={() => setExpanded(expanded === art.id ? null : art.id)}>
-              {expanded === art.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              <span className="article-title">{art.title}</span>
-              {art.launchDate && <span className="article-date-badge"><Calendar size={10} /> {new Date(art.launchDate + 'T12:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>}
-              <span className="article-sub-count">{art.subArticles.length} sub</span>
-              <button className="article-delete" onClick={e => { e.stopPropagation(); removeArticle(art.id) }}><Trash2 size={12} /></button>
-            </div>
-            {expanded === art.id && (
-              <div className="article-body">
-                <input className="article-desc-input" placeholder="Descripción..." value={art.description} onChange={e => updateArticle(art.id, { description: e.target.value })} />
-                <div className="article-date-group">
-                  <label className="article-date-label"><Calendar size={12} /> Creación <input type="date" value={articleCreatedDate(art)} onChange={e => updateArticle(art.id, { createdAt: e.target.value })} /></label>
-                  <label className="article-date-label"><DollarSign size={12} /> Precio <input className="article-price-input" value={art.price || ''} onChange={e => updateArticle(art.id, { price: e.target.value })} placeholder="$0.00" /></label>
-                </div>
-                <div className="article-media-row">
-                  <label className="article-media-btn"><Image size={12} /> {art.cover ? 'Cambiar portada' : 'Portada'}<input type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => updateArticle(art.id, { cover: r.result as string }); r.readAsDataURL(f); e.target.value = '' }} /></label>
-                  {art.cover && <><img src={art.cover} alt="" className="article-cover-thumb" /><button className="article-media-remove" onClick={() => updateArticle(art.id, { cover: undefined })}><X size={11} /></button></>}
-                  <label className="article-media-btn"><Image size={12} /> {art.banner ? 'Cambiar banner' : 'Banner'}<input type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => updateArticle(art.id, { banner: r.result as string }); r.readAsDataURL(f); e.target.value = '' }} /></label>
-                  {art.banner && <><img src={art.banner} alt="" className="article-cover-thumb" /><button className="article-media-remove" onClick={() => updateArticle(art.id, { banner: undefined })}><X size={11} /></button></>}
-                </div>
-                {art.banner && <img src={art.banner} alt="" className="article-banner-preview" />}
-                <div className="subarticles">
-                  <div className="subarticles-header"><span className="subarticles-label">Sub-artículos ({art.subArticles.length})</span><button className="subarticle-add-btn" onClick={() => addSubArticle(art.id)}><Plus size={12} /> Añadir</button></div>
-                  {art.subArticles.map(sub => (
-                    <div key={sub.id} className="subarticle-item">
-                      <span className="subarticle-bullet" style={{ background: store.accentColor }} />
-                      {editingSub === sub.id ? (<input className="subarticle-edit" value={sub.title} placeholder="Nombre..." autoFocus onChange={e => updateSubArticle(art.id, sub.id, e.target.value)} onBlur={() => setEditingSub(null)} onKeyDown={e => { if (e.key === 'Enter') setEditingSub(null) }} />) : (<span className="subarticle-name" onClick={() => setEditingSub(sub.id)}>{sub.title || <em>Sin nombre</em>}</span>)}
-                      <button className="subarticle-edit-btn" onClick={() => setEditingSub(sub.id)}><Edit3 size={11} /></button>
-                      <button className="subarticle-del-btn" onClick={() => removeSubArticle(art.id, sub.id)}><Trash2 size={11} /></button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
+      <div className="articles-toolbar">
+        <div className="articles-search"><Search size={14} /><input placeholder="Buscar artículos..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <button className="articles-add-btn-secondary" onClick={addGroup}><Layers size={15} /> Nuevo grupo</button>
+        <button className="articles-add-btn-big" onClick={() => openAddModal()}><Plus size={16} /> Nuevo artículo</button>
       </div>
+      {showModal && <AddArticleModal groups={groups} defaultGroupId={modalGroup} onAdd={a => { addArticle(a); setShowModal(false) }} onClose={() => setShowModal(false)} />}
+
+      {/* Real groups keep their order... */}
+      {groups.map(g => {
+        const ga = store.articles.filter(a => a.groupId === g.id).filter(matches)
+        return <GroupPanel key={g.id} group={g} store={store} groups={groups} groupArticles={ga} rate={rate} updateArticle={updateArticle} removeArticle={removeArticle} onUpdateGroup={u => updateGroup(g.id, u)} onRemoveGroup={() => removeGroup(g.id)} onAddArticle={openAddModal} />
+      })}
+
+      {/* ...and "Sin grupo" is always the last panel, regardless of naming/order. */}
+      <GroupPanel group={{ id: UNGROUPED_ID, name: 'Sin grupo' }} store={store} groups={groups} groupArticles={ungrouped.filter(matches)} rate={rate} readOnly updateArticle={updateArticle} removeArticle={removeArticle} onUpdateGroup={() => {}} onRemoveGroup={() => {}} onAddArticle={openAddModal} />
     </div>
   )
 }
@@ -196,54 +305,122 @@ function ArticlesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
 
 const ordinals = ['1º', '2º', '3º', '4º', '5º', '6º', '7º', '8º', '9º', '10º']
 
+// Modal to add articles/subarticles to a launch, organized by group.
+function LaunchSelectorModal({ store, onClose, onApply }: { store: StoreData; onClose: () => void; onApply: (arts: Set<string>, subs: Set<string>) => void }) {
+  const groups = store.articleGroups || []
+  const [selArts, setSelArts] = useState<Set<string>>(() => new Set(store.articles.filter(a => a.inLaunches).map(a => a.id)))
+  const [selSubs, setSelSubs] = useState<Set<string>>(() => new Set(store.articles.flatMap(a => a.subArticles.filter(s => s.inLaunches).map(s => s.id))))
+
+  const setArt = (a: Article, on: boolean) => {
+    setSelArts(p => { const n = new Set(p); if (on) n.add(a.id); else n.delete(a.id); return n })
+    setSelSubs(p => { const n = new Set(p); a.subArticles.forEach(s => on ? n.add(s.id) : n.delete(s.id)); return n })
+  }
+  const setSub = (a: Article, s: SubArticle, on: boolean) => {
+    setSelSubs(p => { const n = new Set(p); if (on) n.add(s.id); else n.delete(s.id); return n })
+    if (on) setSelArts(p => new Set(p).add(a.id)) // selecting a sub keeps its article in the launch
+  }
+  const setMany = (arts: Article[], on: boolean) => {
+    setSelArts(p => { const n = new Set(p); arts.forEach(a => on ? n.add(a.id) : n.delete(a.id)); return n })
+    setSelSubs(p => { const n = new Set(p); arts.forEach(a => a.subArticles.forEach(s => on ? n.add(s.id) : n.delete(s.id))); return n })
+  }
+  const allOn = store.articles.length > 0 && store.articles.every(a => selArts.has(a.id))
+
+  const renderArticle = (a: Article) => (
+    <div key={a.id} className="lsel-article">
+      <label className="lsel-row">
+        <input type="checkbox" checked={selArts.has(a.id)} onChange={e => setArt(a, e.target.checked)} />
+        <span className="lsel-title">{a.title}</span>
+        {a.subArticles.length > 0 && <span className="lsel-subcount">{a.subArticles.length} sub</span>}
+      </label>
+      {a.subArticles.map(s => (
+        <label key={s.id} className="lsel-row lsel-sub">
+          <input type="checkbox" checked={selSubs.has(s.id)} onChange={e => setSub(a, s, e.target.checked)} />
+          <span className="lsel-sub-bullet" style={{ background: store.accentColor }} />
+          <span className="lsel-sub-title">{s.title || <em>Sin nombre</em>}</span>
+        </label>
+      ))}
+    </div>
+  )
+
+  const ungrouped = store.articles.filter(a => !a.groupId || !groups.some(g => g.id === a.groupId))
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-content lsel-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header"><h3>Agregar al lanzamiento</h3><button className="modal-close" onClick={onClose}><X size={16} /></button></div>
+        <div className="lsel-quick">
+          <button onClick={() => setMany(store.articles, true)}>Seleccionar todo</button>
+          <button onClick={() => setMany(store.articles, false)}>Ninguno</button>
+        </div>
+        <div className="modal-body lsel-body">
+          {store.articles.length === 0 && <div className="articles-empty"><Package size={24} /><p>No hay artículos. Crealos en la pestaña Artículos.</p></div>}
+          {groups.map(g => {
+            const ga = store.articles.filter(a => a.groupId === g.id)
+            if (ga.length === 0) return null
+            const groupOn = ga.every(a => selArts.has(a.id))
+            return (
+              <div key={g.id} className="lsel-group">
+                <label className="lsel-row lsel-group-head">
+                  <input type="checkbox" checked={groupOn} onChange={e => setMany(ga, e.target.checked)} />
+                  <Layers size={13} /> <span className="lsel-group-name">{g.name}</span>
+                  <span className="lsel-subcount">{ga.length} artículos</span>
+                </label>
+                <div className="lsel-group-items">{ga.map(renderArticle)}</div>
+              </div>
+            )
+          })}
+          {ungrouped.length > 0 && (
+            <div className="lsel-group">
+              {groups.length > 0 && <span className="lsel-ungrouped-label">Sin grupo</span>}
+              <div className="lsel-group-items">{ungrouped.map(renderArticle)}</div>
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <span className="lsel-count">{selArts.size} artículos · {selSubs.size} sub</span>
+          <button className="modal-cancel" onClick={onClose}>Cancelar</button>
+          <button className="modal-submit" onClick={() => onApply(selArts, selSubs)}>{allOn ? 'Aplicar (todos)' : 'Aplicar'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LaunchesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
-  const [view, setView] = useState<'seleccionables' | 'flujo' | 'board' | 'timeline'>('seleccionables')
+  const [view, setView] = useState<'flujo' | 'board'>('board')
+  const [showSelector, setShowSelector] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
-  const toggleInLaunches = (id: string) => onUpdate({ ...store, articles: store.articles.map(a => a.id === id ? { ...a, inLaunches: !a.inLaunches } : a) })
-  // Only articles explicitly marked "En lanzamientos" appear here — not every article.
+  // Only articles explicitly added to the launch appear here — not every article.
   const launchArticles = store.articles.filter(a => a.inLaunches)
   const boardOrder = [...launchArticles].sort((a, b) => { const oa = a.order ?? launchArticles.indexOf(a) + 1000; const ob = b.order ?? launchArticles.indexOf(b) + 1000; return oa - ob })
   const pending = boardOrder.filter(a => !a.launched)
   const commitOrder = (orderedIds: string[]) => { const orderMap = new Map(orderedIds.map((id, i) => [id, i])); onUpdate({ ...store, articles: store.articles.map(a => ({ ...a, order: orderMap.get(a.id) ?? a.order })) }) }
   const handleDrop = (targetId: string) => { if (!dragId || dragId === targetId) { setDragId(null); setOverId(null); return }; const ids = boardOrder.map(a => a.id); const from = ids.indexOf(dragId); const to = ids.indexOf(targetId); ids.splice(to, 0, ids.splice(from, 1)[0]); commitOrder(ids); setDragId(null); setOverId(null) }
   const markLaunched = (id: string, v: boolean) => onUpdate({ ...store, articles: store.articles.map(a => a.id === id ? { ...a, launched: v } : a) })
-  const withDate = [...launchArticles].filter(a => a.launchDate).sort((a, b) => (a.launchDate! > b.launchDate! ? 1 : -1))
-  const withoutDate = launchArticles.filter(a => !a.launchDate)
+  const applySelection = (arts: Set<string>, subs: Set<string>) => onUpdate({ ...store, articles: store.articles.map(a => ({ ...a, inLaunches: arts.has(a.id), subArticles: a.subArticles.map(s => ({ ...s, inLaunches: subs.has(s.id) })) })) })
+  // Count subarticles included in the launch (individually selected, else all).
+  const inclSubs = (a: Article) => { const i = a.subArticles.filter(s => s.inLaunches).length; return i || a.subArticles.length }
 
   return (
     <div className="launches-tab">
-      <div className="launches-view-toggle"><button className={view === 'seleccionables' ? 'active' : ''} onClick={() => setView('seleccionables')}><Check size={13} /> Seleccionables</button><button className={view === 'flujo' ? 'active' : ''} onClick={() => setView('flujo')}><TrendingUp size={13} /> Flujo</button><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}><Layers size={13} /> Mapa de orden</button><button className={view === 'timeline' ? 'active' : ''} onClick={() => setView('timeline')}><Clock size={13} /> Línea de tiempo</button></div>
+      <div className="launches-top-actions">
+        <button className="articles-add-btn-big" onClick={() => setShowSelector(true)}><Plus size={15} /> Agregar al lanzamiento</button>
+        <span className="launches-summary">{launchArticles.length} artículos en lanzamiento</span>
+      </div>
+      {showSelector && <LaunchSelectorModal store={store} onClose={() => setShowSelector(false)} onApply={(a, s) => { applySelection(a, s); setShowSelector(false) }} />}
 
-      {view === 'seleccionables' && (
-        store.articles.length === 0 ? <div className="articles-empty"><Package size={24} /><p>No hay artículos. Crealos en la pestaña Artículos.</p></div> : (
-          <>
-            <p className="board-hint">Elegí qué artículos entran en los lanzamientos. Se generan automáticamente en el resto de pestañas y la línea de tiempo.</p>
-            <div className="seleccionables-list">
-              {store.articles.map(art => (
-                <div key={art.id} className={`seleccionable-item ${art.inLaunches ? 'on' : ''}`}>
-                  <button className={`seleccionable-check ${art.inLaunches ? 'on' : ''}`} style={art.inLaunches ? { background: store.accentColor, borderColor: store.accentColor } : undefined} onClick={() => toggleInLaunches(art.id)}>{art.inLaunches && <Check size={12} />}</button>
-                  <div className="seleccionable-info">
-                    <span className="seleccionable-title">{art.title}</span>
-                    {art.subArticles.length > 0 && <span className="seleccionable-subs">{art.subArticles.length} sub-artículos</span>}
-                  </div>
-                  {art.inLaunches && <span className="seleccionable-badge" style={{ background: store.accentColor }}>En lanzamientos</span>}
-                </div>
-              ))}
-            </div>
-          </>
-        )
-      )}
+      <div className="launches-view-toggle"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}><Layers size={13} /> Mapa de orden</button><button className={view === 'flujo' ? 'active' : ''} onClick={() => setView('flujo')}><TrendingUp size={13} /> Flujo</button></div>
 
       {view === 'flujo' ? (
-        pending.length === 0 ? <div className="articles-empty"><TrendingUp size={24} /><p>{boardOrder.length === 0 ? 'Marcá artículos con "En lanzamientos" en Artículos' : '¡Todos los artículos fueron lanzados!'}</p></div> : (
+        pending.length === 0 ? <div className="articles-empty"><TrendingUp size={24} /><p>{boardOrder.length === 0 ? 'Usá "Agregar al lanzamiento" para elegir artículos' : '¡Todos los artículos fueron lanzados!'}</p></div> : (
           <>
             <div className="launch-next card" style={{ borderTop: `3px solid ${store.accentColor}` }}>
               <div className="launch-next-head"><span className="launch-next-badge" style={{ background: store.accentColor }}>PRÓXIMO</span><span className="launch-next-num">{ordinals[0]} en publicar</span></div>
               <h3 className="launch-next-title">{pending[0].title}</h3>
               {pending[0].description && <p className="launch-next-desc">{pending[0].description}</p>}
               <div className="launch-next-meta">
-                {pending[0].subArticles.length > 0 && <span className="board-card-tag"><Layers size={10} /> {pending[0].subArticles.length} sub</span>}
+                {pending[0].subArticles.length > 0 && <span className="board-card-tag"><Layers size={10} /> {inclSubs(pending[0])} sub</span>}
                 {pending[0].launchDate && <span className="board-card-tag date" style={{ color: store.accentColor }}><Calendar size={10} /> {new Date(pending[0].launchDate + 'T12:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>}
               </div>
               <button className="launch-complete-btn" style={{ background: store.accentColor }} onClick={() => markLaunched(pending[0].id, true)}><Check size={14} /> Marcar como completado</button>
@@ -270,24 +447,19 @@ function LaunchesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
             )}
           </>
         )
-      ) : view === 'board' ? (
-        boardOrder.length === 0 ? <div className="articles-empty"><Clock size={24} /><p>Marcá artículos con "En lanzamientos" en la pestaña Artículos para ordenarlos acá</p></div> : (
+      ) : (
+        boardOrder.length === 0 ? <div className="articles-empty"><Clock size={24} /><p>Usá "Agregar al lanzamiento" para elegir artículos y ordenarlos acá</p></div> : (
           <><p className="board-hint">Arrastrá para definir el orden de publicación.</p><div className="launches-board">
             {boardOrder.map((art, i) => (
               <div key={art.id} className={`board-card ${dragId === art.id ? 'dragging' : ''} ${overId === art.id ? 'drag-over' : ''}`} draggable onDragStart={() => setDragId(art.id)} onDragEnd={() => { setDragId(null); setOverId(null) }} onDragOver={e => { e.preventDefault(); setOverId(art.id) }} onDragLeave={() => setOverId(o => o === art.id ? null : o)} onDrop={() => handleDrop(art.id)}>
                 <div className="board-card-grip"><GripVertical size={14} /></div>
                 <div className="board-card-order" style={{ background: store.accentColor }}>{i + 1}</div>
-                <div className="board-card-content"><span className="board-card-title">{art.title}</span>{art.description && <span className="board-card-desc">{art.description}</span>}<div className="board-card-meta">{art.subArticles.length > 0 && <span className="board-card-tag"><Layers size={10} /> {art.subArticles.length} sub</span>}{art.launchDate ? <span className="board-card-tag date" style={{ color: store.accentColor }}><Calendar size={10} /> {new Date(art.launchDate + 'T12:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span> : <span className="board-card-tag muted">Sin fecha</span>}</div></div>
+                <div className="board-card-content"><span className="board-card-title">{art.title}</span>{art.description && <span className="board-card-desc">{art.description}</span>}<div className="board-card-meta">{art.subArticles.length > 0 && <span className="board-card-tag"><Layers size={10} /> {inclSubs(art)} sub</span>}{art.launchDate ? <span className="board-card-tag date" style={{ color: store.accentColor }}><Calendar size={10} /> {new Date(art.launchDate + 'T12:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span> : <span className="board-card-tag muted">Sin fecha</span>}</div></div>
               </div>
             ))}
           </div></>
         )
-      ) : view === 'timeline' ? (
-        <>{withDate.length === 0 && withoutDate.length === 0 && <div className="articles-empty"><Clock size={24} /><p>Sin artículos</p></div>}
-          {withDate.length > 0 && (<div className="timeline">{withDate.map((art, i) => (<div key={art.id} className="timeline-item"><div className="timeline-dot" style={{ background: store.accentColor }} />{i < withDate.length - 1 && <div className="timeline-line" />}<div className="timeline-content"><span className="timeline-date">{new Date(art.launchDate! + 'T12:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}</span><span className="timeline-title">{art.title}</span>{art.description && <span className="timeline-desc">{art.description}</span>}</div></div>))}</div>)}
-          {withoutDate.length > 0 && (<div className="launches-undated"><span className="undated-label">Sin fecha</span>{withoutDate.map(art => (<div key={art.id} className="undated-item">{art.title}</div>))}</div>)}
-        </>
-      ) : null}
+      )}
     </div>
   )
 }
@@ -579,11 +751,30 @@ function recommendedProducts(label: string, desc: string): string[] {
   return ['Arte temático', 'Imprimibles relacionados', 'Stickers de temporada']
 }
 
+// Richer cultural context: how the date is celebrated and what people tend to buy.
+function dateContext(label: string, desc: string): string {
+  const t = (label + ' ' + desc).toLowerCase()
+  if (/valent|saint-val|valentin/.test(t)) return 'Se celebra el amor y la amistad. Las parejas salen a cenar e intercambian regalos, flores, chocolates y tarjetas. La gente busca detalles románticos y personalizados (arte de pareja, láminas con nombres/fechas, tarjetas imprimibles). Empezá a publicar 3-4 semanas antes.'
+  if (/madre|mother|mamá/.test(t)) return 'Se homenajea a las madres con reuniones familiares, almuerzos y regalos. Hay gran demanda de regalos personalizados con fotos, álbumes, láminas y cupones imprimibles. Es una de las fechas de mayor venta del año.'
+  if (/navidad|christmas|noël|weihnacht/.test(t)) return 'Reuniones familiares, intercambio de regalos y mucha decoración del hogar. Se compran adornos, tarjetas navideñas, planners de fin de año y kits imprimibles festivos. La temporada arranca en noviembre: preparate con anticipación.'
+  if (/halloween/.test(t)) return 'Disfraces, decoración "spooky" y dulces (truco o trato). Se buscan imprimibles de terror, invitaciones a fiestas, decoración para el hogar y stickers temáticos. Publicá durante septiembre-octubre.'
+  if (/black friday|cyber/.test(t)) return 'Jornada de descuentos masivos donde mucha gente adelanta los regalos de Navidad. Conviene armar bundles, packs con descuento y destacar tus best-sellers con ofertas claras.'
+  if (/año nuevo|new year|nouvel|neujahr|propósit|shōgatsu|año/.test(t)) return 'Se festeja el comienzo de año y los nuevos propósitos. La gente compra planners, calendarios, trackers de hábitos y arte motivacional para organizar el año.'
+  if (/independ|nacional|patri|bastille|einheit|canada day|guadalupe/.test(t)) return 'Fiesta patria/cultural con desfiles, banderas y colores nacionales. Demanda de arte patriótico, decoración temática y láminas con los colores y símbolos del país.'
+  if (/muertos/.test(t)) return 'Se honra a los difuntos con altares, flores de cempasúchil, calaveras y comida típica. Enorme demanda de arte tipo "Día de Muertos", calaveras decorativas y láminas coloridas.'
+  if (/white day/.test(t)) return 'Un mes después de San Valentín, los hombres devuelven el regalo recibido, normalmente con dulces o pequeños detalles. Se buscan packaging lindo y tarjetas.'
+  if (/hinamatsuri/.test(t)) return 'Día de las Niñas en Japón: se exhiben muñecas tradicionales (hina) y se desea salud y felicidad a las niñas. Demanda de arte y decoración temática delicada.'
+  if (/bonfire|guy fawkes/.test(t)) return 'Noche de fogatas y fuegos artificiales que conmemora un hecho histórico. Eventos al aire libre; encaja arte festivo y decoración nocturna.'
+  if (/trabajo|travail|labor/.test(t)) return 'Día del trabajador: jornada de descanso. En algunos países se regalan flores (en Francia, muguete). Buen momento para arte de oficina y productividad.'
+  return 'Fecha comercial relevante: la gente suele comprar regalos y decoración acordes a la temática. Revisá qué productos encajan y prepará tus lanzamientos con anticipación.'
+}
+
 function PlanificacionTab() {
   const [country, setCountry] = useState('us')
   const [openConts, setOpenConts] = useState<Record<string, boolean>>({ 'América': true })
   const [search, setSearch] = useState('')
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [openHighlight, setOpenHighlight] = useState<string | null>(null)
   const data = commercialDates[country]
   const now = new Date()
   const currentMMDD = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -602,10 +793,11 @@ function PlanificacionTab() {
         <span className="plan-highlight-title">⭐ Próximas fechas por país</span>
         <div className="plan-highlight-grid">
           {upcomingByCountry.map(u => (
-            <button key={u.key} className="plan-highlight-item" onClick={() => setCountry(u.key)}>
+            <button key={u.key} className={`plan-highlight-item ${openHighlight === u.key ? 'open' : ''}`} onClick={() => { setCountry(u.key); setOpenHighlight(openHighlight === u.key ? null : u.key) }}>
               <span className="plan-highlight-country">{u.name}</span>
               <span className="plan-highlight-date">{new Date(`2024-${u.next.date}`).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>
               <span className="plan-highlight-label">{u.next.label}</span>
+              {openHighlight === u.key && <span className="plan-highlight-desc">{u.next.desc} {dateContext(u.next.label, u.next.desc)}</span>}
             </button>
           ))}
         </div>
@@ -650,6 +842,8 @@ function PlanificacionTab() {
               {sel && (
                 <div className="plan-date-detail">
                   <p className="plan-date-desc">{d.desc}</p>
+                  <span className="plan-date-ctx-label">🎉 Cómo se festeja / qué se hace</span>
+                  <p className="plan-date-ctx">{dateContext(d.label, d.desc)}</p>
                   <span className="plan-date-prod-label">🛍️ Productos para vender</span>
                   <div className="plan-date-prods">
                     {recommendedProducts(d.label, d.desc).map(p => <span key={p} className="plan-date-prod">{p}</span>)}
@@ -665,6 +859,70 @@ function PlanificacionTab() {
   )
 }
 
+// ============ CLIENTES TAB ============
+
+const COUNTRY_OPTIONS = ['Estados Unidos', 'Canadá', 'México', 'Argentina', 'Brasil', 'Reino Unido', 'Francia', 'Alemania', 'España', 'Italia', 'Australia', 'Japón', 'Otro']
+
+function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
+  const clients = store.clientList || []
+  const groups = store.articleGroups || []
+  const [name, setName] = useState('')
+  const [gender, setGender] = useState('Femenino')
+  const [country, setCountry] = useState('Estados Unidos')
+  const [favGroupId, setFavGroupId] = useState('')
+  const [search, setSearch] = useState('')
+
+  const add = () => {
+    if (!name.trim()) return
+    const c: ClientInfo = { id: 'cli-' + Date.now(), name: name.trim(), gender, country, favGroupId: favGroupId || undefined }
+    onUpdate({ ...store, clientList: [c, ...clients] }); setName('')
+  }
+  const remove = (id: string) => onUpdate({ ...store, clientList: clients.filter(c => c.id !== id) })
+  const update = (id: string, u: Partial<ClientInfo>) => onUpdate({ ...store, clientList: clients.map(c => c.id === id ? { ...c, ...u } : c) })
+  const groupName = (id?: string) => groups.find(g => g.id === id)?.name || '—'
+  const filtered = search.trim() ? clients.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.country.toLowerCase().includes(search.toLowerCase())) : clients
+
+  return (
+    <div className="clientes-tab">
+      <div className="clientes-stats">
+        <div className="card clientes-stat"><Users size={16} style={{ color: store.accentColor }} /><span className="clientes-stat-num">{clients.length}</span><span className="clientes-stat-lbl">Clientes</span></div>
+        <div className="card clientes-stat"><Globe size={16} style={{ color: store.accentColor }} /><span className="clientes-stat-num">{new Set(clients.map(c => c.country)).size}</span><span className="clientes-stat-lbl">Países</span></div>
+      </div>
+      <div className="card clientes-add">
+        <input className="clientes-name-input" value={name} onChange={e => setName(e.target.value)} placeholder="Nombre del cliente" onKeyDown={e => e.key === 'Enter' && add()} />
+        <select value={gender} onChange={e => setGender(e.target.value)}><option>Femenino</option><option>Masculino</option><option>Otro</option></select>
+        <select value={country} onChange={e => setCountry(e.target.value)}>{COUNTRY_OPTIONS.map(c => <option key={c}>{c}</option>)}</select>
+        <select value={favGroupId} onChange={e => setFavGroupId(e.target.value)}><option value="">Grupo favorito…</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
+        <button className="modal-submit" onClick={add} disabled={!name.trim()}><UserPlus size={14} /> Agregar</button>
+      </div>
+      {clients.length > 0 && <div className="articles-search clientes-search"><Search size={14} /><input placeholder="Buscar por nombre o país..." value={search} onChange={e => setSearch(e.target.value)} /></div>}
+      <div className="clientes-list">
+        {filtered.map(c => (
+          <div key={c.id} className="card cliente-item">
+            <div className="cliente-avatar" style={{ background: store.accentColor }}>{c.name.charAt(0).toUpperCase()}</div>
+            <div className="cliente-info">
+              <span className="cliente-name">{c.name}</span>
+              <div className="cliente-meta">
+                <span className="cliente-tag">{c.gender}</span>
+                <span className="cliente-tag"><Globe size={10} /> {c.country}</span>
+                <span className="cliente-tag fav"><Layers size={10} /> {groupName(c.favGroupId)}</span>
+              </div>
+            </div>
+            {groups.length > 0 && (
+              <select className="cliente-fav-select" value={c.favGroupId || ''} onChange={e => update(c.id, { favGroupId: e.target.value || undefined })} title="Grupo favorito">
+                <option value="">Sin favorito</option>
+                {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            )}
+            <button className="article-delete" onClick={() => remove(c.id)}><Trash2 size={13} /></button>
+          </div>
+        ))}
+        {filtered.length === 0 && <div className="articles-empty"><Users size={24} /><p>{search ? 'Sin resultados' : 'Sin clientes todavía. Agregá el primero arriba.'}</p></div>}
+      </div>
+    </div>
+  )
+}
+
 // ============ STORE VIEW ============
 
 function BannerBackground({ store }: { store: StoreData }) {
@@ -675,7 +933,7 @@ function BannerBackground({ store }: { store: StoreData }) {
 function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () => void; onUpdate: (store: StoreData) => void }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(store)
-  const [storeTab, setStoreTab] = useState<'info' | 'marca' | 'articles' | 'launches' | 'creaciones' | 'finanzas' | 'planificacion'>('info')
+  const [storeTab, setStoreTab] = useState<'info' | 'marca' | 'articles' | 'launches' | 'creaciones' | 'finanzas' | 'planificacion' | 'clientes'>('info')
   const bannerInputRef = useRef<HTMLInputElement>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
 
@@ -743,6 +1001,7 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
         <button className={storeTab === 'articles' ? 'active' : ''} onClick={() => setStoreTab('articles')}>Artículos ({store.articles.length})</button>
         <button className={storeTab === 'launches' ? 'active' : ''} onClick={() => setStoreTab('launches')}>Lanzamientos</button>
         <button className={storeTab === 'creaciones' ? 'active' : ''} onClick={() => setStoreTab('creaciones')}>Creaciones</button>
+        <button className={storeTab === 'clientes' ? 'active' : ''} onClick={() => setStoreTab('clientes')}>Clientes ({(store.clientList || []).length})</button>
         <button className={storeTab === 'finanzas' ? 'active' : ''} onClick={() => setStoreTab('finanzas')}>Finanzas</button>
         <button className={storeTab === 'planificacion' ? 'active' : ''} onClick={() => setStoreTab('planificacion')}>Planificación</button>
       </div>
@@ -763,6 +1022,7 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
       {storeTab === 'articles' && <ArticlesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'launches' && <LaunchesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'creaciones' && <CreacionesTab store={store} onUpdate={onUpdate} />}
+      {storeTab === 'clientes' && <ClientesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'finanzas' && <FinanzasTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'planificacion' && <PlanificacionTab />}
     </div>
@@ -779,7 +1039,7 @@ export default function EtsySection() {
   const openStore = (id: string) => { if (!openTabs.includes(id)) setOpenTabs([...openTabs, id]); setActiveTab(id) }
   const closeTab = (id: string, e: React.MouseEvent) => { e.stopPropagation(); const nt = openTabs.filter(t => t !== id); setOpenTabs(nt); if (activeTab === id) setActiveTab(nt.length > 0 ? nt[nt.length - 1] : null) }
   const updateStore = (updated: StoreData) => { const ns = stores.map(s => s.id === updated.id ? updated : s); setStores(ns); saveStores(ns) }
-  const addStore = () => { const id = 'store-' + Date.now(); const ns = [...stores, { id, name: 'Nueva tienda', description: 'Descripción.', products: 0, status: 'En desarrollo', bannerColor: '#6366f1', accentColor: '#6366f1', logo: '🏪', articles: [], reviews: 0, sales: 0, clients: 0, creaciones: [], income: [] }]; setStores(ns); saveStores(ns); openStore(id) }
+  const addStore = () => { const id = 'store-' + Date.now(); const ns = [...stores, { id, name: 'Nueva tienda', description: 'Descripción.', products: 0, status: 'En desarrollo', bannerColor: '#6366f1', accentColor: '#6366f1', logo: '🏪', articles: [], reviews: 0, sales: 0, clients: 0, creaciones: [], income: [], articleGroups: [], clientList: [] }]; setStores(ns); saveStores(ns); openStore(id) }
   const deleteStore = (id: string) => { const ns = stores.filter(s => s.id !== id); setStores(ns); saveStores(ns); closeTab(id, { stopPropagation: () => {} } as React.MouseEvent) }
 
   const activeStore = stores.find(s => s.id === activeTab)

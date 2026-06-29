@@ -31,6 +31,9 @@ function createWindow() {
       nodeIntegration: false,
       autoplayPolicy: 'no-user-gesture-required',
       spellcheck: true,
+      // Keep timers/intervals running at full rate when minimized or in tray so
+      // goal alerts, reminders and the countdown timer still fire in background.
+      backgroundThrottling: false,
     },
     autoHideMenuBar: true,
     show: false,
@@ -353,6 +356,24 @@ ipcMain.handle('get-crypto-chart', async (_e, coinId, days) => {
       res.on('end', () => {
         try { resolve({ success: true, data: JSON.parse(body) }); }
         catch (_e2) { resolve({ success: false, message: 'Error' }); }
+      });
+    });
+    req.on('error', (e) => resolve({ success: false, message: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ success: false, message: 'Timeout' }); });
+  });
+});
+
+// ----- Dólar blue (referencia para conversión ARS) -----
+ipcMain.handle('get-dolar-blue', async () => {
+  const https = require('https');
+  const url = 'https://dolarapi.com/v1/dolares/blue';
+  return new Promise((resolve) => {
+    const req = https.get(url, { timeout: 8000, headers: { 'User-Agent': 'NovaNexus/1.0', 'Accept': 'application/json' } }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        try { const d = JSON.parse(body); resolve({ success: true, compra: d.compra, venta: d.venta }); }
+        catch (_e) { resolve({ success: false, message: 'Error al procesar datos' }); }
       });
     });
     req.on('error', (e) => resolve({ success: false, message: e.message }));

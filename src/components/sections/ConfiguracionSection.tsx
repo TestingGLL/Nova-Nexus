@@ -3,6 +3,8 @@ import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, E
 import { useTheme } from '../../contexts/ThemeContext'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { getSoundsEnabled, setSoundsEnabled, getSoundsVolume, setSoundsVolume, sfx } from '../../lib/sounds'
+import { UI_SCALES, getUiScale, setUiScale } from '../../lib/uiScale'
+import { Type } from 'lucide-react'
 import './ConfiguracionSection.css'
 
 const presets = [
@@ -87,6 +89,7 @@ export default function ConfiguracionSection() {
   const [newCat, setNewCat] = useState<Record<'precios' | 'compras', string>>({ precios: '', compras: '' })
   const [soundsOn, setSoundsOn] = useState(getSoundsEnabled())
   const [soundVol, setSoundVol] = useState(getSoundsVolume())
+  const [uiScale, setUiScaleState] = useState(getUiScale())
   const [autoDeleteDays, setAutoDeleteDays] = useState<number>(() => { try { return Number(localStorage.getItem('nn-notes-autodelete-days')) || 7 } catch { return 7 } })
 
   const updWordGroups = (g: WordGroup[]) => { setWordGroups(g); saveWordGroups(g) }
@@ -350,6 +353,19 @@ export default function ConfiguracionSection() {
                 <input type="range" min={0} max={1} step={0.05} value={soundVol} disabled={!soundsOn} onChange={e => { const v = Number(e.target.value); setSoundVol(v); setSoundsVolume(v) }} onMouseUp={() => soundsOn && sfx.click()} className="sound-vol-slider" />
                 <span className="sound-vol-pct">{Math.round(soundVol * 100)}%</span>
               </div>
+            </div>
+          </div>
+
+          <div className="card config-card">
+            <div className="card-title"><Type size={16} /> Tamaño de la tipografía</div>
+            <p className="config-desc">Ajustá el tamaño general del texto y la interfaz de toda la app. Se aplica al instante.</p>
+            <div className="ui-scale-options">
+              {UI_SCALES.map(s => (
+                <button key={s.value} className={`ui-scale-btn ${uiScale === s.value ? 'active' : ''}`} onClick={() => { setUiScale(s.value); setUiScaleState(s.value); if (soundsOn) sfx.click() }}>
+                  <span className="ui-scale-sample" style={{ fontSize: `${13 * Number(s.value)}px` }}>Aa</span>
+                  <span className="ui-scale-label">{s.label}</span>
+                </button>
+              ))}
             </div>
           </div>
 

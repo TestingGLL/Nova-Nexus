@@ -96,3 +96,18 @@
 .alquiler-split-detail { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 .alquiler-split-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-secondary); padding: 3px 0; }
 .alquiler-split-row span:last-child { font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+/* Gastos en USD */
+.usd-rate-note { font-size: 12px; color: var(--text-secondary); background: var(--bg-hover); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+.usd-dashboard { margin-top: 2px; }
+.usd-stat-sub { font-size: 11px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.usd-conv-hint { font-size: 12px; color: #22c55e; font-weight: 600; align-self: center; }
+.usd-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.usd-search { flex: 1; min-width: 180px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); background: var(--bg-card); border-radius: 8px; }
+.usd-search svg { color: var(--text-secondary); flex-shrink: 0; }
+.usd-search input { flex: 1; border: none; background: none; outline: none; font-size: 13px; color: var(--text-primary); font-family: inherit; }
+.usd-filter { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; color: var(--text-secondary); }
+.usd-filter button { padding: 4px 10px; border: 1px solid var(--border); background: none; border-radius: 6px; font-size: 11px; cursor: pointer; color: var(--text-secondary); transition: all 0.15s; }
+.usd-filter button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.usd-item-amounts { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.3; }
+.usd-item-ars { font-size: 11px; color: #22c55e; font-weight: 600; font-variant-numeric: tabular-nums; }
