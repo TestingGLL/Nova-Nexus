@@ -75,6 +75,21 @@
 .sidebar.closed .internet-status { justify-content: center; padding: 6px; }
 .sidebar.closed .internet-status span { display: none; }
 
+.sidebar-clima {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+.sidebar-clima .sidebar-hora { font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.sidebar-clima .sidebar-temp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-clima.collapsed { flex-direction: column; gap: 2px; justify-content: center; padding: 6px 2px; text-align: center; }
+.sidebar-clima.collapsed .sidebar-temp { font-size: 10px; }
+
 .profile-btn {
   display: flex;
   align-items: center;

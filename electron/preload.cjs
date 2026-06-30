@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   setFileAssociations: (browser) => ipcRenderer.invoke('set-file-associations', browser),
@@ -13,6 +13,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   transferStart: () => ipcRenderer.invoke('transfer-start'),
   transferStop: () => ipcRenderer.invoke('transfer-stop'),
   transferAddShared: () => ipcRenderer.invoke('transfer-add-shared'),
+  transferSharePaths: (paths) => ipcRenderer.invoke('transfer-share-paths', paths),
+  transferSendText: (text) => ipcRenderer.invoke('transfer-send-text', text),
+  transferPcMessages: () => ipcRenderer.invoke('transfer-pc-messages'),
+  getPathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
   transferRemoveShared: (id) => ipcRenderer.invoke('transfer-remove-shared', id),
   transferGetShared: () => ipcRenderer.invoke('transfer-get-shared'),
   transferReceived: () => ipcRenderer.invoke('transfer-received'),

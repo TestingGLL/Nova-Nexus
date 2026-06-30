@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Clock, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, Smile } from 'lucide-react'
 import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
+import { useConfirm } from '../ConfirmDialog'
 import './EtsySection.css'
 
 // ============ TYPES ============
@@ -38,6 +39,8 @@ interface StoreData {
   id: string; name: string; description: string; products: number; status: string
   bannerColor: string; accentColor: string; logo: string; articles: Article[]
   reviews: number; sales: number; clients: number; bannerImage?: string; brand?: BrandInfo
+  starCounts?: number[] // [1★,2★,3★,4★,5★] cantidad de reseñas por nivel de estrellas
+  bannerParticles?: boolean // efecto de partículas flotantes en el banner
   starSeller?: boolean; logoImage?: string; creaciones?: PromptPanel[]; income?: IncomeEntry[]
   articleGroups?: ArticleGroup[]; clientList?: ClientInfo[]
 }
@@ -53,7 +56,7 @@ function loadStores(): StoreData[] {
     const saved = localStorage.getItem('nn-etsy-stores')
     if (saved) {
       const parsed = JSON.parse(saved)
-      const stores = parsed.map((s: any) => ({ ...s, articles: s.articles || [], reviews: s.reviews ?? 0, sales: s.sales ?? 0, clients: s.clients ?? 0, creaciones: s.creaciones || [], income: s.income || [], articleGroups: s.articleGroups || [], clientList: s.clientList || [] }))
+      const stores = parsed.map((s: any) => ({ ...s, articles: s.articles || [], reviews: s.reviews ?? 0, sales: s.sales ?? 0, clients: s.clients ?? 0, creaciones: s.creaciones || [], income: s.income || [], articleGroups: s.articleGroups || [], clientList: s.clientList || [], starCounts: Array.isArray(s.starCounts) && s.starCounts.length === 5 ? s.starCounts : [0, 0, 0, 0, s.reviews ?? 0] }))
       const migrated = localStorage.getItem('nn-etsy-migrated-v2')
       if (!migrated) {
         for (const store of stores) {
@@ -69,11 +72,16 @@ function loadStores(): StoreData[] {
 }
 function saveStores(stores: StoreData[]) { localStorage.setItem('nn-etsy-stores', JSON.stringify(stores)) }
 
+function starCountsOf(store: StoreData): number[] {
+  return Array.isArray(store.starCounts) && store.starCounts.length === 5 ? store.starCounts : [0, 0, 0, 0, store.reviews || 0]
+}
+function reviewTotal(store: StoreData): number { return starCountsOf(store).reduce((a, b) => a + b, 0) }
 function storeRating(store: StoreData): number {
-  if (store.reviews === 0 && store.sales === 0) return 0
-  const reviewScore = Math.min(store.reviews / 100, 1) * 5
-  const salesScore = Math.min(store.sales / 500, 1) * 5
-  return Number(((reviewScore + salesScore) / 2).toFixed(1))
+  const sc = starCountsOf(store)
+  const total = sc.reduce((a, b) => a + b, 0)
+  if (total === 0) return 0
+  const sum = sc.reduce((a, c, i) => a + c * (i + 1), 0)
+  return Number((sum / total).toFixed(1))
 }
 
 // ============ ADD ARTICLE MODAL ============
@@ -265,14 +273,23 @@ function ArticlesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const [search, setSearch] = useState('')
   const groups = store.articleGroups || []
   const rate = useDolarBlue()
+  const confirm = useConfirm()
 
   const addArticle = (a: Article) => onUpdate({ ...store, articles: [...store.articles, a] })
-  const removeArticle = (id: string) => onUpdate({ ...store, articles: store.articles.filter(a => a.id !== id) })
+  const removeArticle = async (id: string) => {
+    const art = store.articles.find(a => a.id === id)
+    if (!await confirm({ title: 'Eliminar artículo', message: `¿Eliminar «${art?.title || 'este artículo'}»? Esta acción no se puede deshacer.` })) return
+    onUpdate({ ...store, articles: store.articles.filter(a => a.id !== id) })
+  }
   const updateArticle = (id: string, u: Partial<Article>) => onUpdate({ ...store, articles: store.articles.map(a => a.id === id ? { ...a, ...u } : a) })
 
   const addGroup = () => onUpdate({ ...store, articleGroups: [...groups, { id: 'grp-' + Date.now(), name: 'Nuevo grupo', color: DEFAULT_GROUP_COLOR }] })
   const updateGroup = (id: string, u: Partial<ArticleGroup>) => onUpdate({ ...store, articleGroups: groups.map(g => g.id === id ? { ...g, ...u } : g) })
-  const removeGroup = (id: string) => onUpdate({ ...store, articleGroups: groups.filter(g => g.id !== id), articles: store.articles.map(a => a.groupId === id ? { ...a, groupId: undefined } : a) })
+  const removeGroup = async (id: string) => {
+    const g = groups.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar grupo', message: `¿Eliminar el grupo «${g?.name || ''}»? Sus artículos no se borran: quedan en «Sin grupo».`, confirmLabel: 'Eliminar grupo' })) return
+    onUpdate({ ...store, articleGroups: groups.filter(g => g.id !== id), articles: store.articles.map(a => a.groupId === id ? { ...a, groupId: undefined } : a) })
+  }
 
   // The modal treats the synthetic "Sin grupo" panel as no group.
   const openAddModal = (groupId?: string) => { setModalGroup(groupId && groupId !== UNGROUPED_ID ? groupId : ''); setShowModal(true) }
@@ -871,16 +888,31 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const [country, setCountry] = useState('Estados Unidos')
   const [favGroupId, setFavGroupId] = useState('')
   const [search, setSearch] = useState('')
+  const [filterCountry, setFilterCountry] = useState('all')
+  const [filterGender, setFilterGender] = useState('all')
+  const [filterGroup, setFilterGroup] = useState('all')
 
   const add = () => {
     if (!name.trim()) return
     const c: ClientInfo = { id: 'cli-' + Date.now(), name: name.trim(), gender, country, favGroupId: favGroupId || undefined }
     onUpdate({ ...store, clientList: [c, ...clients] }); setName('')
   }
-  const remove = (id: string) => onUpdate({ ...store, clientList: clients.filter(c => c.id !== id) })
+  const confirm = useConfirm()
+  const remove = async (id: string) => {
+    const c = clients.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar cliente', message: `¿Eliminar a «${c?.name || 'este cliente'}»?` })) return
+    onUpdate({ ...store, clientList: clients.filter(c => c.id !== id) })
+  }
   const update = (id: string, u: Partial<ClientInfo>) => onUpdate({ ...store, clientList: clients.map(c => c.id === id ? { ...c, ...u } : c) })
   const groupName = (id?: string) => groups.find(g => g.id === id)?.name || '—'
-  const filtered = search.trim() ? clients.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.country.toLowerCase().includes(search.toLowerCase())) : clients
+  const clientCountries = Array.from(new Set(clients.map(c => c.country).filter(Boolean))).sort()
+  const q = search.trim().toLowerCase()
+  const filtered = clients.filter(c =>
+    (filterCountry === 'all' || c.country === filterCountry) &&
+    (filterGender === 'all' || c.gender === filterGender) &&
+    (filterGroup === 'all' || (filterGroup === '__none' ? !c.favGroupId : c.favGroupId === filterGroup)) &&
+    (!q || c.name.toLowerCase().includes(q) || c.country.toLowerCase().includes(q))
+  )
 
   return (
     <div className="clientes-tab">
@@ -895,7 +927,14 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
         <select value={favGroupId} onChange={e => setFavGroupId(e.target.value)}><option value="">Grupo favorito…</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
         <button className="modal-submit" onClick={add} disabled={!name.trim()}><UserPlus size={14} /> Agregar</button>
       </div>
-      {clients.length > 0 && <div className="articles-search clientes-search"><Search size={14} /><input placeholder="Buscar por nombre o país..." value={search} onChange={e => setSearch(e.target.value)} /></div>}
+      {clients.length > 0 && (
+        <div className="clientes-filters">
+          <div className="articles-search clientes-search"><Search size={14} /><input placeholder="Buscar por nombre o país..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+          <select value={filterCountry} onChange={e => setFilterCountry(e.target.value)}><option value="all">Todos los países</option>{clientCountries.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          <select value={filterGender} onChange={e => setFilterGender(e.target.value)}><option value="all">Todos los géneros</option><option>Femenino</option><option>Masculino</option><option>Otro</option></select>
+          <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)}><option value="all">Todos los grupos</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}<option value="__none">Sin favorito</option></select>
+        </div>
+      )}
       <div className="clientes-list">
         {filtered.map(c => (
           <div key={c.id} className="card cliente-item">
@@ -930,6 +969,11 @@ function BannerBackground({ store }: { store: StoreData }) {
   return <div className="store-banner-bg" style={{ background: `linear-gradient(135deg, ${store.bannerColor}, ${store.bannerColor}99)` }} />
 }
 
+// Floating particles overlay for store banners (toggleable per store).
+function BannerParticles() {
+  return <div className="banner-particles" aria-hidden>{Array.from({ length: 12 }).map((_, i) => <span key={i} style={{ '--p': i } as React.CSSProperties} />)}</div>
+}
+
 function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () => void; onUpdate: (store: StoreData) => void }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(store)
@@ -948,6 +992,7 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
       <div className="store-view-banner">
         <BannerBackground store={store} />
         <div className="store-banner-overlay" />
+        {store.bannerParticles && <BannerParticles />}
         <div className="store-banner-content">
           <button className="store-view-back" onClick={onBack}><ArrowLeft size={18} /></button>
           <div className="store-view-banner-info">
@@ -985,11 +1030,27 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
             </div>
             <label className="customize-field"><span><Palette size={13} /> Color acento</span><div className="color-row"><input type="color" value={draft.accentColor} onChange={e => setDraft({ ...draft, accentColor: e.target.value })} /><span className="color-hex">{draft.accentColor}</span></div></label>
             <label className="customize-field"><span><Package size={13} /> Productos</span><input type="number" min={0} value={draft.products} onChange={e => setDraft({ ...draft, products: Number(e.target.value) })} /></label>
-            <label className="customize-field"><span><Star size={13} /> Reseñas</span><input type="number" min={0} value={draft.reviews} onChange={e => setDraft({ ...draft, reviews: Number(e.target.value) })} /></label>
+            <div className="customize-field customize-reviews">
+              <span><Star size={13} /> Reseñas por estrellas</span>
+              <div className="reviews-editor">
+                {[5, 4, 3, 2, 1].map(star => {
+                  const sc = starCountsOf(draft)
+                  const idx = star - 1
+                  return (
+                    <div key={star} className="reviews-row">
+                      <span className="reviews-stars">{'★'.repeat(star)}<span className="reviews-stars-empty">{'★'.repeat(5 - star)}</span></span>
+                      <input type="number" min={0} value={sc[idx] || 0} onChange={e => { const next = [...sc]; next[idx] = Math.max(0, Number(e.target.value) || 0); setDraft({ ...draft, starCounts: next, reviews: next.reduce((a, b) => a + b, 0) }) }} />
+                    </div>
+                  )
+                })}
+                <div className="reviews-summary">Total: <strong>{reviewTotal(draft)}</strong> · Promedio: <strong>{storeRating(draft)}★</strong></div>
+              </div>
+            </div>
             <label className="customize-field"><span><ShoppingCart size={13} /> Ventas</span><input type="number" min={0} value={draft.sales} onChange={e => setDraft({ ...draft, sales: Number(e.target.value) })} /></label>
             <label className="customize-field"><span><Users size={13} /> Clientes</span><input type="number" min={0} value={draft.clients} onChange={e => setDraft({ ...draft, clients: Number(e.target.value) })} /></label>
             <label className="customize-field"><span>Estado</span><select value={draft.status} onChange={e => setDraft({ ...draft, status: e.target.value })}><option>Activa</option><option>Pausada</option><option>En desarrollo</option></select></label>
             <label className="customize-field"><span><Award size={13} /> Star Seller</span><button className={`star-toggle ${draft.starSeller ? 'active' : ''}`} onClick={() => setDraft({ ...draft, starSeller: !draft.starSeller })}>{draft.starSeller ? 'Sí' : 'No'}</button></label>
+            <label className="customize-field"><span><Sparkles size={13} /> Partículas en el banner</span><button className={`star-toggle ${draft.bannerParticles ? 'active' : ''}`} onClick={() => setDraft({ ...draft, bannerParticles: !draft.bannerParticles })}>{draft.bannerParticles ? 'Sí' : 'No'}</button></label>
           </div>
           <button className="customize-save" onClick={save}>Guardar cambios</button>
         </div>
@@ -1035,12 +1096,17 @@ export default function EtsySection() {
   const [stores, setStores] = useState<StoreData[]>(loadStores)
   const [openTabs, setOpenTabs] = useState<string[]>([])
   const [activeTab, setActiveTab] = useState<string | null>(null)
+  const confirm = useConfirm()
 
   const openStore = (id: string) => { if (!openTabs.includes(id)) setOpenTabs([...openTabs, id]); setActiveTab(id) }
   const closeTab = (id: string, e: React.MouseEvent) => { e.stopPropagation(); const nt = openTabs.filter(t => t !== id); setOpenTabs(nt); if (activeTab === id) setActiveTab(nt.length > 0 ? nt[nt.length - 1] : null) }
   const updateStore = (updated: StoreData) => { const ns = stores.map(s => s.id === updated.id ? updated : s); setStores(ns); saveStores(ns) }
   const addStore = () => { const id = 'store-' + Date.now(); const ns = [...stores, { id, name: 'Nueva tienda', description: 'Descripción.', products: 0, status: 'En desarrollo', bannerColor: '#6366f1', accentColor: '#6366f1', logo: '🏪', articles: [], reviews: 0, sales: 0, clients: 0, creaciones: [], income: [], articleGroups: [], clientList: [] }]; setStores(ns); saveStores(ns); openStore(id) }
-  const deleteStore = (id: string) => { const ns = stores.filter(s => s.id !== id); setStores(ns); saveStores(ns); closeTab(id, { stopPropagation: () => {} } as React.MouseEvent) }
+  const deleteStore = async (id: string) => {
+    const s = stores.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar tienda', message: `¿Eliminar la tienda «${s?.name || ''}» y todos sus datos (artículos, grupos, clientes, finanzas)? Esta acción no se puede deshacer.`, confirmLabel: 'Eliminar tienda' })) return
+    const ns = stores.filter(s => s.id !== id); setStores(ns); saveStores(ns); closeTab(id, { stopPropagation: () => {} } as React.MouseEvent)
+  }
 
   const activeStore = stores.find(s => s.id === activeTab)
 
@@ -1064,12 +1130,14 @@ export default function EtsySection() {
                   {store.bannerImage ? (
                     <div className="store-card-banner has-image" style={{ backgroundImage: `url(${store.bannerImage})` }}>
                       <div className="store-card-banner-overlay" />
+                      {store.bannerParticles && <BannerParticles />}
                       {store.logoImage ? <img src={store.logoImage} alt="" className="store-card-logo-img" /> : <span className="store-card-logo">{store.logo}</span>}
                       <div><h3 className="store-name" style={{ color: 'white' }}>{store.name}</h3><span className="store-status" style={{ color: 'rgba(255,255,255,0.9)' }}>{store.status}</span></div>
                       {store.starSeller && <span className="star-seller-chip"><Award size={10} /> Star Seller</span>}
                     </div>
                   ) : (
                     <div className="store-card-banner" style={{ background: `linear-gradient(135deg, ${store.bannerColor}22, ${store.bannerColor}11)`, borderLeft: `3px solid ${store.bannerColor}` }}>
+                      {store.bannerParticles && <BannerParticles />}
                       {store.logoImage ? <img src={store.logoImage} alt="" className="store-card-logo-img" /> : <span className="store-card-logo">{store.logo}</span>}
                       <div><h3 className="store-name">{store.name}</h3><span className="store-status" style={{ color: store.accentColor }}>{store.status}</span></div>
                       {store.starSeller && <span className="star-seller-chip"><Award size={10} /> Star Seller</span>}

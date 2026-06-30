@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Bold, Italic, Underline, List, Palette, Type, Eye, EyeOff, Search, Save } from 'lucide-react'
 import { addNotification } from '../../lib/notifications'
+import { useConfirm } from '../ConfirmDialog'
 import './PersonalSection.css'
 
 // ============ SALUD ============
@@ -98,6 +99,18 @@ function ExercisePanel() {
   const [weekPlan, setWeekPlan] = useState<Record<string, string>>(() => { try { const s = localStorage.getItem('nn-week-routine'); return s ? JSON.parse(s) : {} } catch { return {} } })
   const [activeWeek, setActiveWeek] = useState<number>(() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })
   const saveActiveWeek = (w: number) => { setActiveWeek(w); localStorage.setItem('nn-active-week', String(w)) }
+
+  // Deep-link from Inicio's "Rutina de hoy" panel: open today's routine directly.
+  useEffect(() => {
+    try {
+      const rid = localStorage.getItem('__nn_open_routine')
+      if (rid) {
+        localStorage.removeItem('__nn_open_routine')
+        if (routines.some(r => r.id === rid)) { setShowSection('ejercicios'); setActiveRoutine(rid) }
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const isStretch = showSection === 'estiramientos'
   const list = isStretch ? stretches : routines
@@ -268,8 +281,93 @@ function formatExpiry(raw: string): string {
   return digits
 }
 
+// ---- Pedidos Ya: promociones por tarjeta ----
+interface PedidoPromo { id: string; cardId: string; days: number[]; discount: number; cap: number; freq: 'mensual' | 'semanal' | 'unica' }
+const PY_DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const PY_FREQ: Record<PedidoPromo['freq'], string> = { mensual: 'Mensual', semanal: 'Semanal', unica: 'Única compra' }
+function loadPromos(): PedidoPromo[] { try { const s = localStorage.getItem('nn-pedidosya'); return s ? JSON.parse(s) : [] } catch { return [] } }
+
+function PedidosYaTab({ cards }: { cards: CardData[] }) {
+  const [promos, setPromos] = useState<PedidoPromo[]>(loadPromos)
+  const [cardId, setCardId] = useState(cards[0]?.id || '')
+  const [days, setDays] = useState<number[]>([])
+  const [discount, setDiscount] = useState('')
+  const [cap, setCap] = useState('')
+  const [freq, setFreq] = useState<PedidoPromo['freq']>('mensual')
+  const confirm = useConfirm()
+
+  const save = (p: PedidoPromo[]) => { setPromos(p); localStorage.setItem('nn-pedidosya', JSON.stringify(p)) }
+  const toggleDay = (d: number) => setDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d].sort((a, b) => a - b))
+  const add = () => {
+    if (!cardId || days.length === 0 || !discount) return
+    save([{ id: 'py-' + Date.now(), cardId, days, discount: Number(discount), cap: Number(cap) || 0, freq }, ...promos])
+    setDays([]); setDiscount(''); setCap('')
+  }
+  const remove = async (id: string) => {
+    if (!await confirm({ title: 'Eliminar promoción', message: '¿Eliminar esta promoción de Pedidos Ya?' })) return
+    save(promos.filter(p => p.id !== id))
+  }
+  const cardOf = (id: string) => cards.find(c => c.id === id)
+  const cardName = (id: string) => { const c = cardOf(id); return c ? (c.label?.trim() || c.bank?.trim() || 'Tarjeta') : 'Tarjeta eliminada' }
+
+  if (cards.length === 0) return <div className="maint-empty" style={{ padding: '40px 0' }}>Primero cargá una tarjeta en la pestaña «Tarjetas».</div>
+
+  return (
+    <div className="pedidosya-tab">
+      <div className="card pedidosya-add">
+        <div className="card-title">🛵 Nueva promoción</div>
+        <div className="py-add-grid">
+          <label className="py-field"><span>Tarjeta</span><select value={cardId} onChange={e => setCardId(e.target.value)}>{cards.map(c => <option key={c.id} value={c.id}>{c.label?.trim() || c.bank?.trim() || 'Tarjeta'}</option>)}</select></label>
+          <label className="py-field"><span>Descuento %</span><input type="number" value={discount} onChange={e => setDiscount(e.target.value)} placeholder="30" /></label>
+          <label className="py-field"><span>Tope de reintegro</span><input type="number" value={cap} onChange={e => setCap(e.target.value)} placeholder="$ (opcional)" /></label>
+          <label className="py-field"><span>Frecuencia</span><select value={freq} onChange={e => setFreq(e.target.value as PedidoPromo['freq'])}><option value="mensual">Mensual</option><option value="semanal">Semanal</option><option value="unica">Única compra</option></select></label>
+        </div>
+        <div className="py-days">
+          {PY_DAYS.map((d, i) => <button key={i} className={`py-day ${days.includes(i) ? 'on' : ''}`} onClick={() => toggleDay(i)}>{d}</button>)}
+        </div>
+        <button className="py-add-btn" onClick={add} disabled={!cardId || days.length === 0 || !discount}><Plus size={14} /> Agregar promoción</button>
+      </div>
+
+      <div className="pedidosya-list">
+        {cards.filter(c => promos.some(p => p.cardId === c.id)).map(c => (
+          <div key={c.id} className="py-card-group">
+            <div className="py-card-head" style={{ background: `linear-gradient(135deg, ${c.color || '#1a1a2e'}, ${c.color || '#1a1a2e'}cc)` }}>
+              <span>{cardName(c.id)}</span><span className="py-card-bank">{c.bank}</span>
+            </div>
+            {promos.filter(p => p.cardId === c.id).map(p => (
+              <div key={p.id} className="py-promo">
+                <span className="py-promo-discount">{p.discount}%</span>
+                <div className="py-promo-info">
+                  <span className="py-promo-days">{p.days.map(d => PY_DAYS[d]).join(' · ')}</span>
+                  <span className="py-promo-meta">{p.cap > 0 ? `Tope $${p.cap.toLocaleString('es-AR')}` : 'Sin tope'} · {PY_FREQ[p.freq]}</span>
+                </div>
+                <button className="py-promo-del" onClick={() => remove(p.id)}><Trash2 size={13} /></button>
+              </div>
+            ))}
+          </div>
+        ))}
+        {promos.length === 0 && <div className="maint-empty">Sin promociones. Agregá la primera arriba.</div>}
+        {/* Promos whose card was deleted */}
+        {promos.filter(p => !cardOf(p.cardId)).length > 0 && (
+          <div className="py-card-group">
+            <div className="py-card-head" style={{ background: 'linear-gradient(135deg,#475569,#64748b)' }}><span>Tarjeta eliminada</span></div>
+            {promos.filter(p => !cardOf(p.cardId)).map(p => (
+              <div key={p.id} className="py-promo">
+                <span className="py-promo-discount">{p.discount}%</span>
+                <div className="py-promo-info"><span className="py-promo-days">{p.days.map(d => PY_DAYS[d]).join(' · ')}</span><span className="py-promo-meta">{p.cap > 0 ? `Tope $${p.cap.toLocaleString('es-AR')}` : 'Sin tope'} · {PY_FREQ[p.freq]}</span></div>
+                <button className="py-promo-del" onClick={() => remove(p.id)}><Trash2 size={13} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function TarjetasTab() {
   const [unlocked, setUnlocked] = useState(false)
+  const [subtab, setSubtab] = useState<'tarjetas' | 'pedidosya'>('tarjetas')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(false)
   const [cards, setCards] = useState<CardData[]>(() => { try { const s = localStorage.getItem('nn-cards'); return s ? JSON.parse(s) : [] } catch { return [] } })
@@ -277,12 +375,17 @@ function TarjetasTab() {
   const [showCvv, setShowCvv] = useState<Record<string, boolean>>({})
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState<string>('all')
+  const confirm = useConfirm()
   const save = (c: CardData[]) => { setCards(c); localStorage.setItem('nn-cards', JSON.stringify(c)) }
   const copyText = (text: string, field: string) => { navigator.clipboard.writeText(text.replace(/\s-\s/g, '')); setCopied(field); setTimeout(() => setCopied(null), 1500) }
   const tryUnlock = () => { if (password === 'A5/911') { setUnlocked(true); setError(false) } else { setError(true) } }
   const addCard = () => { save([...cards, { id: 'card-' + Date.now(), label: '', bank: '', type: 'visa', number: '', holder: '', expiry: '', cvv: '', color: CARD_COLORS[cards.length % CARD_COLORS.length] }]) }
   const updateCard = (id: string, updates: Partial<CardData>) => save(cards.map(c => c.id === id ? { ...c, ...updates } : c))
-  const removeCard = (id: string) => save(cards.filter(c => c.id !== id))
+  const removeCard = async (id: string) => {
+    const c = cards.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar tarjeta', message: `¿Eliminar la tarjeta «${c?.label?.trim() || c?.bank?.trim() || 'sin nombre'}»?` })) return
+    save(cards.filter(c => c.id !== id))
+  }
 
   if (!unlocked) return (<div className="tarjetas-lock"><Lock size={32} /><p>Ingresá la contraseña para acceder</p><div className="tarjetas-lock-form"><input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(false) }} onKeyDown={e => e.key === 'Enter' && tryUnlock()} placeholder="Contraseña" /><button onClick={tryUnlock}>Ingresar</button></div>{error && <span className="tarjetas-error">Contraseña incorrecta</span>}</div>)
 
@@ -294,6 +397,12 @@ function TarjetasTab() {
 
   return (
     <div className="tarjetas-content">
+      <div className="tarjetas-subtabs">
+        <button className={subtab === 'tarjetas' ? 'active' : ''} onClick={() => setSubtab('tarjetas')}><CreditCard size={13} /> Tarjetas</button>
+        <button className={subtab === 'pedidosya' ? 'active' : ''} onClick={() => setSubtab('pedidosya')}>🛵 Pedidos Ya</button>
+      </div>
+      {subtab === 'pedidosya' ? <PedidosYaTab cards={cards} /> : (
+      <>
       <div className="tarjetas-toolbar">
         <div className="tarjetas-search"><Search size={14} /><input placeholder="Buscar por nombre o banco..." value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div className="tarjetas-filters">
@@ -343,6 +452,8 @@ function TarjetasTab() {
         ))}
         <button className="card tarjeta-add" onClick={addCard}><Plus size={24} /><span>Agregar tarjeta</span></button>
       </div>
+      </>
+      )}
     </div>
   )
 }
@@ -390,6 +501,7 @@ function RecordatoriosTab() {
   const [showColors, setShowColors] = useState(false)
   const dragBlock = useRef<number | null>(null)
   const [dragOverBlk, setDragOverBlk] = useState<number | null>(null)
+  const [fmtMenu, setFmtMenu] = useState<string | null>(null)
 
   const save = (r: Reminder[]) => { setReminders(r); localStorage.setItem('nn-reminders', JSON.stringify(r)) }
   const saveBlocks = (b: TextBlock[]) => { setBlocks(b); localStorage.setItem('nn-reminder-blocks', JSON.stringify(b)) }
@@ -421,6 +533,21 @@ function RecordatoriosTab() {
   // Toolbar commands act on whichever block currently holds the selection.
   const exec = (cmd: string, val?: string) => { try { document.execCommand('styleWithCSS', false, 'true') } catch {}; document.execCommand(cmd, false, val) }
 
+  // Per-block format menu: select the whole block, then apply a command to it.
+  const applyFmt = (id: string, cmd: string, val?: string) => {
+    const el = document.querySelector(`[data-block="${id}"]`) as HTMLElement | null
+    if (!el) { setFmtMenu(null); return }
+    el.focus()
+    const range = document.createRange(); range.selectNodeContents(el)
+    const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range)
+    try { document.execCommand('styleWithCSS', false, 'true') } catch {}
+    document.execCommand(cmd, false, val)
+    sel?.removeAllRanges()
+    updateBlock(id, el.innerHTML)
+    setFmtMenu(null)
+  }
+  const editBlock = (id: string) => { (document.querySelector(`[data-block="${id}"]`) as HTMLElement | null)?.focus(); setFmtMenu(null) }
+
   return (
     <div className="anotaciones-content">
       <div className="bloques-toolbar">
@@ -450,9 +577,24 @@ function RecordatoriosTab() {
           >
             <span className="bloque-grip" draggable onDragStart={() => { dragBlock.current = i }} onDragEnd={() => { dragBlock.current = null; setDragOverBlk(null) }}><GripVertical size={13} /></span>
             <BlockEditor block={b} onChange={html => updateBlock(b.id, html)} onEnter={() => addBlockAfter(b.id)} onBackspaceEmpty={() => removeBlock(b.id)} />
+            <div className="bloque-fmt-wrap">
+              <button className="bloque-fmt-btn" onClick={() => setFmtMenu(fmtMenu === b.id ? null : b.id)} title="Formato del bloque"><Type size={13} /></button>
+              {fmtMenu === b.id && (
+                <div className="bloque-fmt-menu">
+                  <button onClick={() => editBlock(b.id)}><Edit3 size={12} /> Editar</button>
+                  <button onClick={() => applyFmt(b.id, 'bold')}><Bold size={12} /> Negrita</button>
+                  <button onClick={() => applyFmt(b.id, 'formatBlock', 'p')}><Type size={12} /> Convertir a texto</button>
+                  <div className="bloque-fmt-sep" />
+                  <button onClick={() => applyFmt(b.id, 'formatBlock', 'h1')}>Encabezado 1</button>
+                  <button onClick={() => applyFmt(b.id, 'formatBlock', 'h2')}>Encabezado 2</button>
+                  <button onClick={() => applyFmt(b.id, 'formatBlock', 'h3')}>Encabezado 3</button>
+                </div>
+              )}
+            </div>
             <button className="bloque-del" onClick={() => removeBlock(b.id)}><X size={12} /></button>
           </div>
         ))}
+        {fmtMenu && <div className="bloque-fmt-backdrop" onClick={() => setFmtMenu(null)} />}
         <button className="bloque-add" onClick={() => addBlockAfter(blocks[blocks.length - 1].id)}><Plus size={12} /> Agregar bloque</button>
       </div>
 
@@ -499,17 +641,21 @@ function ListaComprasTab() {
   const [editingGroup, setEditingGroup] = useState<string | null>(null)
   const [editingColor, setEditingColor] = useState<string | null>(null)
   const [filterCat, setFilterCat] = useState<string | null>(null)
-  const [activeGroup, setActiveGroup] = useState<string | null>(null)
 
+  const confirm = useConfirm()
   const save = (g: ShoppingGroup[]) => { setGroups(g); localStorage.setItem('nn-shopping', JSON.stringify(g)) }
 
   const addGroup = () => {
     if (!newGroupName.trim()) return
     const id = 'sg-' + Date.now()
     save([...groups, { id, name: newGroupName.trim(), color: newGroupColor, items: [] }])
-    setNewGroupName(''); setShowNewGroup(false); setNewGroupColor(defaultGroupColors[groups.length % defaultGroupColors.length]); setActiveGroup(id)
+    setNewGroupName(''); setShowNewGroup(false); setNewGroupColor(defaultGroupColors[(groups.length + 1) % defaultGroupColors.length])
   }
-  const removeGroup = (id: string) => { save(groups.filter(g => g.id !== id)); if (activeGroup === id) setActiveGroup(null) }
+  const removeGroup = async (id: string) => {
+    const g = groups.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar lista', message: `¿Eliminar la lista «${g?.name || ''}» y sus ${g?.items.length || 0} ítems?`, confirmLabel: 'Eliminar lista' })) return
+    save(groups.filter(g => g.id !== id))
+  }
   const updateGroup = (id: string, u: Partial<ShoppingGroup>) => save(groups.map(g => g.id === id ? { ...g, ...u } : g))
   const duplicateGroup = (id: string) => {
     const g = groups.find(g => g.id === id); if (!g) return
@@ -562,20 +708,8 @@ function ListaComprasTab() {
 
       {groups.length === 0 && !showNewGroup && (<div className="shopping-empty"><ShoppingCart size={32} /><p>Sin listas de compras</p><p className="shopping-empty-hint">Creá tu primera lista</p></div>)}
 
-      {groups.length > 0 && (
-        <div className="shopping-subtabs">
-          {groups.map(g => (
-            <button key={g.id} className={`shopping-subtab ${(activeGroup || groups[0].id) === g.id ? 'active' : ''}`} onClick={() => setActiveGroup(g.id)} style={(activeGroup || groups[0].id) === g.id ? { borderColor: g.color, color: g.color } : undefined}>
-              <span className="shopping-subtab-dot" style={{ background: g.color }} />
-              {g.name}
-              <span className="shopping-subtab-count">{g.items.filter(i => !i.done).length}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
       <div className="shopping-groups">
-        {groups.filter(g => g.id === (activeGroup || (groups[0] && groups[0].id))).map(g => {
+        {groups.map(g => {
           const filteredItems = filterCat ? g.items.filter(i => i.category === filterCat) : g.items
           return (
             <div key={g.id} className="card shopping-group" style={{ borderLeft: `4px solid ${g.color}` }}>
@@ -723,6 +857,7 @@ function DiarioTab() {
   const [newChapter, setNewChapter] = useState('')
   const [showNewChapter, setShowNewChapter] = useState(false)
   const [snapshot, setSnapshot] = useState<{ title: string; content: string } | null>(null)
+  const confirm = useConfirm()
 
   const save = (e: DiaryEntry[]) => { setEntries(e); localStorage.setItem('nn-diary', JSON.stringify(e)) }
   const saveChapters = (c: string[]) => { setChapters(c); localStorage.setItem('nn-diary-chapters', JSON.stringify(c)) }
@@ -740,7 +875,11 @@ function DiarioTab() {
     }
     setSnapshot(null); setActiveEntry(null)
   }
-  const remove = (id: string) => { save(entries.filter(e => e.id !== id)); if (activeEntry === id) { setActiveEntry(null); setSnapshot(null) } }
+  const remove = async (id: string) => {
+    const e = entries.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar entrada', message: `¿Eliminar la entrada «${e?.title?.trim() || 'sin título'}» del diario?` })) return
+    save(entries.filter(e => e.id !== id)); if (activeEntry === id) { setActiveEntry(null); setSnapshot(null) }
+  }
   const selectEntry = (id: string) => {
     const entry = entries.find(e => e.id === id)
     if (entry) { setActiveEntry(id); setSnapshot({ title: entry.title, content: entry.content }) }

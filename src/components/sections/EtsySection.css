@@ -68,9 +68,9 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 40px 24px;
+  padding: 56px 24px;
   border-radius: 12px;
-  min-height: 150px;
+  min-height: 210px;
   position: relative;
   overflow: hidden;
 }
@@ -80,8 +80,8 @@
 .store-card-banner.has-image {
   background-size: cover;
   background-position: center;
-  padding: 48px 24px;
-  min-height: 170px;
+  padding: 64px 24px;
+  min-height: 230px;
 }
 .store-card-banner-overlay {
   position: absolute;
@@ -770,3 +770,39 @@
 .cliente-fav-select { padding: 6px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 12px; color: var(--text-primary); font-family: inherit; max-width: 150px; }
 .cliente-item .article-delete { opacity: 0.5; }
 .cliente-item .article-delete:hover { opacity: 1 !important; }
+
+/* Clientes: filter row */
+.clientes-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.clientes-filters .clientes-search { flex: 1; min-width: 180px; }
+.clientes-filters select { padding: 8px 10px; border: 1px solid var(--border); background: var(--bg-card); border-radius: 8px; font-size: 12px; color: var(--text-primary); font-family: inherit; cursor: pointer; }
+.clientes-filters select:focus { outline: none; border-color: var(--accent); }
+
+/* Store reviews-by-stars editor (customize panel) */
+.customize-reviews { grid-column: 1 / -1; }
+.reviews-editor { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; }
+.reviews-row { display: flex; align-items: center; gap: 10px; }
+.reviews-stars { font-size: 14px; color: #f59e0b; letter-spacing: 1px; min-width: 90px; }
+.reviews-stars-empty { color: var(--border); }
+.reviews-row input { width: 90px; padding: 5px 8px; border: 1px solid var(--border); background: var(--bg-card); border-radius: 6px; font-size: 13px; color: var(--text-primary); }
+.reviews-row input:focus { outline: none; border-color: var(--accent); }
+.reviews-summary { font-size: 12px; color: var(--text-secondary); margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--border); }
+
+/* Banner floating particles effect */
+.banner-particles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+.banner-particles span {
+  position: absolute; bottom: -12px;
+  left: calc(4% + var(--p) * 8%);
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255,255,255,0.55);
+  box-shadow: 0 0 6px rgba(255,255,255,0.5);
+  animation: particle-float 6s linear infinite;
+  animation-delay: calc(var(--p) * -0.5s);
+  animation-duration: calc(5s + var(--p) * 0.35s);
+  opacity: 0;
+}
+@keyframes particle-float {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  15% { opacity: 0.85; }
+  85% { opacity: 0.5; }
+  100% { transform: translateY(-260px) scale(1.1); opacity: 0; }
+}

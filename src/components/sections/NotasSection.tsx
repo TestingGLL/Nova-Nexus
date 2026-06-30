@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Plus, Trash2, Bold, Italic, Underline, List, ListOrdered, Type, Palette, Search, Copy, FolderPlus, Folder, ChevronRight, ChevronDown, Tag, X, Check, Clock } from 'lucide-react'
+import { useConfirm } from '../ConfirmDialog'
 import './NotasSection.css'
 
 interface Note {
@@ -64,6 +65,7 @@ export default function NotasSection() {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['__all']))
   const [tagInput, setTagInput] = useState('')
   const [showTagInput, setShowTagInput] = useState(false)
+  const confirm = useConfirm()
   const [filterTag, setFilterTag] = useState<string | null>(null)
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
@@ -130,7 +132,9 @@ export default function NotasSection() {
     setActiveNote(dup.id)
   }
 
-  const deleteNote = (id: string) => {
+  const deleteNote = async (id: string) => {
+    const n = notes.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar nota', message: `¿Eliminar la nota «${n?.title?.trim() || 'sin título'}»?` })) return
     setNotes(prev => prev.filter(n => n.id !== id))
     if (activeNote === id) setActiveNote(null)
   }
@@ -166,7 +170,9 @@ export default function NotasSection() {
     setNewFolderName(''); setShowNewFolder(false)
   }
 
-  const deleteFolder = (id: string) => {
+  const deleteFolder = async (id: string) => {
+    const f = folders.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar carpeta', message: `¿Eliminar la carpeta «${f?.name || ''}»? Las notas no se borran: pasan a «Todas».`, confirmLabel: 'Eliminar carpeta' })) return
     setFolders(prev => prev.filter(f => f.id !== id))
     setNotes(prev => prev.map(n => n.folderId === id ? { ...n, folderId: null } : n))
     if (activeFolder === id) setActiveFolder('__all')

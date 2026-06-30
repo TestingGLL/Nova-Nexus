@@ -11,11 +11,21 @@ const crypto = require('crypto');
 let server = null;
 let token = null;
 let sharedFiles = [];   // { id, name, path, size }
-let received = [];      // { name, path, size, ts } | { type:'text', text, ts }
+let received = [];      // { name, path, size, ts } | { type:'text', text, ts }  (phone → PC)
+let pcMessages = [];    // { id, type:'text', text, ts }  (PC → phone)
 let downloadDir = null;
 let activePort = 0;
+let pruneTimer = null;
 
 const FIXED_PORT = 8473;
+const HISTORY_TTL = 2 * 60 * 60 * 1000; // 2h — only the history entries expire; files stay on disk.
+
+// Drop history entries older than 2h. Transferred files remain on disk untouched.
+function pruneHistory() {
+  const cutoff = Date.now() - HISTORY_TTL;
+  received = received.filter(r => r.ts > cutoff);
+  pcMessages = pcMessages.filter(m => m.ts > cutoff);
+}
 
 // Stable token persisted next to the downloads so the QR/URL stays the same
 // across restarts ("mantener siempre el mismo identificador").
@@ -97,6 +107,11 @@ function pageHtml() {
     <button id="dlall" class="dl" style="width:100%;margin-top:6px;padding:11px;display:none">⬇ Descargar todo</button>
   </div>
 
+  <div class="card" id="pcmsgcard" style="display:none">
+    <h2>💬 Mensajes desde la PC</h2>
+    <div id="pcmsgs"></div>
+  </div>
+
   <div class="card">
     <h2>📤 Enviar archivos a la PC</h2>
     <div class="uploadbox">
@@ -134,6 +149,24 @@ function pageHtml() {
   }
   loadFiles();
   setInterval(loadFiles, 4000);
+
+  async function loadPcMessages() {
+    try {
+      const r = await fetch('/api/pcmessages?t='+T);
+      const list = await r.json();
+      const card = document.getElementById('pcmsgcard');
+      const el = document.getElementById('pcmsgs');
+      if (!list.length) { card.style.display='none'; return; }
+      card.style.display='block';
+      el.innerHTML = list.map(m =>
+        '<div class="file"><span class="nm">'+m.text.replace(/[<>&]/g, c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]))+'</span>'+
+        '<button class="dl copybtn" data-t="'+encodeURIComponent(m.text)+'">Copiar</button></div>'
+      ).join('');
+      el.querySelectorAll('.copybtn').forEach(b => b.onclick = () => { navigator.clipboard.writeText(decodeURIComponent(b.dataset.t)); b.textContent='✓'; setTimeout(()=>b.textContent='Copiar',1200); });
+    } catch(e) {}
+  }
+  loadPcMessages();
+  setInterval(loadPcMessages, 4000);
 
   document.getElementById('sendtxt').addEventListener('click', async () => {
     const ta = document.getElementById('txt'); const st = document.getElementById('txtstatus');
@@ -185,6 +218,12 @@ function handle(req, res) {
   if (req.method === 'GET' && pathname === '/api/files') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(sharedFiles.map(f => ({ id: f.id, name: f.name, size: f.size }))));
+    return;
+  }
+  if (req.method === 'GET' && pathname === '/api/pcmessages') {
+    pruneHistory();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(pcMessages.map(m => ({ id: m.id, text: m.text, ts: m.ts }))));
     return;
   }
   if (req.method === 'GET' && pathname.startsWith('/download/')) {
@@ -246,6 +285,7 @@ function start(dir) {
       server.listen(port, '0.0.0.0', () => {
         activePort = server.address().port;
         const ip = localIPv4();
+        if (!pruneTimer) pruneTimer = setInterval(pruneHistory, 60000);
         resolve({ ip, port: activePort, url: `http://${ip}:${activePort}/?t=${token}` });
       });
     };
@@ -253,7 +293,7 @@ function start(dir) {
   });
 }
 
-function stop() { if (server) { try { server.close(); } catch {} server = null; } activePort = 0; }
+function stop() { if (server) { try { server.close(); } catch {} server = null; } if (pruneTimer) { clearInterval(pruneTimer); pruneTimer = null; } activePort = 0; }
 function listShared() { return sharedFiles.map(f => ({ id: f.id, name: f.name, size: f.size })); }
 function addShared(paths) {
   for (const p of paths || []) {
@@ -267,10 +307,18 @@ function addShared(paths) {
 }
 function removeShared(id) { sharedFiles = sharedFiles.filter(f => f.id !== id); return listShared(); }
 function getShared() { return listShared(); }
-function getReceived() { return received.map(r => r.type === 'text' ? ({ type: 'text', text: r.text, ts: r.ts }) : ({ name: r.name, size: r.size, ts: r.ts })); }
-function clearReceived() { received = []; }
+function getReceived() { pruneHistory(); return received.map(r => r.type === 'text' ? ({ type: 'text', text: r.text, ts: r.ts }) : ({ name: r.name, size: r.size, ts: r.ts })); }
+function clearReceived() { received = []; pcMessages = []; }
+// PC → phone text message (shown on the phone page, copyable).
+function addPcText(text) {
+  const t = String(text || '').trim();
+  if (!t) return getPcMessages();
+  pcMessages.unshift({ id: 'pm-' + Date.now(), type: 'text', text: t.slice(0, 5000), ts: Date.now() });
+  return getPcMessages();
+}
+function getPcMessages() { pruneHistory(); return pcMessages.map(m => ({ id: m.id, text: m.text, ts: m.ts })); }
 function getDownloadDir() { return downloadDir; }
 function isRunning() { return !!server; }
 
 function getStatus() { const ip = localIPv4(); return { running: !!server, ip, port: activePort, url: server ? `http://${ip}:${activePort}/?t=${token}` : '' }; }
-module.exports = { start, stop, addShared, removeShared, getShared, getReceived, clearReceived, getDownloadDir, isRunning, getStatus };
+module.exports = { start, stop, addShared, removeShared, getShared, getReceived, clearReceived, addPcText, getPcMessages, getDownloadDir, isRunning, getStatus };

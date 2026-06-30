@@ -403,11 +403,13 @@ function DayRoutineWidget() {
     if (routine) weekEx = (routine.weeks && routine.weeks.length === 4 ? routine.weeks[activeWeek] : routine.exercises) || []
   } catch {}
   const openRoutine = () => {
+    // Signal Salud to open today's routine (transient, non-synced key).
+    if (routine) { try { localStorage.setItem('__nn_open_routine', routine.id) } catch {} }
     navTo('personal')
     setTimeout(() => {
       const saludTab = document.querySelector('[data-tab="salud"]') as HTMLButtonElement
       if (saludTab) saludTab.click()
-    }, 100)
+    }, 150)
   }
 
   return (

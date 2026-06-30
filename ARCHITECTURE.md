@@ -45,6 +45,7 @@ src/
 | `MainContent.tsx` | Renderiza **solo la sección activa** (las demás se desmontan → no corren sus timers/fetches en segundo plano). Cada sección es un chunk vía `React.lazy`. Overlay de bloqueo (`nn-locked-sections`) y `SectionErrorBoundary`. |
 | `Login.tsx` | Validación local + Supabase Auth, "recordar dispositivo", recuperación. |
 | `Toast.tsx` | `ToastProvider` + `useToast()` (notificaciones efímeras). |
+| `ConfirmDialog.tsx` | `ConfirmProvider` + `useConfirm()` → `Promise<boolean>`. Diálogo de confirmación para acciones destructivas (borrar tienda, grupo, proyecto, nota, tarjeta, etc.). |
 | `SoundFx.tsx` | Engancha los sonidos de UI a eventos globales. |
 | `KeyboardShortcuts.tsx` | Atajos globales. |
 | `ControllerStatus.tsx` | HUD de dispositivos Bluetooth en la barra superior. |

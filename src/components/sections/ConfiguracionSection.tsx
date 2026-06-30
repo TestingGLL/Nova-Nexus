@@ -1,11 +1,70 @@
-import { useState } from 'react'
-import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, EyeOff, Tag, Sparkles, Plus, X, Volume2, Settings, Lock, GripVertical } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, EyeOff, Tag, Sparkles, Plus, X, Volume2, Settings, Lock, GripVertical, Type, CheckCircle2, XCircle, Loader, Activity } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { getSoundsEnabled, setSoundsEnabled, getSoundsVolume, setSoundsVolume, sfx } from '../../lib/sounds'
 import { UI_SCALES, getUiScale, setUiScale } from '../../lib/uiScale'
-import { Type } from 'lucide-react'
+import { supabase, supabaseEnabled } from '../../lib/supabase'
+import { hasPendingSync } from '../../lib/cloudSync'
+import { APP_VERSION } from '../../App'
 import './ConfiguracionSection.css'
+
+type Stat = 'checking' | 'ok' | 'warn' | 'bad'
+function EstadoRow({ label, stat, text }: { label: string; stat: Stat; text: string }) {
+  const Icon = stat === 'checking' ? Loader : stat === 'ok' ? CheckCircle2 : XCircle
+  return (
+    <div className="estado-row">
+      <span className="estado-label">{label}</span>
+      <span className={`estado-badge ${stat}`}><Icon size={13} className={stat === 'checking' ? 'estado-spin' : ''} /> {text}</span>
+    </div>
+  )
+}
+
+function SistemaEstado() {
+  const desktop = !!window.electronAPI?.isDesktop
+  const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const [supa, setSupa] = useState<{ stat: Stat; text: string }>({ stat: 'checking', text: 'Comprobando…' })
+  const [transfer, setTransfer] = useState<{ stat: Stat; text: string }>({ stat: 'checking', text: 'Comprobando…' })
+  const [dolar, setDolar] = useState<{ stat: Stat; text: string }>({ stat: 'checking', text: 'Comprobando…' })
+  const [mundial, setMundial] = useState<{ stat: Stat; text: string }>({ stat: 'checking', text: 'Comprobando…' })
+
+  useEffect(() => {
+    let active = true
+    const on = () => setOnline(true), off = () => setOnline(false)
+    window.addEventListener('online', on); window.addEventListener('offline', off)
+    ;(async () => {
+      if (!supabaseEnabled || !supabase) { if (active) setSupa({ stat: 'warn', text: 'No configurado' }); return }
+      try {
+        const { data, error } = await supabase.auth.getSession()
+        if (!active) return
+        if (error) setSupa({ stat: 'bad', text: 'Error de conexión' })
+        else setSupa({ stat: data.session ? 'ok' : 'warn', text: data.session ? 'Conectado (sesión activa)' : 'Configurado, sin sesión' })
+      } catch { if (active) setSupa({ stat: 'bad', text: 'Sin conexión' }) }
+    })()
+    window.electronAPI?.transferStatus?.().then(s => { if (active) setTransfer({ stat: s?.running ? 'ok' : 'warn', text: s?.running ? `Activo · puerto ${s.port}` : 'Detenido' }) }).catch(() => active && setTransfer({ stat: 'bad', text: 'No disponible' }))
+    window.electronAPI?.getDolarBlue?.().then(r => { if (active) setDolar(r?.success ? { stat: 'ok', text: `OK · venta $${r.venta}` } : { stat: 'bad', text: 'No disponible' }) }).catch(() => active && setDolar({ stat: 'bad', text: 'No disponible' }))
+    window.electronAPI?.getMundialScores?.().then(r => { if (active) setMundial(r?.success ? { stat: 'ok', text: `OK · ${r.matches?.length ?? 0} partidos` } : { stat: 'bad', text: 'No disponible' }) }).catch(() => active && setMundial({ stat: 'bad', text: 'No disponible' }))
+    if (!desktop) { setTransfer({ stat: 'warn', text: 'Solo en escritorio' }); setDolar({ stat: 'warn', text: 'Solo en escritorio' }); setMundial({ stat: 'warn', text: 'Solo en escritorio' }) }
+    return () => { active = false; window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [desktop])
+
+  return (
+    <div className="card config-card">
+      <div className="card-title"><Activity size={16} /> Estado del sistema</div>
+      <p className="config-desc">Versión de la app y conexión de los servicios.</p>
+      <div className="estado-list">
+        <EstadoRow label="Versión" stat="ok" text={`v${APP_VERSION}`} />
+        <EstadoRow label="Modo escritorio (Electron)" stat={desktop ? 'ok' : 'warn'} text={desktop ? 'Activo' : 'Navegador'} />
+        <EstadoRow label="Internet" stat={online ? 'ok' : 'bad'} text={online ? 'En línea' : 'Sin conexión'} />
+        <EstadoRow label="Supabase (nube)" stat={supa.stat} text={supa.text} />
+        <EstadoRow label="Sincronización" stat={hasPendingSync() ? 'warn' : 'ok'} text={hasPendingSync() ? 'Cambios pendientes de subir' : 'Al día'} />
+        <EstadoRow label="Servidor de transferencia" stat={transfer.stat} text={transfer.text} />
+        <EstadoRow label="Dólar blue" stat={dolar.stat} text={dolar.text} />
+        <EstadoRow label="Resultados Mundial" stat={mundial.stat} text={mundial.text} />
+      </div>
+    </div>
+  )
+}
 
 const presets = [
   { name: 'Celeste', color: '#38bdf8' },
@@ -338,6 +397,7 @@ export default function ConfiguracionSection() {
 
       {tab === 'sistema' && (
         <>
+          <SistemaEstado />
           <div className="card config-card">
             <div className="card-title"><Volume2 size={16} /> Sonidos de interfaz</div>
             <p className="config-desc">Sonidos sutiles tipo burbuja al interactuar. También podés controlar el volumen de la app desde el mezclador de sonido de Windows.</p>

@@ -59,8 +59,8 @@ function SpinWheel({ options, onResult }: { options: WheelOption[]; onResult: (o
       ctx.font = `bold ${Math.max(11, Math.min(16, r / options.length * 1.2))}px sans-serif`
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle'
       const label = opt.label.length > 14 ? opt.label.slice(0, 13) + '…' : opt.label
-      // Dark outline + white fill keeps labels legible on every segment colour.
-      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineJoin = 'round'
+      // Strong dark outline + white fill keeps labels legible on every segment colour.
+      ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.lineJoin = 'round'
       ctx.strokeText(label, r - 16, 0)
       ctx.fillStyle = '#fff'
       ctx.fillText(label, r - 16, 0)
@@ -147,15 +147,17 @@ function GridRandom({ options, onResult }: { options: WheelOption[]; onResult: (
     if (pool.length === 0) { setUsed([]); pool = options }
     if (pool.length === 0) return
     setRunning(true); setWinner(null)
-    let speed = 50
+    // Ease-out durations that always add up to ~4s, regardless of step count.
+    const steps = 22 + Math.floor(Math.random() * 8)
+    const weights = Array.from({ length: steps }, (_, i) => Math.pow(i + 1, 1.7))
+    const sumW = weights.reduce((a, b) => a + b, 0)
+    const TOTAL_MS = 3900
     let count = 0
-    const maxSteps = 28 + Math.floor(Math.random() * 18)
 
     const step = () => {
       const idx = Math.floor(Math.random() * pool.length)
       setHighlighted(pool[idx].id)
-      count++
-      if (count >= maxSteps) {
+      if (count >= steps - 1) {
         const chosen = pool[idx]
         setRunning(false); setWinner(chosen.id)
         onResult(chosen)
@@ -163,8 +165,9 @@ function GridRandom({ options, onResult }: { options: WheelOption[]; onResult: (
         setTimeout(() => setUsed(u => { const next = [...u, chosen.id]; return next.length >= options.length ? [] : next }), 900)
         return
       }
-      speed += count * 3
-      setTimeout(step, speed)
+      const dur = (TOTAL_MS * weights[count]) / sumW
+      count++
+      setTimeout(step, dur)
     }
     step()
   }

@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical, Search } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical, Search, Archive } from 'lucide-react'
 import CriptomonedasSection from './CriptomonedasSection'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { useDolarBlue, toArs } from '../../lib/dolarBlue'
+import { useConfirm } from '../ConfirmDialog'
 import './FinanzasSection.css'
 
 // ============ DATA MODEL ============
@@ -13,6 +14,7 @@ interface MaintenanceItem { id: string; text: string; type: MaintType; done: boo
 const maintColors: Record<MaintType, string> = { revisar: '#3b82f6', arreglar: '#f59e0b', obligacion: '#ef4444' }
 const maintLabels: Record<MaintType, string> = { revisar: 'Revisar', arreglar: 'Arreglar', obligacion: 'Obligación' }
 interface ExtraExpense { id: string; name: string; amount: number; date: string }
+interface MonthClosure { id: string; period: string; date: string; rent: number; services: number; extras: number; total: number }
 interface RentData {
   monthlyRent: number
   categories: ServiceRecord[]
@@ -22,6 +24,8 @@ interface RentData {
   rentDueDay: number
   maintenance: MaintenanceItem[]
   extras: ExtraExpense[]
+  closures: MonthClosure[]
+  activePeriod?: string // 'YYYY-MM' currently accumulating
 }
 
 const defaultExpenseColors = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
@@ -41,16 +45,19 @@ function loadRent(): RentData {
         rentDueDay: d.rentDueDay || 10,
         maintenance: d.maintenance || [],
         extras: d.extras || [],
+        closures: d.closures || [],
+        activePeriod: d.activePeriod,
       }
     }
   } catch {}
-  return { monthlyRent: 0, categories: [], people: 1, rentHistory: [], rentFrequencyMonths: 12, rentDueDay: 10, maintenance: [], extras: [] }
+  return { monthlyRent: 0, categories: [], people: 1, rentHistory: [], rentFrequencyMonths: 12, rentDueDay: 10, maintenance: [], extras: [], closures: [] }
 }
 function saveRent(d: RentData) { localStorage.setItem('nn-rent', JSON.stringify(d)) }
 
 // ============ ALQUILER ============
 function AlquilerView() {
   const [data, setData] = useState<RentData>(loadRent)
+  const confirm = useConfirm()
   const [newCatName, setNewCatName] = useState('')
   const [showNewCat, setShowNewCat] = useState(false)
   const [view, setView] = useState<'dashboard' | 'servicios' | 'historial' | 'mantenimiento' | 'extras'>('dashboard')
@@ -69,6 +76,32 @@ function AlquilerView() {
   // Distribution now includes the rent value itself.
   const distItems = [{ id: '__rent', name: 'Alquiler', amount: data.monthlyRent, color: '#6366f1' }, ...data.categories]
   const maxAmount = Math.max(...distItems.map(c => c.amount), 1)
+
+  // Monthly close: archive the current totals into history and start fresh (clears extras).
+  const currentPeriod = new Date().toISOString().slice(0, 7)
+  const fmtPeriod = (p: string) => { const d = new Date(p + '-01T12:00'); return d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }) }
+  const doManualClose = async () => {
+    if (grandTotal <= 0) return
+    if (!await confirm({ title: 'Cierre de mes', message: `¿Cerrar el período y archivar el resumen ($${grandTotal.toLocaleString('es-AR')})? Se guarda en el historial y se reinician los gastos extraordinarios.`, confirmLabel: 'Cerrar mes', danger: false })) return
+    const closure: MonthClosure = { id: 'cl-' + Date.now(), period: data.activePeriod || currentPeriod, date: new Date().toISOString(), rent: data.monthlyRent, services: totalServices, extras: totalExtras, total: grandTotal }
+    save({ ...data, closures: [closure, ...data.closures], extras: [], activePeriod: currentPeriod })
+  }
+  // Auto-close when the month rolls over (e.g. first launch in a new month).
+  useEffect(() => {
+    if (!data.activePeriod) { save({ ...data, activePeriod: currentPeriod }); return }
+    if (data.activePeriod !== currentPeriod) {
+      const svc = data.categories.reduce((a, c) => a + c.amount, 0)
+      const ext = data.extras.reduce((a, e) => a + e.amount, 0)
+      const total = data.monthlyRent + svc + ext
+      if (total > 0) {
+        const closure: MonthClosure = { id: 'cl-' + Date.now(), period: data.activePeriod, date: new Date().toISOString(), rent: data.monthlyRent, services: svc, extras: ext, total }
+        save({ ...data, closures: [closure, ...data.closures], extras: [], activePeriod: currentPeriod })
+      } else {
+        save({ ...data, activePeriod: currentPeriod })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Set the rent amount; if it changed, push a price-change record.
   const setRent = (amount: number) => {
@@ -93,7 +126,11 @@ function AlquilerView() {
       updateCategory(id, { amount })
     }
   }
-  const removeCategory = (id: string) => save({ ...data, categories: data.categories.filter(c => c.id !== id) })
+  const removeCategory = async (id: string) => {
+    const c = data.categories.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar servicio', message: `¿Eliminar el servicio «${c?.name || ''}» y su historial de aumentos?`, confirmLabel: 'Eliminar servicio' })) return
+    save({ ...data, categories: data.categories.filter(c => c.id !== id) })
+  }
   const addMaintenance = () => { if (!newMaintText.trim()) return; save({ ...data, maintenance: [...data.maintenance, { id: 'mnt-' + Date.now(), text: newMaintText.trim(), type: 'revisar', done: false }] }); setNewMaintText('') }
   const toggleMaint = (id: string) => save({ ...data, maintenance: data.maintenance.map(m => m.id === id ? { ...m, done: !m.done } : m) })
   const removeMaint = (id: string) => save({ ...data, maintenance: data.maintenance.filter(m => m.id !== id) })
@@ -150,7 +187,26 @@ function AlquilerView() {
               {totalExtras > 0 && <div className="alquiler-total-item"><span>Extras</span><span className="alquiler-total-value">${totalExtras.toLocaleString('es-AR')}</span></div>}
               <div className="alquiler-total-item total"><span>Total mensual</span><span className="alquiler-total-value">${grandTotal.toLocaleString('es-AR')}</span></div>
             </div>
+            <div className="alquiler-cierre-row">
+              <span className="alquiler-cierre-period">Período activo: <strong>{fmtPeriod(data.activePeriod || currentPeriod)}</strong></span>
+              <button className="alquiler-cierre-btn" onClick={doManualClose} disabled={grandTotal <= 0}><Archive size={14} /> Cierre de mes</button>
+            </div>
           </div>
+
+          {data.closures.length > 0 && (
+            <div className="card alquiler-closures">
+              <div className="card-title"><Archive size={14} /> Cierres de mes</div>
+              <div className="closures-list">
+                {data.closures.slice(0, 12).map(c => (
+                  <div key={c.id} className="closure-item">
+                    <span className="closure-period">{fmtPeriod(c.period)}</span>
+                    <span className="closure-breakdown">Alquiler ${c.rent.toLocaleString('es-AR')} · Serv. ${c.services.toLocaleString('es-AR')}{c.extras > 0 ? ` · Extras $${c.extras.toLocaleString('es-AR')}` : ''}</span>
+                    <span className="closure-total">${c.total.toLocaleString('es-AR')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="alquiler-split card">
             <div className="alquiler-split-header">
@@ -435,7 +491,7 @@ interface UsdExpense { id: string; name: string; amountUsd: number; payType: Usd
 const usdTabs: { id: UsdTab; label: string; color: string }[] = [
   { id: 'fijos', label: 'Gastos fijos', color: '#3b82f6' },
   { id: 'pendientes', label: 'Gastos pendientes', color: '#f59e0b' },
-  { id: 'futuros', label: 'Gastos futuros', color: '#8b5cf6' },
+  { id: 'futuros', label: 'Gastos para Proyectos Futuros', color: '#8b5cf6' },
 ]
 // perMonth normaliza cada tipo a un costo mensual equivalente (pago único = 0 recurrente).
 const usdPayTypes: { v: UsdPayType; label: string; perMonth: number }[] = [

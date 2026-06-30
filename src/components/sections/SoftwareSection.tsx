@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare } from 'lucide-react'
+import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send } from 'lucide-react'
 import { useToast } from '../Toast'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import './SoftwareSection.css'
@@ -277,8 +277,17 @@ function TransferenciasTab() {
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [shared, setShared] = useState<SharedFile[]>([])
   const [received, setReceived] = useState<ReceivedFile[]>([])
+  const [pcMessages, setPcMessages] = useState<{ id: string; text: string; ts: number }[]>([])
+  const [pcText, setPcText] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const sendText = async () => {
+    if (!pcText.trim()) return
+    const res = await window.electronAPI?.transferSendText(pcText.trim())
+    if (res?.messages) setPcMessages(res.messages)
+    setPcText('')
+  }
 
   const start = async () => {
     setStarting(true)
@@ -301,7 +310,7 @@ function TransferenciasTab() {
 
   const stop = async () => {
     await window.electronAPI?.transferStop()
-    setRunning(false); setUrl(''); setQrDataUrl(''); setShared([]); setReceived([])
+    setRunning(false); setUrl(''); setQrDataUrl(''); setShared([]); setReceived([]); setPcMessages([])
     if (pollRef.current) clearInterval(pollRef.current)
     toast.info('Servidor de transferencia detenido')
   }
@@ -317,12 +326,20 @@ function TransferenciasTab() {
   }
 
   const openFolder = () => window.electronAPI?.transferOpenFolder()
-  const clearHistory = async () => { await window.electronAPI?.transferClearReceived(); setReceived([]) }
+  const clearHistory = async () => { await window.electronAPI?.transferClearReceived(); setReceived([]); setPcMessages([]) }
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
-    const res = await window.electronAPI?.transferAddShared()
-    if (res?.files) setShared(res.files)
+    const files = Array.from(e.dataTransfer.files)
+    const paths = files.map(f => window.electronAPI?.getPathForFile(f) || '').filter(Boolean)
+    if (paths.length) {
+      const res = await window.electronAPI?.transferSharePaths(paths)
+      if (res?.files) { setShared(res.files); toast.success(`${paths.length} archivo(s) compartido(s)`) }
+    } else {
+      // Fallback (no path available) → open the picker.
+      const res = await window.electronAPI?.transferAddShared()
+      if (res?.files) setShared(res.files)
+    }
   }
 
   // The server auto-starts with the app (fixed port + stable token). On mount we
@@ -354,6 +371,8 @@ function TransferenciasTab() {
     const poll = async () => {
       const list = await window.electronAPI?.transferReceived()
       if (list) setReceived(list)
+      const pm = await window.electronAPI?.transferPcMessages()
+      if (pm) setPcMessages(pm)
     }
     poll()
     pollRef.current = setInterval(poll, 3000)
@@ -422,6 +441,27 @@ function TransferenciasTab() {
               </div>
             ))}
           </div>
+          <div className="transfer-sendtext">
+            <input value={pcText} onChange={e => setPcText(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendText()} placeholder="Enviar texto al celular…" />
+            <button className="system-btn-sm" onClick={sendText} disabled={!pcText.trim()}><Send size={12} /> Enviar</button>
+          </div>
+          {pcMessages.length > 0 && (
+            <div className="transfer-sent-list">
+              {pcMessages.map(m => (
+                <div key={m.id} className="transfer-msg sent">
+                  <div className="transfer-msg-bubble transfer-msg-text">
+                    <div className="transfer-msg-info">
+                      <span className="transfer-text-content">{m.text}</span>
+                      <span className="transfer-msg-meta">
+                        <button className="transfer-copy-btn" onClick={() => navigator.clipboard.writeText(m.text)}>Copiar</button>
+                        {new Date(m.ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

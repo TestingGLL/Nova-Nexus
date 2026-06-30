@@ -100,6 +100,7 @@ function createWindow() {
       { label: 'Salir', click: () => { app.isQuitting = true; app.quit(); } },
     ]);
     tray.setContextMenu(contextMenu);
+    tray.on('click', () => { win.show(); win.focus(); });
     tray.on('double-click', () => { win.show(); win.focus(); });
   } catch (trayErr) {
     console.error('Tray creation failed:', trayErr);
@@ -270,6 +271,9 @@ ipcMain.handle('transfer-add-shared', async () => {
   if (result.canceled || !result.filePaths.length) return { success: false, files: transfer.getShared() };
   return { success: true, files: transfer.addShared(result.filePaths) };
 });
+ipcMain.handle('transfer-share-paths', (_e, paths) => ({ success: true, files: transfer.addShared(Array.isArray(paths) ? paths : []) }));
+ipcMain.handle('transfer-send-text', (_e, text) => ({ success: true, messages: transfer.addPcText(text) }));
+ipcMain.handle('transfer-pc-messages', () => transfer.getPcMessages());
 ipcMain.handle('transfer-remove-shared', (_e, id) => ({ success: true, files: transfer.removeShared(id) }));
 ipcMain.handle('transfer-get-shared', () => transfer.getShared());
 ipcMain.handle('transfer-received', () => transfer.getReceived());
@@ -394,13 +398,13 @@ ipcMain.handle('get-bluetooth-devices', async () => {
     "$ErrorActionPreference='SilentlyContinue'",
     "$ProgressPreference='SilentlyContinue'",
     "$out=@()",
-    "Get-PnpDevice -PresentOnly | Where-Object { $_.FriendlyName -and ($_.InstanceId -match '^BTHLE\\\\DEV_' -or $_.InstanceId -match '^BTHENUM\\\\DEV_') } | ForEach-Object {",
+    "Get-PnpDevice -PresentOnly | Where-Object { $_.FriendlyName -and $_.Status -eq 'OK' -and ($_.InstanceId -match '^BTHLE\\\\DEV_' -or $_.InstanceId -match '^BTHENUM\\\\DEV_') } | ForEach-Object {",
     "  $b=(Get-PnpDeviceProperty -InstanceId $_.InstanceId -KeyName '{104ea319-6ee2-4701-bd47-8ddbf425bbe5} 2').Data",
     "  $lvl=$null; if ($b -ne $null) { $lvl=[int]$b }",
     "  $out += [PSCustomObject]@{ id=$_.InstanceId; name=$_.FriendlyName; battery=$lvl; class=[string]$_.Class }",
     "}",
     // Wireless headsets/headphones (e.g. USB-dongle sets) show up as audio render endpoints, not BTH nodes.
-    "Get-PnpDevice -PresentOnly | Where-Object { $_.Class -eq 'AudioEndpoint' -and $_.InstanceId -match '\\{0\\.0\\.0\\.' -and $_.FriendlyName -match 'auricular|headphone|headset|airpod|buds|cascos|freebuds|earbud' } | ForEach-Object {",
+    "Get-PnpDevice -PresentOnly | Where-Object { $_.Class -eq 'AudioEndpoint' -and $_.Status -eq 'OK' -and $_.InstanceId -match '\\{0\\.0\\.0\\.' -and $_.FriendlyName -match 'auricular|headphone|headset|airpod|buds|cascos|freebuds|earbud' } | ForEach-Object {",
     "  $nm=$_.FriendlyName; if ($nm -match '\\((.+)\\)') { $nm=$Matches[1] }",
     "  $out += [PSCustomObject]@{ id=$_.InstanceId; name=$nm; battery=$null; class='audio' }",
     "}",
@@ -430,9 +434,12 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  // Clicking the taskbar/pinned icon again (while hidden to tray or minimized)
+  // restores and focuses the existing window instead of opening a new instance.
   app.on('second-instance', () => {
     const win = BrowserWindow.getAllWindows()[0];
     if (win) {
+      if (!win.isVisible()) win.show();
       if (win.isMinimized()) win.restore();
       win.focus();
     }

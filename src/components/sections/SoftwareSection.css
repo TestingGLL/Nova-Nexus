@@ -144,3 +144,11 @@
 @media (max-width: 700px) {
   .transfer-grid { grid-template-columns: 1fr; }
 }
+
+/* Transfer: send text to phone */
+.transfer-sendtext { display: flex; gap: 8px; margin-top: 10px; }
+.transfer-sendtext input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); font-family: inherit; }
+.transfer-sendtext input:focus { outline: none; border-color: var(--accent); }
+.transfer-sent-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.transfer-msg.sent { display: flex; justify-content: flex-end; }
+.transfer-msg.sent .transfer-msg-bubble { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 10px; padding: 8px 10px; max-width: 90%; }

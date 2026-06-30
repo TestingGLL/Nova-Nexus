@@ -9,6 +9,10 @@ interface ElectronAPI {
   transferStart: () => Promise<{ success: boolean; ip?: string; port?: number; url?: string; dir?: string; message?: string }>
   transferStop: () => Promise<{ success: boolean }>
   transferAddShared: () => Promise<{ success: boolean; files: { id: string; name: string; size: number }[] }>
+  transferSharePaths: (paths: string[]) => Promise<{ success: boolean; files: { id: string; name: string; size: number }[] }>
+  transferSendText: (text: string) => Promise<{ success: boolean; messages: { id: string; text: string; ts: number }[] }>
+  transferPcMessages: () => Promise<{ id: string; text: string; ts: number }[]>
+  getPathForFile: (file: File) => string
   transferRemoveShared: (id: string) => Promise<{ success: boolean; files: { id: string; name: string; size: number }[] }>
   transferGetShared: () => Promise<{ id: string; name: string; size: number }[]>
   transferReceived: () => Promise<Array<{ name?: string; size?: number; ts: number; type?: string; text?: string }>>

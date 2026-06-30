@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ToastProvider } from './components/Toast'
+import { ConfirmProvider } from './components/ConfirmDialog'
 import Login from './components/Login'
 import Sidebar from './components/Sidebar'
 import MainContent from './components/MainContent'
@@ -14,7 +15,7 @@ import './App.css'
 
 export type Section = 'inicio' | 'personal' | 'finanzas' | 'etsy' | 'proyectos' | 'software' | 'edicion' | 'notas' | 'extras' | 'alertas' | 'configuracion'
 
-export const APP_VERSION = '1.00.65'
+export const APP_VERSION = '1.00.73'
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -39,6 +40,7 @@ function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
+      <ConfirmProvider>
       <div className="app">
         <Sidebar
           activeSection={activeSection}
@@ -61,6 +63,7 @@ function App() {
         </button>
         <div className="version-badge">v{APP_VERSION}</div>
       </div>
+      </ConfirmProvider>
       </ToastProvider>
     </ThemeProvider>
   )

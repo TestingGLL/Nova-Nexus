@@ -14,6 +14,12 @@ const COINS: CoinDef[] = [
 
 interface PriceData { ars: number; usd: number; change24h: number; updatedAt: number }
 
+// User-editable metadata per coin (persisted + cloud-synced via nn- key).
+interface CoinMeta { tipo: string; riesgo: 'Bajo' | 'Medio' | 'Alto'; plazo: 'Corto' | 'Mediano' | 'Largo'; rinde: boolean }
+const DEFAULT_META: CoinMeta = { tipo: '', riesgo: 'Medio', plazo: 'Mediano', rinde: false }
+const RIESGO_COLOR: Record<string, string> = { Bajo: '#22c55e', Medio: '#f59e0b', Alto: '#ef4444' }
+function loadMeta(): Record<string, CoinMeta> { try { const s = localStorage.getItem('nn-cripto-meta'); return s ? JSON.parse(s) : {} } catch { return {} } }
+
 const PERIODS = [
   { label: 'Última hora', days: 0.042 },
   { label: '3 días', days: 3 },
@@ -93,6 +99,11 @@ export default function CriptomonedasSection() {
   const [lastUpdate, setLastUpdate] = useState('')
   const [selectedCoin, setSelectedCoin] = useState<string | null>(null)
   const [period, setPeriod] = useState(7)
+  const [meta, setMeta] = useState<Record<string, CoinMeta>>(loadMeta)
+  const updateMeta = (id: string, u: Partial<CoinMeta>) => {
+    const next = { ...meta, [id]: { ...DEFAULT_META, ...meta[id], ...u } }
+    setMeta(next); localStorage.setItem('nn-cripto-meta', JSON.stringify(next))
+  }
 
   const fetchPrices = useCallback(async () => {
     try {
@@ -162,6 +173,14 @@ export default function CriptomonedasSection() {
                 <span className="cripto-price-ars">{data ? fmtArs(data.ars) : '...'}</span>
                 <span className="cripto-price-usd">{data ? `USD ${data.usd.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : ''}</span>
               </div>
+              {meta[coin.id] && (
+                <div className="cripto-tags">
+                  {meta[coin.id].tipo && <span className="cripto-tag">{meta[coin.id].tipo}</span>}
+                  <span className="cripto-tag" style={{ color: RIESGO_COLOR[meta[coin.id].riesgo], borderColor: RIESGO_COLOR[meta[coin.id].riesgo] }}>{meta[coin.id].riesgo}</span>
+                  <span className="cripto-tag">{meta[coin.id].plazo}</span>
+                  {meta[coin.id].rinde && <span className="cripto-tag rinde">Rinde</span>}
+                </div>
+              )}
             </button>
           )
         })}
@@ -182,6 +201,17 @@ export default function CriptomonedasSection() {
             ))}
           </div>
           <MiniChart coinId={selected.id} days={period} color={selected.color} />
+          {(() => {
+            const m = meta[selected.id] || DEFAULT_META
+            return (
+              <div className="cripto-meta">
+                <label className="cripto-meta-field"><span>Tipo</span><input value={m.tipo} onChange={e => updateMeta(selected.id, { tipo: e.target.value })} placeholder="Reserva de valor, L1, DeFi, oro…" /></label>
+                <label className="cripto-meta-field"><span>Riesgo</span><select value={m.riesgo} onChange={e => updateMeta(selected.id, { riesgo: e.target.value as CoinMeta['riesgo'] })}><option>Bajo</option><option>Medio</option><option>Alto</option></select></label>
+                <label className="cripto-meta-field"><span>Plazo</span><select value={m.plazo} onChange={e => updateMeta(selected.id, { plazo: e.target.value as CoinMeta['plazo'] })}><option>Corto</option><option>Mediano</option><option>Largo</option></select></label>
+                <label className="cripto-meta-field"><span>Genera rendimientos</span><button type="button" className={`cripto-rinde ${m.rinde ? 'on' : ''}`} onClick={() => updateMeta(selected.id, { rinde: !m.rinde })}>{m.rinde ? 'Sí' : 'No'}</button></label>
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>

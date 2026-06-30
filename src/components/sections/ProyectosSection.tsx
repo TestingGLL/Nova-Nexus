@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { FolderKanban, Plus, Trash2, Tag, Search, LayoutList, Columns3, GripVertical, ChevronDown } from 'lucide-react'
+import { useConfirm } from '../ConfirmDialog'
 import './ProyectosSection.css'
 
 type ProjectType = 'freelancer' | 'propio' | 'etsy' | 'producto' | 'servicio'
@@ -78,6 +79,7 @@ export default function ProyectosSection() {
   const [view, setView] = useState<'list' | 'kanban'>('list')
   const dragRef = useRef<string | null>(null)
   const [dragOverCol, setDragOverCol] = useState<ProjectStatus | null>(null)
+  const confirm = useConfirm()
 
   const save = (p: Project[]) => { setProjects(p); saveProjects(p) }
 
@@ -87,7 +89,11 @@ export default function ProyectosSection() {
     setTitle(''); setDesc(''); setType('propio'); setShowNew(false)
   }
 
-  const removeProject = (id: string) => save(projects.filter(p => p.id !== id))
+  const removeProject = async (id: string) => {
+    const p = projects.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar proyecto', message: `¿Eliminar el proyecto «${p?.title || ''}»?` })) return
+    save(projects.filter(p => p.id !== id))
+  }
   const changeStatus = (id: string, status: ProjectStatus) => save(projects.map(p => p.id === id ? { ...p, status } : p))
 
   const searched = projects.filter(p => {
