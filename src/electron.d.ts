@@ -34,6 +34,21 @@ interface ElectronAPI {
       clock: string
       detail: string
       startTime: string
+      penalty?: boolean
+    }>
+    message?: string
+  }>
+  getMundialArgentina: () => Promise<{
+    success: boolean
+    matches?: Array<{
+      id: string
+      home: { name: string; abbr: string; score: number; logo: string }
+      away: { name: string; abbr: string; score: number; logo: string }
+      state: string
+      clock: string
+      detail: string
+      startTime: string
+      penalty?: boolean
     }>
     message?: string
   }>

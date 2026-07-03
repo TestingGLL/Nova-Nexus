@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   transferStatus: () => ipcRenderer.invoke('transfer-status'),
   transferOpenFolder: () => ipcRenderer.invoke('transfer-open-folder'),
   getMundialScores: () => ipcRenderer.invoke('get-mundial-scores'),
+  getMundialArgentina: () => ipcRenderer.invoke('get-mundial-argentina'),
   getCryptoPrices: () => ipcRenderer.invoke('get-crypto-prices'),
   getCryptoChart: (coinId, days) => ipcRenderer.invoke('get-crypto-chart', coinId, days),
   getDolarBlue: () => ipcRenderer.invoke('get-dolar-blue'),

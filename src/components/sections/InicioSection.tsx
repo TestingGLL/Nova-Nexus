@@ -464,17 +464,19 @@ function NextAlertsWidget() {
 // Goal detection + adaptive polling live in the global mundialStore so they run
 // app-wide (any section, minimized/tray). This widget is just the Inicio display.
 function MundialWidget() {
-  const { matches, loading, error, goalFlash } = useSyncExternalStore(subscribeMundial, getMundialSnapshot)
+  const { matches, argFixtures, loading, error, goalFlash } = useSyncExternalStore(subscribeMundial, getMundialSnapshot)
 
   const fmtTime = (iso: string) => {
     try { return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' }) } catch { return '' }
   }
 
   const liveCount = matches.filter(m => m.state === 'in').length
-  const argMatches = matches.filter(m => m.home.abbr === 'ARG' || m.away.abbr === 'ARG')
+  // Prefer the full Argentina fixtures feed (all confirmed/scheduled matches);
+  // fall back to today's scoreboard when it isn't available (e.g. browser dev).
+  const argMatches = argFixtures.length > 0 ? argFixtures : matches.filter(m => m.home.abbr === 'ARG' || m.away.abbr === 'ARG')
   const argPlayed = argMatches.filter(m => m.state === 'post')
   const argLive = argMatches.filter(m => m.state === 'in')
-  const argUpcoming = argMatches.filter(m => m.state === 'pre')
+  const argUpcoming = argMatches.filter(m => m.state === 'pre').sort((a, b) => (a.startTime > b.startTime ? 1 : -1))
 
   return (
     <div className="card mundial-card">
@@ -508,8 +510,9 @@ function MundialWidget() {
                       {m.away.logo && <img src={m.away.logo} alt="" className="mundial-logo" />}
                     </div>
                   </div>
-                  <div className={`mundial-detail ${m.state === 'in' ? 'live' : ''}`}>
-                    {m.state === 'in' ? (m.clock ? `${m.clock} · ${m.detail}` : m.detail)
+                  <div className={`mundial-detail ${m.state === 'in' ? 'live' : ''} ${m.penalty ? 'penalty' : ''}`}>
+                    {m.penalty ? '🥅 PENALES'
+                      : m.state === 'in' ? (m.clock ? `${m.clock} · ${m.detail}` : m.detail)
                       : m.state === 'pre' ? fmtTime(m.startTime)
                       : m.detail || 'Final'}
                   </div>
@@ -539,9 +542,9 @@ function MundialWidget() {
           )}
           {argUpcoming.length > 0 && (
             <div className="mundial-arg-group">
-              <span className="mundial-arg-label">Próximos</span>
+              <span className="mundial-arg-label">Próximos ({argUpcoming.length})</span>
               {argUpcoming.map(m => (
-                <div key={m.id} className="mundial-arg-row">{m.home.abbr} vs {m.away.abbr} <span>{fmtTime(m.startTime)}</span></div>
+                <div key={m.id} className="mundial-arg-row">{m.home.abbr} vs {m.away.abbr} <span>{(() => { try { return new Date(m.startTime).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', timeZone: 'America/Argentina/Buenos_Aires' }) + ' ' + fmtTime(m.startTime) } catch { return fmtTime(m.startTime) } })()}</span></div>
               ))}
             </div>
           )}

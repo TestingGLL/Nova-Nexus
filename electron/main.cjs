@@ -287,42 +287,57 @@ ipcMain.handle('transfer-status', async () => {
 });
 ipcMain.handle('transfer-open-folder', async () => { const d = transfer.getDownloadDir(); if (d) await shell.openPath(d); return { success: !!d }; });
 
-// ----- Mundial 2026 live scores (ESPN API) -----
-ipcMain.handle('get-mundial-scores', async () => {
+// ----- Mundial 2026 (ESPN API) -----
+function mapMundialEvent(ev) {
+  const comp = (ev.competitions && ev.competitions[0]) || {};
+  const competitors = comp.competitors || [];
+  const home = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
+  const away = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
+  const t = (team) => team && team.team ? team.team : {};
+  const st = (ev.status && ev.status.type) || {};
+  // Penalty shootout detection (used to alert once and stop goal alerts).
+  const penalty = /shootout|penal|penales/i.test(`${st.name || ''} ${st.detail || ''} ${st.description || ''}`);
+  return {
+    id: ev.id || '',
+    home: { name: t(home).displayName || t(home).name || '?', abbr: t(home).abbreviation || '?', score: parseInt(home.score || '0', 10), logo: t(home).logo || '' },
+    away: { name: t(away).displayName || t(away).name || '?', abbr: t(away).abbreviation || '?', score: parseInt(away.score || '0', 10), logo: t(away).logo || '' },
+    state: st.state || 'pre',
+    clock: (ev.status && ev.status.displayClock) || '',
+    detail: st.detail || st.description || '',
+    startTime: ev.date || '',
+    penalty,
+  };
+}
+
+function fetchEspn(url) {
   const https = require('https');
-  const url = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
   return new Promise((resolve) => {
-    const req = https.get(url, { timeout: 8000 }, (res) => {
+    const req = https.get(url, { timeout: 10000, headers: { 'User-Agent': 'NovaNexus/1.0', 'Accept': 'application/json' } }, (res) => {
       let body = '';
-      res.on('data', chunk => body += chunk);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(body);
-          const matches = (json.events || []).map(ev => {
-            const comp = (ev.competitions && ev.competitions[0]) || {};
-            const competitors = comp.competitors || [];
-            const home = competitors.find(c => c.homeAway === 'home') || competitors[0] || {};
-            const away = competitors.find(c => c.homeAway === 'away') || competitors[1] || {};
-            const t = (team) => team && team.team ? team.team : {};
-            return {
-              id: ev.id || '',
-              home: { name: t(home).displayName || t(home).name || '?', abbr: t(home).abbreviation || '?', score: parseInt(home.score || '0', 10), logo: t(home).logo || '' },
-              away: { name: t(away).displayName || t(away).name || '?', abbr: t(away).abbreviation || '?', score: parseInt(away.score || '0', 10), logo: t(away).logo || '' },
-              state: (ev.status && ev.status.type && ev.status.type.state) || 'pre',
-              clock: (ev.status && ev.status.displayClock) || '',
-              detail: (ev.status && ev.status.type && (ev.status.type.detail || ev.status.type.description)) || '',
-              startTime: ev.date || '',
-            };
-          });
-          resolve({ success: true, matches });
-        } catch (_e) {
-          resolve({ success: false, message: 'Error al procesar datos' });
-        }
-      });
+      res.on('data', c => body += c);
+      res.on('end', () => { try { resolve({ ok: true, json: JSON.parse(body) }); } catch { resolve({ ok: false }); } });
     });
-    req.on('error', (e) => resolve({ success: false, message: e.message }));
-    req.on('timeout', () => { req.destroy(); resolve({ success: false, message: 'Timeout' }); });
+    req.on('error', () => resolve({ ok: false }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false }); });
   });
+}
+
+ipcMain.handle('get-mundial-scores', async () => {
+  const r = await fetchEspn('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard');
+  if (!r.ok) return { success: false, message: 'Error al procesar datos' };
+  return { success: true, matches: (r.json.events || []).map(mapMundialEvent) };
+});
+
+// Every confirmed/scheduled Argentina match across the whole tournament window
+// (not just today/tomorrow), so upcoming fixtures show up as soon as they're set.
+ipcMain.handle('get-mundial-argentina', async () => {
+  const fmt = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const now = new Date();
+  const end = new Date(now.getTime() + 55 * 24 * 60 * 60 * 1000);
+  const r = await fetchEspn(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${fmt(now)}-${fmt(end)}`);
+  if (!r.ok) return { success: false, message: 'Error' };
+  const matches = (r.json.events || []).map(mapMundialEvent).filter(m => m.home.abbr === 'ARG' || m.away.abbr === 'ARG' || /argentina/i.test(`${m.home.name} ${m.away.name}`));
+  return { success: true, matches };
 });
 
 // ----- Crypto prices (CoinGecko) -----

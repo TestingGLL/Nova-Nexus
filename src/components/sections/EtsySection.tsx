@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Clock, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, Smile } from 'lucide-react'
+import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, Smile } from 'lucide-react'
 import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
 import './EtsySection.css'
@@ -9,7 +9,10 @@ import './EtsySection.css'
 interface SubArticle { id: string; title: string; description: string; inLaunches?: boolean }
 interface Article { id: string; title: string; description: string; subArticles: SubArticle[]; launchDate?: string; order?: number; createdAt?: string; inLaunches?: boolean; launched?: boolean; cover?: string; price?: string; groupId?: string; icon?: string }
 interface ArticleGroup { id: string; name: string; color?: string; defaultPrice?: string }
-interface ClientInfo { id: string; name: string; gender: string; country: string; favGroupId?: string }
+interface ClientInfo { id: string; name: string; gender: string; country: string; favGroupId?: string; recurring?: boolean }
+// Lanzamientos → Organizador: paneles con artículos ordenados (oficiales o personalizados).
+interface OrgItem { id: string; articleId?: string; customTitle?: string; customDesc?: string; launched?: boolean }
+interface Organizer { id: string; name: string; items: OrgItem[] }
 
 const UNGROUPED_ID = '__ungrouped'
 
@@ -39,10 +42,12 @@ interface StoreData {
   id: string; name: string; description: string; products: number; status: string
   bannerColor: string; accentColor: string; logo: string; articles: Article[]
   reviews: number; sales: number; clients: number; bannerImage?: string; brand?: BrandInfo
-  starCounts?: number[] // [1★,2★,3★,4★,5★] cantidad de reseñas por nivel de estrellas
+  starCounts?: number[] // (legado) cantidad de reseñas por nivel de estrellas
+  reviewItems?: { id: string; stars: number }[] // reseñas individuales (1-5★), clicables
   bannerParticles?: boolean // efecto de partículas flotantes en el banner
   starSeller?: boolean; logoImage?: string; creaciones?: PromptPanel[]; income?: IncomeEntry[]
   articleGroups?: ArticleGroup[]; clientList?: ClientInfo[]
+  organizers?: Organizer[]; flowOrganizerId?: string | null
 }
 
 const defaultStores: StoreData[] = [
@@ -56,7 +61,7 @@ function loadStores(): StoreData[] {
     const saved = localStorage.getItem('nn-etsy-stores')
     if (saved) {
       const parsed = JSON.parse(saved)
-      const stores = parsed.map((s: any) => ({ ...s, articles: s.articles || [], reviews: s.reviews ?? 0, sales: s.sales ?? 0, clients: s.clients ?? 0, creaciones: s.creaciones || [], income: s.income || [], articleGroups: s.articleGroups || [], clientList: s.clientList || [], starCounts: Array.isArray(s.starCounts) && s.starCounts.length === 5 ? s.starCounts : [0, 0, 0, 0, s.reviews ?? 0] }))
+      const stores = parsed.map((s: any) => ({ ...s, articles: s.articles || [], reviews: s.reviews ?? 0, sales: s.sales ?? 0, clients: s.clients ?? 0, creaciones: s.creaciones || [], income: s.income || [], articleGroups: s.articleGroups || [], clientList: s.clientList || [], reviewItems: Array.isArray(s.reviewItems) ? s.reviewItems : seedReviewItems(s), organizers: s.organizers || [], flowOrganizerId: s.flowOrganizerId ?? null }))
       const migrated = localStorage.getItem('nn-etsy-migrated-v2')
       if (!migrated) {
         for (const store of stores) {
@@ -72,16 +77,21 @@ function loadStores(): StoreData[] {
 }
 function saveStores(stores: StoreData[]) { localStorage.setItem('nn-etsy-stores', JSON.stringify(stores)) }
 
-function starCountsOf(store: StoreData): number[] {
-  return Array.isArray(store.starCounts) && store.starCounts.length === 5 ? store.starCounts : [0, 0, 0, 0, store.reviews || 0]
+// Individual reviews (1-5★). Seeded from legacy data (starCounts, or the numeric
+// review count as 5★) so existing stores keep their reviews at 5 stars.
+function seedReviewItems(s: any): { id: string; stars: number }[] {
+  const items: { id: string; stars: number }[] = []
+  const sc = Array.isArray(s.starCounts) && s.starCounts.length === 5 ? s.starCounts : null
+  if (sc) sc.forEach((n: number, i: number) => { for (let k = 0; k < n; k++) items.push({ id: `rv-${i + 1}-${k}`, stars: i + 1 }) })
+  else { const n = s.reviews ?? 0; for (let k = 0; k < n; k++) items.push({ id: `rv-${k}`, stars: 5 }) }
+  return items
 }
-function reviewTotal(store: StoreData): number { return starCountsOf(store).reduce((a, b) => a + b, 0) }
+function reviewItemsOf(store: StoreData): { id: string; stars: number }[] { return Array.isArray(store.reviewItems) ? store.reviewItems : seedReviewItems(store) }
+function reviewTotal(store: StoreData): number { return reviewItemsOf(store).length }
 function storeRating(store: StoreData): number {
-  const sc = starCountsOf(store)
-  const total = sc.reduce((a, b) => a + b, 0)
-  if (total === 0) return 0
-  const sum = sc.reduce((a, c, i) => a + c * (i + 1), 0)
-  return Number((sum / total).toFixed(1))
+  const it = reviewItemsOf(store)
+  if (it.length === 0) return 0
+  return Number((it.reduce((a, r) => a + r.stars, 0) / it.length).toFixed(1))
 }
 
 // ============ ADD ARTICLE MODAL ============
@@ -181,6 +191,7 @@ function ArticleItem({ art, store, groups, rate, updateArticle, removeArticle }:
       </div>
       {open && (
         <div className="article-body">
+          <input className="article-title-input" placeholder="Nombre del artículo" value={art.title} onChange={e => updateArticle(art.id, { title: e.target.value })} />
           <input className="article-desc-input" placeholder="Descripción..." value={art.description} onChange={e => updateArticle(art.id, { description: e.target.value })} />
           <div className="article-date-group">
             <label className="article-date-label"><Smile size={12} /> Icono <input className="article-icon-input" value={art.icon || ''} onChange={e => updateArticle(art.id, { icon: e.target.value.slice(0, 2) })} placeholder="📄" maxLength={2} /></label>
@@ -221,6 +232,9 @@ function GroupPanel({ group, store, groups, groupArticles, rate, readOnly, updat
     ? { background: 'linear-gradient(135deg, #475569, #64748b)' }
     : { background: `linear-gradient(135deg, ${color}, ${color}cc)` }
   const priceLabel = fmtUsdArs(group.defaultPrice, rate)
+  // Auto-computed sum of every article price in the group.
+  const groupSum = groupArticles.reduce((a, art) => a + (parseFloat(String(art.price || '').replace(/[^0-9.,]/g, '').replace(',', '.')) || 0), 0)
+  const sumLabel = groupSum > 0 ? fmtUsdArs(String(groupSum), rate) : ''
   return (
     <div className="article-group card">
       <div className="article-group-banner" style={bannerStyle}>
@@ -230,6 +244,7 @@ function GroupPanel({ group, store, groups, groupArticles, rate, readOnly, updat
           <span className="article-group-count">{groupArticles.length} artículos</span>
         </button>
         <div className="article-group-actions">
+          {sumLabel && <span className="article-group-sum" title="Suma de los precios de los artículos">Σ {sumLabel}</span>}
           {priceLabel && <span className="article-group-price"><DollarSign size={12} /> {priceLabel}</span>}
           {!readOnly && <button type="button" className="article-group-edit" onClick={() => setEditing(e => !e)} title="Editar grupo"><Edit3 size={14} /></button>}
           {!readOnly && <button type="button" className="article-group-delete" onClick={onRemoveGroup} title="Eliminar grupo"><Trash2 size={14} /></button>}
@@ -318,85 +333,36 @@ function ArticlesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   )
 }
 
-// ============ LAUNCHES BOARD ============
+// ============ LAUNCHES / ORGANIZADOR ============
 
 const ordinals = ['1º', '2º', '3º', '4º', '5º', '6º', '7º', '8º', '9º', '10º']
 
-// Modal to add articles/subarticles to a launch, organized by group.
-function LaunchSelectorModal({ store, onClose, onApply }: { store: StoreData; onClose: () => void; onApply: (arts: Set<string>, subs: Set<string>) => void }) {
+// Picker for adding official store articles into an organizer panel.
+function OrganizerArticlePicker({ store, existing, onAdd, onClose }: { store: StoreData; existing: Set<string>; onAdd: (ids: string[]) => void; onClose: () => void }) {
   const groups = store.articleGroups || []
-  const [selArts, setSelArts] = useState<Set<string>>(() => new Set(store.articles.filter(a => a.inLaunches).map(a => a.id)))
-  const [selSubs, setSelSubs] = useState<Set<string>>(() => new Set(store.articles.flatMap(a => a.subArticles.filter(s => s.inLaunches).map(s => s.id))))
-
-  const setArt = (a: Article, on: boolean) => {
-    setSelArts(p => { const n = new Set(p); if (on) n.add(a.id); else n.delete(a.id); return n })
-    setSelSubs(p => { const n = new Set(p); a.subArticles.forEach(s => on ? n.add(s.id) : n.delete(s.id)); return n })
-  }
-  const setSub = (a: Article, s: SubArticle, on: boolean) => {
-    setSelSubs(p => { const n = new Set(p); if (on) n.add(s.id); else n.delete(s.id); return n })
-    if (on) setSelArts(p => new Set(p).add(a.id)) // selecting a sub keeps its article in the launch
-  }
-  const setMany = (arts: Article[], on: boolean) => {
-    setSelArts(p => { const n = new Set(p); arts.forEach(a => on ? n.add(a.id) : n.delete(a.id)); return n })
-    setSelSubs(p => { const n = new Set(p); arts.forEach(a => a.subArticles.forEach(s => on ? n.add(s.id) : n.delete(s.id))); return n })
-  }
-  const allOn = store.articles.length > 0 && store.articles.every(a => selArts.has(a.id))
-
-  const renderArticle = (a: Article) => (
-    <div key={a.id} className="lsel-article">
-      <label className="lsel-row">
-        <input type="checkbox" checked={selArts.has(a.id)} onChange={e => setArt(a, e.target.checked)} />
-        <span className="lsel-title">{a.title}</span>
-        {a.subArticles.length > 0 && <span className="lsel-subcount">{a.subArticles.length} sub</span>}
-      </label>
-      {a.subArticles.map(s => (
-        <label key={s.id} className="lsel-row lsel-sub">
-          <input type="checkbox" checked={selSubs.has(s.id)} onChange={e => setSub(a, s, e.target.checked)} />
-          <span className="lsel-sub-bullet" style={{ background: store.accentColor }} />
-          <span className="lsel-sub-title">{s.title || <em>Sin nombre</em>}</span>
-        </label>
-      ))}
-    </div>
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const toggle = (id: string) => setSel(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const available = store.articles.filter(a => !existing.has(a.id))
+  const ungrouped = available.filter(a => !a.groupId || !groups.some(g => g.id === a.groupId))
+  const row = (a: Article) => (
+    <label key={a.id} className="lsel-row">
+      <input type="checkbox" checked={sel.has(a.id)} onChange={() => toggle(a.id)} />
+      <span className="lsel-title">{a.icon || '📄'} {a.title}</span>
+    </label>
   )
-
-  const ungrouped = store.articles.filter(a => !a.groupId || !groups.some(g => g.id === a.groupId))
-
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content lsel-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header"><h3>Agregar al lanzamiento</h3><button className="modal-close" onClick={onClose}><X size={16} /></button></div>
-        <div className="lsel-quick">
-          <button onClick={() => setMany(store.articles, true)}>Seleccionar todo</button>
-          <button onClick={() => setMany(store.articles, false)}>Ninguno</button>
-        </div>
+        <div className="modal-header"><h3>Agregar artículos oficiales</h3><button className="modal-close" onClick={onClose}><X size={16} /></button></div>
         <div className="modal-body lsel-body">
-          {store.articles.length === 0 && <div className="articles-empty"><Package size={24} /><p>No hay artículos. Crealos en la pestaña Artículos.</p></div>}
-          {groups.map(g => {
-            const ga = store.articles.filter(a => a.groupId === g.id)
-            if (ga.length === 0) return null
-            const groupOn = ga.every(a => selArts.has(a.id))
-            return (
-              <div key={g.id} className="lsel-group">
-                <label className="lsel-row lsel-group-head">
-                  <input type="checkbox" checked={groupOn} onChange={e => setMany(ga, e.target.checked)} />
-                  <Layers size={13} /> <span className="lsel-group-name">{g.name}</span>
-                  <span className="lsel-subcount">{ga.length} artículos</span>
-                </label>
-                <div className="lsel-group-items">{ga.map(renderArticle)}</div>
-              </div>
-            )
-          })}
-          {ungrouped.length > 0 && (
-            <div className="lsel-group">
-              {groups.length > 0 && <span className="lsel-ungrouped-label">Sin grupo</span>}
-              <div className="lsel-group-items">{ungrouped.map(renderArticle)}</div>
-            </div>
-          )}
+          {available.length === 0 && <div className="articles-empty"><Package size={24} /><p>No hay más artículos oficiales para agregar. Creá artículos en la pestaña «Artículos» o cargá uno personalizado.</p></div>}
+          {groups.map(g => { const ga = available.filter(a => a.groupId === g.id); return ga.length ? <div key={g.id} className="lsel-group"><span className="lsel-group-name"><Layers size={13} /> {g.name}</span><div className="lsel-group-items">{ga.map(row)}</div></div> : null })}
+          {ungrouped.length > 0 && <div className="lsel-group">{groups.length > 0 && <span className="lsel-ungrouped-label">Sin grupo</span>}<div className="lsel-group-items">{ungrouped.map(row)}</div></div>}
         </div>
         <div className="modal-footer">
-          <span className="lsel-count">{selArts.size} artículos · {selSubs.size} sub</span>
+          <span className="lsel-count">{sel.size} seleccionados</span>
           <button className="modal-cancel" onClick={onClose}>Cancelar</button>
-          <button className="modal-submit" onClick={() => onApply(selArts, selSubs)}>{allOn ? 'Aplicar (todos)' : 'Aplicar'}</button>
+          <button className="modal-submit" onClick={() => { onAdd(Array.from(sel)); onClose() }} disabled={sel.size === 0}>Agregar</button>
         </div>
       </div>
     </div>
@@ -404,77 +370,128 @@ function LaunchSelectorModal({ store, onClose, onApply }: { store: StoreData; on
 }
 
 function LaunchesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
-  const [view, setView] = useState<'flujo' | 'board'>('board')
-  const [showSelector, setShowSelector] = useState(false)
-  const [dragId, setDragId] = useState<string | null>(null)
-  const [overId, setOverId] = useState<string | null>(null)
-  // Only articles explicitly added to the launch appear here — not every article.
-  const launchArticles = store.articles.filter(a => a.inLaunches)
-  const boardOrder = [...launchArticles].sort((a, b) => { const oa = a.order ?? launchArticles.indexOf(a) + 1000; const ob = b.order ?? launchArticles.indexOf(b) + 1000; return oa - ob })
-  const pending = boardOrder.filter(a => !a.launched)
-  const commitOrder = (orderedIds: string[]) => { const orderMap = new Map(orderedIds.map((id, i) => [id, i])); onUpdate({ ...store, articles: store.articles.map(a => ({ ...a, order: orderMap.get(a.id) ?? a.order })) }) }
-  const handleDrop = (targetId: string) => { if (!dragId || dragId === targetId) { setDragId(null); setOverId(null); return }; const ids = boardOrder.map(a => a.id); const from = ids.indexOf(dragId); const to = ids.indexOf(targetId); ids.splice(to, 0, ids.splice(from, 1)[0]); commitOrder(ids); setDragId(null); setOverId(null) }
-  const markLaunched = (id: string, v: boolean) => onUpdate({ ...store, articles: store.articles.map(a => a.id === id ? { ...a, launched: v } : a) })
-  const applySelection = (arts: Set<string>, subs: Set<string>) => onUpdate({ ...store, articles: store.articles.map(a => ({ ...a, inLaunches: arts.has(a.id), subArticles: a.subArticles.map(s => ({ ...s, inLaunches: subs.has(s.id) })) })) })
-  // Count subarticles included in the launch (individually selected, else all).
-  const inclSubs = (a: Article) => { const i = a.subArticles.filter(s => s.inLaunches).length; return i || a.subArticles.length }
+  const [view, setView] = useState<'organizador' | 'flujo'>('organizador')
+  const [pickerOrg, setPickerOrg] = useState<string | null>(null)
+  const [customTitle, setCustomTitle] = useState<Record<string, string>>({})
+  const [drag, setDrag] = useState<{ org: string; item: string } | null>(null)
+  const [overItem, setOverItem] = useState<string | null>(null)
+  const confirm = useConfirm()
+
+  const organizers = store.organizers || []
+  const setOrganizers = (o: Organizer[]) => onUpdate({ ...store, organizers: o })
+  const flowOrg = organizers.find(o => o.id === store.flowOrganizerId) || null
+
+  const articleById = (id?: string) => store.articles.find(a => a.id === id)
+  const itemTitle = (it: OrgItem) => it.articleId ? (articleById(it.articleId)?.title || 'Artículo eliminado') : (it.customTitle || 'Personalizado')
+  const itemIcon = (it: OrgItem) => it.articleId ? (articleById(it.articleId)?.icon || '📄') : '✏️'
+
+  const addOrganizer = () => setOrganizers([...organizers, { id: 'org-' + Date.now(), name: 'Nuevo panel', items: [] }])
+  const renameOrganizer = (id: string, name: string) => setOrganizers(organizers.map(o => o.id === id ? { ...o, name } : o))
+  const removeOrganizer = async (id: string) => { const o = organizers.find(x => x.id === id); if (!await confirm({ title: 'Eliminar panel', message: `¿Eliminar el panel «${o?.name || ''}» y su orden?`, confirmLabel: 'Eliminar panel' })) return; onUpdate({ ...store, organizers: organizers.filter(o => o.id !== id), flowOrganizerId: store.flowOrganizerId === id ? null : store.flowOrganizerId }) }
+
+  const addOfficial = (orgId: string, ids: string[]) => setOrganizers(organizers.map(o => o.id === orgId ? { ...o, items: [...o.items, ...ids.map((aid, k) => ({ id: 'oi-' + Date.now() + '-' + k, articleId: aid }))] } : o))
+  const addCustom = (orgId: string) => { const t = (customTitle[orgId] || '').trim(); if (!t) return; setOrganizers(organizers.map(o => o.id === orgId ? { ...o, items: [...o.items, { id: 'oi-' + Date.now(), customTitle: t }] } : o)); setCustomTitle({ ...customTitle, [orgId]: '' }) }
+  const removeItem = (orgId: string, itemId: string) => setOrganizers(organizers.map(o => o.id === orgId ? { ...o, items: o.items.filter(i => i.id !== itemId) } : o))
+  const reorder = (orgId: string, from: string, to: string) => { if (from === to) return; setOrganizers(organizers.map(o => { if (o.id !== orgId) return o; const items = [...o.items]; const fi = items.findIndex(i => i.id === from); const ti = items.findIndex(i => i.id === to); if (fi < 0 || ti < 0) return o; items.splice(ti, 0, items.splice(fi, 1)[0]); return { ...o, items } })) }
+  const officialize = (orgId: string, itemId: string) => {
+    const org = organizers.find(o => o.id === orgId); const it = org?.items.find(i => i.id === itemId)
+    if (!it || it.articleId) return
+    const newArt: Article = { id: 'art-' + Date.now(), title: it.customTitle || 'Artículo', description: it.customDesc || '', subArticles: [] }
+    onUpdate({ ...store, articles: [...store.articles, newArt], organizers: organizers.map(o => o.id === orgId ? { ...o, items: o.items.map(i => i.id === itemId ? { id: i.id, articleId: newArt.id, launched: i.launched } : i) } : o) })
+  }
+
+  const loadIntoFlow = (orgId: string) => onUpdate({ ...store, flowOrganizerId: orgId, organizers: organizers.map(o => o.id === orgId ? { ...o, items: o.items.map(i => ({ ...i, launched: false })) } : o) })
+  const clearFlow = () => onUpdate({ ...store, flowOrganizerId: null })
+  const markLaunched = (itemId: string, v: boolean) => { if (!flowOrg) return; setOrganizers(organizers.map(o => o.id === flowOrg.id ? { ...o, items: o.items.map(i => i.id === itemId ? { ...i, launched: v } : i) } : o)) }
+
+  const pending = flowOrg ? flowOrg.items.filter(i => !i.launched) : []
+  const done = flowOrg ? flowOrg.items.filter(i => i.launched) : []
 
   return (
     <div className="launches-tab">
-      <div className="launches-top-actions">
-        <button className="articles-add-btn-big" onClick={() => setShowSelector(true)}><Plus size={15} /> Agregar al lanzamiento</button>
-        <span className="launches-summary">{launchArticles.length} artículos en lanzamiento</span>
+      <div className="launches-view-toggle">
+        <button className={view === 'organizador' ? 'active' : ''} onClick={() => setView('organizador')}><Layers size={13} /> Organizador</button>
+        <button className={view === 'flujo' ? 'active' : ''} onClick={() => setView('flujo')}><TrendingUp size={13} /> Flujo</button>
       </div>
-      {showSelector && <LaunchSelectorModal store={store} onClose={() => setShowSelector(false)} onApply={(a, s) => { applySelection(a, s); setShowSelector(false) }} />}
 
-      <div className="launches-view-toggle"><button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}><Layers size={13} /> Mapa de orden</button><button className={view === 'flujo' ? 'active' : ''} onClick={() => setView('flujo')}><TrendingUp size={13} /> Flujo</button></div>
-
-      {view === 'flujo' ? (
-        pending.length === 0 ? <div className="articles-empty"><TrendingUp size={24} /><p>{boardOrder.length === 0 ? 'Usá "Agregar al lanzamiento" para elegir artículos' : '¡Todos los artículos fueron lanzados!'}</p></div> : (
-          <>
-            <div className="launch-next card" style={{ borderTop: `3px solid ${store.accentColor}` }}>
-              <div className="launch-next-head"><span className="launch-next-badge" style={{ background: store.accentColor }}>PRÓXIMO</span><span className="launch-next-num">{ordinals[0]} en publicar</span></div>
-              <h3 className="launch-next-title">{pending[0].title}</h3>
-              {pending[0].description && <p className="launch-next-desc">{pending[0].description}</p>}
-              <div className="launch-next-meta">
-                {pending[0].subArticles.length > 0 && <span className="board-card-tag"><Layers size={10} /> {inclSubs(pending[0])} sub</span>}
-                {pending[0].launchDate && <span className="board-card-tag date" style={{ color: store.accentColor }}><Calendar size={10} /> {new Date(pending[0].launchDate + 'T12:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>}
+      {view === 'organizador' ? (
+        <>
+          <div className="launches-top-actions">
+            <button className="articles-add-btn-big" onClick={addOrganizer}><Plus size={15} /> Nuevo panel</button>
+            <span className="launches-summary">{organizers.length} panel(es)</span>
+          </div>
+          {organizers.length === 0 && <div className="articles-empty"><Layers size={24} /><p>Creá un panel para organizar y ordenar los artículos de un lanzamiento.</p></div>}
+          {organizers.map(org => (
+            <div key={org.id} className="card organizer-panel">
+              <div className="organizer-head">
+                <input className="organizer-name" value={org.name} onChange={e => renameOrganizer(org.id, e.target.value)} />
+                <span className="organizer-count">{org.items.length} art.</span>
+                {store.flowOrganizerId === org.id && <span className="organizer-inflow">En flujo</span>}
+                <button className="organizer-load" onClick={() => loadIntoFlow(org.id)} title="Cargar en Flujo"><TrendingUp size={13} /> Cargar en Flujo</button>
+                <button className="organizer-del" onClick={() => removeOrganizer(org.id)}><Trash2 size={14} /></button>
               </div>
-              <button className="launch-complete-btn" style={{ background: store.accentColor }} onClick={() => markLaunched(pending[0].id, true)}><Check size={14} /> Marcar como completado</button>
-            </div>
-            {pending.length > 1 && (
-              <div className="launch-upcoming">
-                <span className="launch-upcoming-label">Siguientes</span>
-                {pending.slice(1).map((a, i) => (
-                  <div key={a.id} className="launch-upcoming-item">
-                    <span className="launch-upcoming-num">{ordinals[i + 1]}</span>
-                    <span className="launch-upcoming-title">{a.title}</span>
-                    {a.launchDate && <span className="launch-upcoming-date">{new Date(a.launchDate + 'T12:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>}
+              <div className="organizer-items">
+                {org.items.map((it, i) => (
+                  <div key={it.id} className={`organizer-item ${overItem === it.id ? 'drag-over' : ''}`}
+                    draggable onDragStart={() => setDrag({ org: org.id, item: it.id })} onDragEnd={() => { setDrag(null); setOverItem(null) }}
+                    onDragOver={e => { e.preventDefault(); setOverItem(it.id) }} onDragLeave={() => setOverItem(o => o === it.id ? null : o)}
+                    onDrop={() => { if (drag && drag.org === org.id) reorder(org.id, drag.item, it.id); setDrag(null); setOverItem(null) }}>
+                    <GripVertical size={13} className="organizer-grip" />
+                    <span className="organizer-num" style={{ background: store.accentColor }}>{i + 1}</span>
+                    <span className="organizer-item-title">{itemIcon(it)} {itemTitle(it)}</span>
+                    {!it.articleId && <span className="organizer-custom-tag">Personalizado</span>}
+                    {!it.articleId && <button className="organizer-officialize" onClick={() => officialize(org.id, it.id)} title="Agregar al catálogo oficial"><Check size={11} /> Oficializar</button>}
+                    <button className="organizer-item-del" onClick={() => removeItem(org.id, it.id)}><X size={12} /></button>
                   </div>
                 ))}
+                {org.items.length === 0 && <p className="article-group-empty">Sin artículos. Agregá oficiales o uno personalizado.</p>}
               </div>
+              <div className="organizer-add-row">
+                <button className="articles-add-btn-secondary" onClick={() => setPickerOrg(org.id)}><Plus size={13} /> Artículos oficiales</button>
+                <div className="organizer-custom-input">
+                  <input value={customTitle[org.id] || ''} onChange={e => setCustomTitle({ ...customTitle, [org.id]: e.target.value })} onKeyDown={e => e.key === 'Enter' && addCustom(org.id)} placeholder="Artículo personalizado…" />
+                  <button onClick={() => addCustom(org.id)} disabled={!(customTitle[org.id] || '').trim()}><Plus size={13} /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {pickerOrg && <OrganizerArticlePicker store={store} existing={new Set((organizers.find(o => o.id === pickerOrg)?.items || []).map(i => i.articleId).filter(Boolean) as string[])} onAdd={ids => addOfficial(pickerOrg, ids)} onClose={() => setPickerOrg(null)} />}
+        </>
+      ) : (
+        !flowOrg ? (
+          <div className="articles-empty"><TrendingUp size={24} /><p>El flujo está vacío. Cargá un panel desde <b>Organizador</b>.</p></div>
+        ) : (
+          <>
+            <div className="flujo-head">
+              <span className="flujo-org-name"><Layers size={13} /> {flowOrg.name}</span>
+              <button className="system-btn-sm" onClick={clearFlow}><X size={12} /> Vaciar flujo</button>
+            </div>
+            {pending.length === 0 ? (
+              <div className="articles-empty"><Check size={24} /><p>¡Panel completado! Vaciá el flujo para cargar el mismo u otro panel.</p></div>
+            ) : (
+              <>
+                <div className="launch-next card" style={{ borderTop: `3px solid ${store.accentColor}` }}>
+                  <div className="launch-next-head"><span className="launch-next-badge" style={{ background: store.accentColor }}>PRÓXIMO</span><span className="launch-next-num">{ordinals[0]} en publicar</span></div>
+                  <h3 className="launch-next-title">{itemIcon(pending[0])} {itemTitle(pending[0])}</h3>
+                  <button className="launch-complete-btn" style={{ background: store.accentColor }} onClick={() => markLaunched(pending[0].id, true)}><Check size={14} /> Marcar como publicado</button>
+                </div>
+                {pending.length > 1 && (
+                  <div className="launch-upcoming">
+                    <span className="launch-upcoming-label">Siguientes</span>
+                    {pending.slice(1).map((it, i) => (
+                      <div key={it.id} className="launch-upcoming-item"><span className="launch-upcoming-num">{ordinals[i + 1] || (i + 2) + 'º'}</span><span className="launch-upcoming-title">{itemTitle(it)}</span></div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
-            {boardOrder.some(a => a.launched) && (
+            {done.length > 0 && (
               <div className="launch-done-list">
-                <span className="launch-upcoming-label">Completados</span>
-                {boardOrder.filter(a => a.launched).map(a => (
-                  <div key={a.id} className="launch-done-item"><Check size={12} /> <span>{a.title}</span><button onClick={() => markLaunched(a.id, false)}>Deshacer</button></div>
-                ))}
+                <span className="launch-upcoming-label">Publicados</span>
+                {done.map(it => <div key={it.id} className="launch-done-item"><Check size={12} /> <span>{itemTitle(it)}</span><button onClick={() => markLaunched(it.id, false)}>Deshacer</button></div>)}
               </div>
             )}
           </>
-        )
-      ) : (
-        boardOrder.length === 0 ? <div className="articles-empty"><Clock size={24} /><p>Usá "Agregar al lanzamiento" para elegir artículos y ordenarlos acá</p></div> : (
-          <><p className="board-hint">Arrastrá para definir el orden de publicación.</p><div className="launches-board">
-            {boardOrder.map((art, i) => (
-              <div key={art.id} className={`board-card ${dragId === art.id ? 'dragging' : ''} ${overId === art.id ? 'drag-over' : ''}`} draggable onDragStart={() => setDragId(art.id)} onDragEnd={() => { setDragId(null); setOverId(null) }} onDragOver={e => { e.preventDefault(); setOverId(art.id) }} onDragLeave={() => setOverId(o => o === art.id ? null : o)} onDrop={() => handleDrop(art.id)}>
-                <div className="board-card-grip"><GripVertical size={14} /></div>
-                <div className="board-card-order" style={{ background: store.accentColor }}>{i + 1}</div>
-                <div className="board-card-content"><span className="board-card-title">{art.title}</span>{art.description && <span className="board-card-desc">{art.description}</span>}<div className="board-card-meta">{art.subArticles.length > 0 && <span className="board-card-tag"><Layers size={10} /> {inclSubs(art)} sub</span>}{art.launchDate ? <span className="board-card-tag date" style={{ color: store.accentColor }}><Calendar size={10} /> {new Date(art.launchDate + 'T12:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span> : <span className="board-card-tag muted">Sin fecha</span>}</div></div>
-              </div>
-            ))}
-          </div></>
         )
       )}
     </div>
@@ -622,73 +639,6 @@ function CreacionesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: St
   )
 }
 
-// ============ FINANZAS TAB ============
-
-function FinanzasTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
-  const income = store.income || []
-  const [newAmount, setNewAmount] = useState('')
-  const [newNote, setNewNote] = useState('')
-  const [filterMonth, setFilterMonth] = useState('')
-
-  const addEntry = () => {
-    if (!newAmount) return
-    const entry: IncomeEntry = { id: 'inc-' + Date.now(), amount: Number(newAmount), date: new Date().toISOString(), note: newNote.trim() }
-    onUpdate({ ...store, income: [entry, ...income] }); setNewAmount(''); setNewNote('')
-  }
-  const removeEntry = (id: string) => onUpdate({ ...store, income: income.filter(e => e.id !== id) })
-  const total = income.reduce((a, e) => a + e.amount, 0)
-
-  const thisMonth = new Date().toISOString().slice(0, 7)
-  const monthTotal = income.filter(e => e.date.startsWith(thisMonth)).reduce((a, e) => a + e.amount, 0)
-  const months = [...new Set(income.map(e => e.date.slice(0, 7)))].sort().reverse()
-  const filtered = filterMonth ? income.filter(e => e.date.startsWith(filterMonth)) : income
-
-  return (
-    <div className="finanzas-tab">
-      <div className="finanzas-stats-grid">
-        <div className="card finanzas-stat-card">
-          <span className="finanzas-stat-label">Ingresos totales</span>
-          <span className="finanzas-stat-value" style={{ color: '#22c55e' }}>${total.toLocaleString('es-AR')}</span>
-          <span className="finanzas-stat-sub">{income.length} registros</span>
-        </div>
-        <div className="card finanzas-stat-card">
-          <span className="finanzas-stat-label">Este mes</span>
-          <span className="finanzas-stat-value">${monthTotal.toLocaleString('es-AR')}</span>
-          <span className="finanzas-stat-sub">{income.filter(e => e.date.startsWith(thisMonth)).length} registros</span>
-        </div>
-        <div className="card finanzas-stat-card">
-          <span className="finanzas-stat-label">Promedio mensual</span>
-          <span className="finanzas-stat-value">${months.length > 0 ? Math.round(total / months.length).toLocaleString('es-AR') : '0'}</span>
-          <span className="finanzas-stat-sub">{months.length} meses</span>
-        </div>
-      </div>
-      <div className="card finanzas-add-card">
-        <div className="finanzas-add-row">
-          <div className="finanzas-amount-wrap"><span>$</span><input type="number" value={newAmount} onChange={e => setNewAmount(e.target.value)} placeholder="0" /></div>
-          <input value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Nota (Opcional)..." className="finanzas-note-input" onKeyDown={e => e.key === 'Enter' && addEntry()} />
-          <button className="modal-submit" onClick={addEntry} disabled={!newAmount}><Plus size={14} /> Registrar</button>
-        </div>
-      </div>
-      <div className="finanzas-filter">
-        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}>
-          <option value="">Todos los meses</option>
-          {months.map(m => <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</option>)}
-        </select>
-      </div>
-      <div className="finanzas-list">
-        {filtered.map(e => (
-          <div key={e.id} className="finanzas-item">
-            <span className="finanzas-item-amount" style={{ color: e.amount >= 0 ? '#22c55e' : '#ef4444' }}>${e.amount.toLocaleString('es-AR')}</span>
-            <span className="finanzas-item-note">{e.note || '—'}</span>
-            <span className="finanzas-item-date">{new Date(e.date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-            <button className="shopping-item-delete" onClick={() => removeEntry(e.id)}><Trash2 size={12} /></button>
-          </div>
-        ))}
-        {filtered.length === 0 && <div className="articles-empty"><DollarSign size={24} /><p>Sin registros{filterMonth ? ' en este período' : ''}</p></div>}
-      </div>
-    </div>
-  )
-}
 
 // ============ PLANIFICACIÓN TAB ============
 
@@ -792,9 +742,13 @@ function PlanificacionTab() {
   const [search, setSearch] = useState('')
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [openHighlight, setOpenHighlight] = useState<string | null>(null)
+  const [range, setRange] = useState<'month' | '3months'>('month')
   const data = commercialDates[country]
   const now = new Date()
   const currentMMDD = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const curMonth = now.getMonth() + 1
+  const months3 = [0, 1, 2].map(i => ((curMonth - 1 + i) % 12) + 1)
+  const inRange = (dt: string) => { const m = parseInt(dt.slice(0, 2)); return range === '3months' ? months3.includes(m) : m === curMonth }
 
   const upcomingByCountry = Object.entries(commercialDates).map(([key, val]) => {
     const next = [...val.dates].sort((a, b) => a.date.localeCompare(b.date)).find(d => d.date >= currentMMDD) || val.dates[0]
@@ -802,7 +756,8 @@ function PlanificacionTab() {
   }).sort((a, b) => a.next.date.localeCompare(b.next.date))
 
   const q = search.trim().toLowerCase()
-  const filteredDates = data.dates.filter(d => !q || d.label.toLowerCase().includes(q) || d.desc.toLowerCase().includes(q))
+  // Search ignores the range; otherwise show only the current month (default) or the next 3 months.
+  const filteredDates = data.dates.filter(d => q ? (d.label.toLowerCase().includes(q) || d.desc.toLowerCase().includes(q)) : inRange(d.date))
 
   return (
     <div className="planificacion-tab">
@@ -844,6 +799,13 @@ function PlanificacionTab() {
         )
       })}
 
+      {!q && (
+        <div className="plan-range-toggle">
+          <button className={range === 'month' ? 'active' : ''} onClick={() => setRange('month')}>Este mes</button>
+          <button className={range === '3months' ? 'active' : ''} onClick={() => setRange('3months')}>Próximos 3 meses</button>
+        </div>
+      )}
+
       <div className="plan-dates-grid">
         {filteredDates.map(d => {
           const isPast = d.date < currentMMDD
@@ -878,7 +840,20 @@ function PlanificacionTab() {
 
 // ============ CLIENTES TAB ============
 
-const COUNTRY_OPTIONS = ['Estados Unidos', 'Canadá', 'México', 'Argentina', 'Brasil', 'Reino Unido', 'Francia', 'Alemania', 'España', 'Italia', 'Australia', 'Japón', 'Otro']
+const COUNTRIES: { name: string; flag: string }[] = [
+  { name: 'Alemania', flag: '🇩🇪' }, { name: 'Arabia Saudita', flag: '🇸🇦' }, { name: 'Argentina', flag: '🇦🇷' },
+  { name: 'Australia', flag: '🇦🇺' }, { name: 'Austria', flag: '🇦🇹' }, { name: 'Bélgica', flag: '🇧🇪' },
+  { name: 'Brasil', flag: '🇧🇷' }, { name: 'Canadá', flag: '🇨🇦' }, { name: 'Corea del Sur', flag: '🇰🇷' },
+  { name: 'Dinamarca', flag: '🇩🇰' }, { name: 'España', flag: '🇪🇸' }, { name: 'Estados Unidos', flag: '🇺🇸' },
+  { name: 'Filipinas', flag: '🇵🇭' }, { name: 'Francia', flag: '🇫🇷' }, { name: 'Italia', flag: '🇮🇹' },
+  { name: 'Japón', flag: '🇯🇵' }, { name: 'México', flag: '🇲🇽' }, { name: 'Nueva Zelanda', flag: '🇳🇿' },
+  { name: 'Países Bajos', flag: '🇳🇱' }, { name: 'Polonia', flag: '🇵🇱' }, { name: 'Reino Unido', flag: '🇬🇧' },
+  { name: 'Suecia', flag: '🇸🇪' }, { name: 'Suiza', flag: '🇨🇭' }, { name: 'Otro', flag: '🌍' },
+]
+const flagOf = (name: string) => COUNTRIES.find(c => c.name === name)?.flag || '🌍'
+const GENDERS = ['Femenino', 'Masculino', 'Desconocido']
+const normGender = (g: string) => (g === 'Otro' ? 'Desconocido' : g)
+const genderColor = (g: string) => { const n = normGender(g); return n === 'Femenino' ? '#ec4899' : n === 'Masculino' ? '#38bdf8' : '#9ca3af' }
 
 function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
   const clients = store.clientList || []
@@ -891,13 +866,14 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const [filterCountry, setFilterCountry] = useState('all')
   const [filterGender, setFilterGender] = useState('all')
   const [filterGroup, setFilterGroup] = useState('all')
+  const [editId, setEditId] = useState<string | null>(null)
+  const confirm = useConfirm()
 
   const add = () => {
     if (!name.trim()) return
-    const c: ClientInfo = { id: 'cli-' + Date.now(), name: name.trim(), gender, country, favGroupId: favGroupId || undefined }
+    const c: ClientInfo = { id: 'cli-' + Date.now(), name: name.trim(), gender, country, favGroupId: favGroupId || undefined, recurring: false }
     onUpdate({ ...store, clientList: [c, ...clients] }); setName('')
   }
-  const confirm = useConfirm()
   const remove = async (id: string) => {
     const c = clients.find(x => x.id === id)
     if (!await confirm({ title: 'Eliminar cliente', message: `¿Eliminar a «${c?.name || 'este cliente'}»?` })) return
@@ -905,64 +881,118 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   }
   const update = (id: string, u: Partial<ClientInfo>) => onUpdate({ ...store, clientList: clients.map(c => c.id === id ? { ...c, ...u } : c) })
   const groupName = (id?: string) => groups.find(g => g.id === id)?.name || '—'
-  const clientCountries = Array.from(new Set(clients.map(c => c.country).filter(Boolean))).sort()
+
+  // Dashboard aggregates.
+  const byCountry = Array.from(clients.reduce((m, c) => m.set(c.country, (m.get(c.country) || 0) + 1), new Map<string, number>())).sort((a, b) => b[1] - a[1])
+  const byGender = GENDERS.map(g => [g, clients.filter(c => normGender(c.gender) === g).length] as [string, number]).filter(x => x[1] > 0)
+  const recurringCount = clients.filter(c => c.recurring).length
+
   const q = search.trim().toLowerCase()
   const filtered = clients.filter(c =>
     (filterCountry === 'all' || c.country === filterCountry) &&
-    (filterGender === 'all' || c.gender === filterGender) &&
+    (filterGender === 'all' || normGender(c.gender) === filterGender) &&
     (filterGroup === 'all' || (filterGroup === '__none' ? !c.favGroupId : c.favGroupId === filterGroup)) &&
     (!q || c.name.toLowerCase().includes(q) || c.country.toLowerCase().includes(q))
   )
 
   return (
     <div className="clientes-tab">
-      <div className="clientes-stats">
-        <div className="card clientes-stat"><Users size={16} style={{ color: store.accentColor }} /><span className="clientes-stat-num">{clients.length}</span><span className="clientes-stat-lbl">Clientes</span></div>
-        <div className="card clientes-stat"><Globe size={16} style={{ color: store.accentColor }} /><span className="clientes-stat-num">{new Set(clients.map(c => c.country)).size}</span><span className="clientes-stat-lbl">Países</span></div>
+      {/* Dashboard */}
+      <div className="clientes-dashboard">
+        <div className="clientes-stats">
+          <div className="card clientes-stat"><Users size={16} style={{ color: store.accentColor }} /><span className="clientes-stat-num">{clients.length}</span><span className="clientes-stat-lbl">Clientes</span></div>
+          <div className="card clientes-stat"><Star size={16} style={{ color: '#f59e0b' }} /><span className="clientes-stat-num">{recurringCount}</span><span className="clientes-stat-lbl">Recurrentes</span></div>
+          <div className="card clientes-stat"><Globe size={16} style={{ color: store.accentColor }} /><span className="clientes-stat-num">{new Set(clients.map(c => c.country)).size}</span><span className="clientes-stat-lbl">Países</span></div>
+        </div>
+        {clients.length > 0 && (
+          <div className="card clientes-breakdown">
+            {byCountry.length > 0 && <div className="clientes-bd-row"><span className="clientes-bd-label">Países</span><div className="clientes-bd-chips">{byCountry.map(([c, n]) => <button key={c} className={`clientes-bd-chip ${filterCountry === c ? 'on' : ''}`} onClick={() => setFilterCountry(filterCountry === c ? 'all' : c)}>{flagOf(c)} {c} <b>{n}</b></button>)}</div></div>}
+            {byGender.length > 0 && <div className="clientes-bd-row"><span className="clientes-bd-label">Género</span><div className="clientes-bd-chips">{byGender.map(([g, n]) => <button key={g} className={`clientes-bd-chip ${filterGender === g ? 'on' : ''}`} style={{ color: genderColor(g), borderColor: genderColor(g) }} onClick={() => setFilterGender(filterGender === g ? 'all' : g)}>{g} <b>{n}</b></button>)}</div></div>}
+            {groups.length > 0 && <div className="clientes-bd-row"><span className="clientes-bd-label">Grupos</span><div className="clientes-bd-chips">{groups.map(g => { const n = clients.filter(c => c.favGroupId === g.id).length; return n > 0 ? <button key={g.id} className={`clientes-bd-chip ${filterGroup === g.id ? 'on' : ''}`} onClick={() => setFilterGroup(filterGroup === g.id ? 'all' : g.id)}>{g.name} <b>{n}</b></button> : null })}</div></div>}
+          </div>
+        )}
       </div>
+
       <div className="card clientes-add">
         <input className="clientes-name-input" value={name} onChange={e => setName(e.target.value)} placeholder="Nombre del cliente" onKeyDown={e => e.key === 'Enter' && add()} />
-        <select value={gender} onChange={e => setGender(e.target.value)}><option>Femenino</option><option>Masculino</option><option>Otro</option></select>
-        <select value={country} onChange={e => setCountry(e.target.value)}>{COUNTRY_OPTIONS.map(c => <option key={c}>{c}</option>)}</select>
+        <select value={gender} onChange={e => setGender(e.target.value)}>{GENDERS.map(g => <option key={g}>{g}</option>)}</select>
+        <select value={country} onChange={e => setCountry(e.target.value)}>{COUNTRIES.map(c => <option key={c.name} value={c.name}>{c.flag} {c.name}</option>)}</select>
         <select value={favGroupId} onChange={e => setFavGroupId(e.target.value)}><option value="">Grupo favorito…</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
         <button className="modal-submit" onClick={add} disabled={!name.trim()}><UserPlus size={14} /> Agregar</button>
       </div>
+
       {clients.length > 0 && (
         <div className="clientes-filters">
           <div className="articles-search clientes-search"><Search size={14} /><input placeholder="Buscar por nombre o país..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-          <select value={filterCountry} onChange={e => setFilterCountry(e.target.value)}><option value="all">Todos los países</option>{clientCountries.map(c => <option key={c} value={c}>{c}</option>)}</select>
-          <select value={filterGender} onChange={e => setFilterGender(e.target.value)}><option value="all">Todos los géneros</option><option>Femenino</option><option>Masculino</option><option>Otro</option></select>
+          <select value={filterCountry} onChange={e => setFilterCountry(e.target.value)}><option value="all">Todos los países</option>{byCountry.map(([c]) => <option key={c} value={c}>{flagOf(c)} {c}</option>)}</select>
+          <select value={filterGender} onChange={e => setFilterGender(e.target.value)}><option value="all">Todos los géneros</option>{GENDERS.map(g => <option key={g}>{g}</option>)}</select>
           <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)}><option value="all">Todos los grupos</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}<option value="__none">Sin favorito</option></select>
         </div>
       )}
+
       <div className="clientes-list">
-        {filtered.map(c => (
-          <div key={c.id} className="card cliente-item">
+        {filtered.map(c => editId === c.id ? (
+          <div key={c.id} className="card cliente-item editing">
+            <div className="cliente-edit-fields">
+              <input value={c.name} onChange={e => update(c.id, { name: e.target.value })} placeholder="Nombre" />
+              <select value={normGender(c.gender)} onChange={e => update(c.id, { gender: e.target.value })}>{GENDERS.map(g => <option key={g}>{g}</option>)}</select>
+              <select value={c.country} onChange={e => update(c.id, { country: e.target.value })}>{COUNTRIES.map(x => <option key={x.name} value={x.name}>{x.flag} {x.name}</option>)}</select>
+              <select value={c.favGroupId || ''} onChange={e => update(c.id, { favGroupId: e.target.value || undefined })}><option value="">Sin grupo favorito</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
+            </div>
+            <button className="cliente-done" onClick={() => setEditId(null)}><Check size={14} /> Listo</button>
+          </div>
+        ) : (
+          <div key={c.id} className={`card cliente-item ${c.recurring ? 'recurring' : ''}`}>
+            <button className={`cliente-star ${c.recurring ? 'on' : ''}`} onClick={() => update(c.id, { recurring: !c.recurring })} title={c.recurring ? 'Cliente recurrente' : 'Marcar como recurrente'}><Star size={15} /></button>
             <div className="cliente-avatar" style={{ background: store.accentColor }}>{c.name.charAt(0).toUpperCase()}</div>
             <div className="cliente-info">
               <span className="cliente-name">{c.name}</span>
               <div className="cliente-meta">
-                <span className="cliente-tag">{c.gender}</span>
-                <span className="cliente-tag"><Globe size={10} /> {c.country}</span>
+                <span className="cliente-tag gender" style={{ color: genderColor(c.gender), borderColor: genderColor(c.gender) }}>{normGender(c.gender)}</span>
+                <span className="cliente-tag">{flagOf(c.country)} {c.country}</span>
                 <span className="cliente-tag fav"><Layers size={10} /> {groupName(c.favGroupId)}</span>
               </div>
             </div>
-            {groups.length > 0 && (
-              <select className="cliente-fav-select" value={c.favGroupId || ''} onChange={e => update(c.id, { favGroupId: e.target.value || undefined })} title="Grupo favorito">
-                <option value="">Sin favorito</option>
-                {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
-            )}
+            <button className="cliente-edit-btn" onClick={() => setEditId(c.id)} title="Editar"><Edit3 size={13} /></button>
             <button className="article-delete" onClick={() => remove(c.id)}><Trash2 size={13} /></button>
           </div>
         ))}
-        {filtered.length === 0 && <div className="articles-empty"><Users size={24} /><p>{search ? 'Sin resultados' : 'Sin clientes todavía. Agregá el primero arriba.'}</p></div>}
+        {filtered.length === 0 && <div className="articles-empty"><Users size={24} /><p>{search || filterCountry !== 'all' || filterGender !== 'all' || filterGroup !== 'all' ? 'Sin resultados' : 'Sin clientes todavía. Agregá el primero arriba.'}</p></div>}
       </div>
     </div>
   )
 }
 
 // ============ STORE VIEW ============
+
+// Individual review panels — click a star to set that review's rating (1-5).
+function ReviewsManager({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
+  const items = reviewItemsOf(store)
+  const setItems = (it: { id: string; stars: number }[]) => onUpdate({ ...store, reviewItems: it, reviews: it.length })
+  const addReview = () => setItems([{ id: 'rv-' + Date.now(), stars: 5 }, ...items])
+  const setStars = (id: string, stars: number) => setItems(items.map(r => r.id === id ? { ...r, stars } : r))
+  const removeReview = (id: string) => setItems(items.filter(r => r.id !== id))
+  return (
+    <div className="card reviews-manager">
+      <div className="reviews-manager-head">
+        <span className="card-title" style={{ margin: 0 }}><Star size={16} /> Reseñas · {storeRating(store)}★ promedio · {items.length}</span>
+        <button className="articles-add-btn-secondary" onClick={addReview}><Plus size={13} /> Agregar reseña</button>
+      </div>
+      <div className="reviews-panels">
+        {items.map((r, i) => (
+          <div key={r.id} className="review-panel">
+            <span className="review-panel-num">#{items.length - i}</span>
+            <div className="review-stars">
+              {[1, 2, 3, 4, 5].map(s => <button key={s} className={`review-star ${s <= r.stars ? 'on' : ''}`} onClick={() => setStars(r.id, s)} title={`${s}★`}>★</button>)}
+            </div>
+            <button className="review-del" onClick={() => removeReview(r.id)}><X size={12} /></button>
+          </div>
+        ))}
+        {items.length === 0 && <p className="article-group-empty">Sin reseñas. Agregá la primera con el botón de arriba.</p>}
+      </div>
+    </div>
+  )
+}
 
 function BannerBackground({ store }: { store: StoreData }) {
   if (store.bannerImage) return <div className="store-banner-bg" style={{ backgroundImage: `url(${store.bannerImage})` }} />
@@ -977,7 +1007,7 @@ function BannerParticles() {
 function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () => void; onUpdate: (store: StoreData) => void }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(store)
-  const [storeTab, setStoreTab] = useState<'info' | 'marca' | 'articles' | 'launches' | 'creaciones' | 'finanzas' | 'planificacion' | 'clientes'>('info')
+  const [storeTab, setStoreTab] = useState<'informacion' | 'articles' | 'launches' | 'creaciones' | 'planificacion' | 'clientes'>('informacion')
   const bannerInputRef = useRef<HTMLInputElement>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
 
@@ -1030,22 +1060,7 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
             </div>
             <label className="customize-field"><span><Palette size={13} /> Color acento</span><div className="color-row"><input type="color" value={draft.accentColor} onChange={e => setDraft({ ...draft, accentColor: e.target.value })} /><span className="color-hex">{draft.accentColor}</span></div></label>
             <label className="customize-field"><span><Package size={13} /> Productos</span><input type="number" min={0} value={draft.products} onChange={e => setDraft({ ...draft, products: Number(e.target.value) })} /></label>
-            <div className="customize-field customize-reviews">
-              <span><Star size={13} /> Reseñas por estrellas</span>
-              <div className="reviews-editor">
-                {[5, 4, 3, 2, 1].map(star => {
-                  const sc = starCountsOf(draft)
-                  const idx = star - 1
-                  return (
-                    <div key={star} className="reviews-row">
-                      <span className="reviews-stars">{'★'.repeat(star)}<span className="reviews-stars-empty">{'★'.repeat(5 - star)}</span></span>
-                      <input type="number" min={0} value={sc[idx] || 0} onChange={e => { const next = [...sc]; next[idx] = Math.max(0, Number(e.target.value) || 0); setDraft({ ...draft, starCounts: next, reviews: next.reduce((a, b) => a + b, 0) }) }} />
-                    </div>
-                  )
-                })}
-                <div className="reviews-summary">Total: <strong>{reviewTotal(draft)}</strong> · Promedio: <strong>{storeRating(draft)}★</strong></div>
-              </div>
-            </div>
+            <div className="customize-field"><span><Star size={13} /> Reseñas</span><span className="customize-hint">Gestioná las reseñas (1-5★) desde la pestaña «Información».</span></div>
             <label className="customize-field"><span><ShoppingCart size={13} /> Ventas</span><input type="number" min={0} value={draft.sales} onChange={e => setDraft({ ...draft, sales: Number(e.target.value) })} /></label>
             <label className="customize-field"><span><Users size={13} /> Clientes</span><input type="number" min={0} value={draft.clients} onChange={e => setDraft({ ...draft, clients: Number(e.target.value) })} /></label>
             <label className="customize-field"><span>Estado</span><select value={draft.status} onChange={e => setDraft({ ...draft, status: e.target.value })}><option>Activa</option><option>Pausada</option><option>En desarrollo</option></select></label>
@@ -1057,34 +1072,34 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
       )}
 
       <div className="store-inner-tabs">
-        <button className={storeTab === 'info' ? 'active' : ''} onClick={() => setStoreTab('info')}>Info</button>
-        <button className={storeTab === 'marca' ? 'active' : ''} onClick={() => setStoreTab('marca')}>Marca</button>
+        <button className={storeTab === 'informacion' ? 'active' : ''} onClick={() => setStoreTab('informacion')}>Información</button>
         <button className={storeTab === 'articles' ? 'active' : ''} onClick={() => setStoreTab('articles')}>Artículos ({store.articles.length})</button>
         <button className={storeTab === 'launches' ? 'active' : ''} onClick={() => setStoreTab('launches')}>Lanzamientos</button>
         <button className={storeTab === 'creaciones' ? 'active' : ''} onClick={() => setStoreTab('creaciones')}>Creaciones</button>
         <button className={storeTab === 'clientes' ? 'active' : ''} onClick={() => setStoreTab('clientes')}>Clientes ({(store.clientList || []).length})</button>
-        <button className={storeTab === 'finanzas' ? 'active' : ''} onClick={() => setStoreTab('finanzas')}>Finanzas</button>
         <button className={storeTab === 'planificacion' ? 'active' : ''} onClick={() => setStoreTab('planificacion')}>Planificación</button>
       </div>
 
-      {storeTab === 'info' && (
-        <div className="store-view-content"><div className="card">
-          <p className="store-view-desc">{store.description}</p>
-          <div className="store-view-stats">
-            <div className="stat-box" style={{ borderColor: store.accentColor }}><Package size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.products}</span><span className="stat-label">Productos</span></div>
-            <div className="stat-box" style={{ borderColor: store.accentColor }}><Star size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.reviews}</span><span className="stat-label">Reseñas</span></div>
-            <div className="stat-box" style={{ borderColor: store.accentColor }}><ShoppingCart size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.sales}</span><span className="stat-label">Ventas</span></div>
-            <div className="stat-box" style={{ borderColor: store.accentColor }}><Users size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.clients}</span><span className="stat-label">Clientes</span></div>
-            <div className="stat-box" style={{ borderColor: store.accentColor }}><TrendingUp size={18} style={{ color: store.accentColor }} /><span className="stat-number">{rating}</span><span className="stat-label">Rating</span></div>
+      {storeTab === 'informacion' && (
+        <div className="store-view-content">
+          <div className="card">
+            <p className="store-view-desc">{store.description}</p>
+            <div className="store-view-stats">
+              <div className="stat-box" style={{ borderColor: store.accentColor }}><Package size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.products}</span><span className="stat-label">Productos</span></div>
+              <div className="stat-box" style={{ borderColor: store.accentColor }}><Star size={18} style={{ color: store.accentColor }} /><span className="stat-number">{reviewTotal(store)}</span><span className="stat-label">Reseñas</span></div>
+              <div className="stat-box" style={{ borderColor: store.accentColor }}><ShoppingCart size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.sales}</span><span className="stat-label">Ventas</span></div>
+              <div className="stat-box" style={{ borderColor: store.accentColor }}><Users size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.clients}</span><span className="stat-label">Clientes</span></div>
+              <div className="stat-box" style={{ borderColor: store.accentColor }}><TrendingUp size={18} style={{ color: store.accentColor }} /><span className="stat-number">{rating}★</span><span className="stat-label">Rating</span></div>
+            </div>
           </div>
-        </div></div>
+          <ReviewsManager store={store} onUpdate={onUpdate} />
+          <BrandPanel store={store} onUpdate={onUpdate} />
+        </div>
       )}
-      {storeTab === 'marca' && <BrandPanel store={store} onUpdate={onUpdate} />}
       {storeTab === 'articles' && <ArticlesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'launches' && <LaunchesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'creaciones' && <CreacionesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'clientes' && <ClientesTab store={store} onUpdate={onUpdate} />}
-      {storeTab === 'finanzas' && <FinanzasTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'planificacion' && <PlanificacionTab />}
     </div>
   )
@@ -1101,7 +1116,7 @@ export default function EtsySection() {
   const openStore = (id: string) => { if (!openTabs.includes(id)) setOpenTabs([...openTabs, id]); setActiveTab(id) }
   const closeTab = (id: string, e: React.MouseEvent) => { e.stopPropagation(); const nt = openTabs.filter(t => t !== id); setOpenTabs(nt); if (activeTab === id) setActiveTab(nt.length > 0 ? nt[nt.length - 1] : null) }
   const updateStore = (updated: StoreData) => { const ns = stores.map(s => s.id === updated.id ? updated : s); setStores(ns); saveStores(ns) }
-  const addStore = () => { const id = 'store-' + Date.now(); const ns = [...stores, { id, name: 'Nueva tienda', description: 'Descripción.', products: 0, status: 'En desarrollo', bannerColor: '#6366f1', accentColor: '#6366f1', logo: '🏪', articles: [], reviews: 0, sales: 0, clients: 0, creaciones: [], income: [], articleGroups: [], clientList: [] }]; setStores(ns); saveStores(ns); openStore(id) }
+  const addStore = () => { const id = 'store-' + Date.now(); const ns = [...stores, { id, name: 'Nueva tienda', description: 'Descripción.', products: 0, status: 'En desarrollo', bannerColor: '#6366f1', accentColor: '#6366f1', logo: '🏪', articles: [], reviews: 0, sales: 0, clients: 0, creaciones: [], income: [], articleGroups: [], clientList: [], reviewItems: [], organizers: [], flowOrganizerId: null }]; setStores(ns); saveStores(ns); openStore(id) }
   const deleteStore = async (id: string) => {
     const s = stores.find(x => x.id === id)
     if (!await confirm({ title: 'Eliminar tienda', message: `¿Eliminar la tienda «${s?.name || ''}» y todos sus datos (artículos, grupos, clientes, finanzas)? Esta acción no se puede deshacer.`, confirmLabel: 'Eliminar tienda' })) return
