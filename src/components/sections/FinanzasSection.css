@@ -128,3 +128,56 @@
 .closure-period { font-size: 13px; font-weight: 600; color: var(--text-primary); text-transform: capitalize; min-width: 120px; }
 .closure-breakdown { font-size: 11px; color: var(--text-secondary); flex: 1; }
 .closure-total { font-size: 14px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* ===== Spec Finanzas: dashboard alimentos, servicios, mantenimiento, proyección/inflación, ingresos ===== */
+
+/* Dashboard de alimentos */
+.fin-food-dashboard { display: flex; flex-direction: column; gap: 12px; }
+.food-budget-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.food-budget-label { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+.food-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+.food-stat { flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 3px; padding: 12px; background: var(--bg-hover); border: 1px solid var(--border); border-radius: 10px; }
+.food-stat-lbl { font-size: 11px; color: var(--text-secondary); }
+.food-stat-val { font-size: 18px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.food-diff { font-size: 13px; padding: 10px 12px; border-radius: 10px; }
+.food-diff.over { background: rgba(239,68,68,0.1); color: #ef4444; }
+.food-diff.under { background: rgba(34,197,94,0.1); color: #22c55e; }
+.food-hint { font-size: 12px; color: var(--text-secondary); font-style: italic; }
+
+/* Servicios: campos extra */
+.svc-info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
+.svc-info-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--text-secondary); }
+.svc-info-field input { padding: 6px 8px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 6px; font-size: 12px; color: var(--text-primary); outline: none; }
+.svc-info-field input:focus { border-color: var(--accent); }
+.svc-custom-fields { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.svc-custom-head { display: flex; align-items: center; justify-content: space-between; }
+.svc-field-add { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-secondary); border-radius: 7px; font-size: 11px; cursor: pointer; }
+.svc-field-add:hover { border-color: var(--accent); color: var(--accent); }
+.svc-custom-row { display: flex; gap: 6px; align-items: center; }
+.svc-custom-title { width: 34%; padding: 6px 8px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 6px; font-size: 12px; color: var(--text-primary); outline: none; }
+.svc-custom-desc { flex: 1; padding: 6px 8px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 6px; font-size: 12px; color: var(--text-primary); outline: none; }
+
+/* Mantenimiento */
+.maint-add-type { padding: 8px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.maint-edit { flex: 1; padding: 4px 8px; border: 1px solid var(--accent); background: var(--bg-primary); border-radius: 6px; font-size: 13px; color: var(--text-primary); font-family: inherit; outline: none; }
+
+/* Gastos propios: proyección + inflación + edición */
+.gastos-proj-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px !important; }
+.gastos-proj-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gastos-proj-label { font-size: 13px; color: var(--text-secondary); }
+.gastos-proj-row select { padding: 6px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 12px; color: var(--text-primary); }
+.gastos-proj-total { margin-left: auto; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.gastos-infl { display: flex; flex-direction: column; gap: 8px; }
+.gastos-infl-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-primary); border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.gastos-infl-btn:hover { border-color: var(--accent); color: var(--accent); }
+.gastos-infl-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.gastos-infl-fetch { padding: 8px 12px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-secondary); border-radius: 8px; font-size: 12px; cursor: pointer; }
+.gastos-infl-fetch:hover { border-color: var(--accent); color: var(--accent); }
+.gastos-item-new.editing { flex-wrap: wrap; gap: 8px; }
+.gastos-edit-name { flex: 1; min-width: 140px; padding: 7px 10px; border: 1px solid var(--accent); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); font-family: inherit; outline: none; }
+.gastos-item-new.editing select { padding: 7px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 12px; color: var(--text-primary); }
+.gastos-edit-done { display: flex; padding: 7px 12px; border: none; background: #22c55e; color: #fff; border-radius: 8px; cursor: pointer; }
+
+/* Ingresos */
+.income-item .gastos-repeat-tag { background: rgba(34,197,94,0.12); color: #16a34a; }
+.income-net { font-size: 11px; font-weight: 600; }

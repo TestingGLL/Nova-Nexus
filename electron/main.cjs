@@ -341,10 +341,11 @@ ipcMain.handle('get-mundial-argentina', async () => {
 });
 
 // ----- Crypto prices (CoinGecko) -----
-ipcMain.handle('get-crypto-prices', async () => {
+ipcMain.handle('get-crypto-prices', async (_e, ids) => {
   const https = require('https');
-  const ids = 'bitcoin,pax-gold,hyperliquid,cosmos,solana';
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ars,usd&include_24hr_change=true&include_last_updated_at=true`;
+  // The renderer passes the coin id list; fall back to a default set if absent.
+  const idList = (typeof ids === 'string' && ids.trim()) ? ids.trim() : 'bitcoin,pax-gold,hyperliquid,cosmos,solana';
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${idList}&vs_currencies=ars,usd&include_24hr_change=true&include_last_updated_at=true`;
   return new Promise((resolve) => {
     // CoinGecko returns 403 without a descriptive User-Agent header.
     const req = https.get(url, { timeout: 10000, headers: { 'User-Agent': 'NovaNexus/1.0', 'Accept': 'application/json' } }, (res) => {

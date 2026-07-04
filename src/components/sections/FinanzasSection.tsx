@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical, Search, Archive } from 'lucide-react'
+import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical, Search, Archive, Edit3, TrendingUp as InflationIcon, ArrowDownCircle } from 'lucide-react'
 import CriptomonedasSection from './CriptomonedasSection'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { useDolarBlue, toArs } from '../../lib/dolarBlue'
@@ -8,7 +8,8 @@ import './FinanzasSection.css'
 
 // ============ DATA MODEL ============
 interface PriceChange { id: string; date: string; prevAmount: number; amount: number }
-interface ServiceRecord { id: string; name: string; amount: number; color: string; dueDay: number; history: PriceChange[] }
+interface ServiceCustomField { id: string; title: string; desc: string }
+interface ServiceRecord { id: string; name: string; amount: number; color: string; dueDay: number; history: PriceChange[]; company?: string; account?: string; dni?: string; contact?: string; fields?: ServiceCustomField[] }
 type MaintType = 'revisar' | 'arreglar' | 'obligacion'
 interface MaintenanceItem { id: string; text: string; type: MaintType; done: boolean }
 const maintColors: Record<MaintType, string> = { revisar: '#3b82f6', arreglar: '#f59e0b', obligacion: '#ef4444' }
@@ -26,6 +27,7 @@ interface RentData {
   extras: ExtraExpense[]
   closures: MonthClosure[]
   activePeriod?: string // 'YYYY-MM' currently accumulating
+  totalBudget?: number // monto total a destinar a todos los gastos (para el dashboard de alimentos)
 }
 
 const defaultExpenseColors = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
@@ -47,10 +49,11 @@ function loadRent(): RentData {
         extras: d.extras || [],
         closures: d.closures || [],
         activePeriod: d.activePeriod,
+        totalBudget: d.totalBudget || 0,
       }
     }
   } catch {}
-  return { monthlyRent: 0, categories: [], people: 1, rentHistory: [], rentFrequencyMonths: 12, rentDueDay: 10, maintenance: [], extras: [], closures: [] }
+  return { monthlyRent: 0, categories: [], people: 1, rentHistory: [], rentFrequencyMonths: 12, rentDueDay: 10, maintenance: [], extras: [], closures: [], totalBudget: 0 }
 }
 function saveRent(d: RentData) { localStorage.setItem('nn-rent', JSON.stringify(d)) }
 
@@ -63,6 +66,8 @@ function AlquilerView() {
   const [view, setView] = useState<'dashboard' | 'servicios' | 'historial' | 'mantenimiento' | 'extras'>('dashboard')
   const [splitOpen, setSplitOpen] = useState(false)
   const [newMaintText, setNewMaintText] = useState('')
+  const [newMaintType, setNewMaintType] = useState<MaintType>('revisar')
+  const [editingMaint, setEditingMaint] = useState<string | null>(null)
   const [newExtraName, setNewExtraName] = useState('')
   const [newExtraAmount, setNewExtraAmount] = useState('')
   const [expandedSvc, setExpandedSvc] = useState<string | null>(null)
@@ -76,6 +81,15 @@ function AlquilerView() {
   // Distribution now includes the rent value itself.
   const distItems = [{ id: '__rent', name: 'Alquiler', amount: data.monthlyRent, color: '#6366f1' }, ...data.categories]
   const maxAmount = Math.max(...distItems.map(c => c.amount), 1)
+
+  // Food-budget dashboard: how much of the total budget is left for food, and
+  // whether the configured "Alimentos" service is over/under that remaining amount.
+  const foodService = data.categories.find(c => /aliment/i.test(c.name))
+  const foodActual = foodService?.amount || 0
+  const nonFoodExpenses = data.monthlyRent + (totalServices - foodActual)
+  const totalBudget = data.totalBudget || 0
+  const remainingForFood = totalBudget - nonFoodExpenses
+  const foodDiff = foodActual - remainingForFood // >0 = de más ; <0 = de menos
 
   // Monthly close: archive the current totals into history and start fresh (clears extras).
   const currentPeriod = new Date().toISOString().slice(0, 7)
@@ -131,7 +145,13 @@ function AlquilerView() {
     if (!await confirm({ title: 'Eliminar servicio', message: `¿Eliminar el servicio «${c?.name || ''}» y su historial de aumentos?`, confirmLabel: 'Eliminar servicio' })) return
     save({ ...data, categories: data.categories.filter(c => c.id !== id) })
   }
-  const addMaintenance = () => { if (!newMaintText.trim()) return; save({ ...data, maintenance: [...data.maintenance, { id: 'mnt-' + Date.now(), text: newMaintText.trim(), type: 'revisar', done: false }] }); setNewMaintText('') }
+  // Custom info fields per service.
+  const addSvcField = (id: string) => { const c = data.categories.find(x => x.id === id); if (!c) return; updateCategory(id, { fields: [...(c.fields || []), { id: 'sf-' + Date.now(), title: '', desc: '' }] }) }
+  const updSvcField = (id: string, fid: string, u: Partial<ServiceCustomField>) => { const c = data.categories.find(x => x.id === id); if (!c) return; updateCategory(id, { fields: (c.fields || []).map(f => f.id === fid ? { ...f, ...u } : f) }) }
+  const delSvcField = (id: string, fid: string) => { const c = data.categories.find(x => x.id === id); if (!c) return; updateCategory(id, { fields: (c.fields || []).filter(f => f.id !== fid) }) }
+
+  const addMaintenance = () => { if (!newMaintText.trim()) return; save({ ...data, maintenance: [...data.maintenance, { id: 'mnt-' + Date.now(), text: newMaintText.trim(), type: newMaintType, done: false }] }); setNewMaintText('') }
+  const updateMaint = (id: string, u: Partial<MaintenanceItem>) => save({ ...data, maintenance: data.maintenance.map(m => m.id === id ? { ...m, ...u } : m) })
   const toggleMaint = (id: string) => save({ ...data, maintenance: data.maintenance.map(m => m.id === id ? { ...m, done: !m.done } : m) })
   const removeMaint = (id: string) => save({ ...data, maintenance: data.maintenance.filter(m => m.id !== id) })
   const addExtra = () => { if (!newExtraName.trim()) return; save({ ...data, extras: [...data.extras, { id: 'ext-' + Date.now(), name: newExtraName.trim(), amount: Number(newExtraAmount) || 0, date: new Date().toISOString() }] }); setNewExtraName(''); setNewExtraAmount('') }
@@ -160,6 +180,29 @@ function AlquilerView() {
 
       {view === 'dashboard' && (
         <>
+          <div className="card fin-food-dashboard">
+            <div className="card-title"><BarChart3 size={14} /> Resumen de gastos y alimentos</div>
+            <div className="food-budget-row">
+              <span className="food-budget-label">Presupuesto total (todos los gastos)</span>
+              <div className="alquiler-cat-input-wrap"><span>$</span><input type="number" value={data.totalBudget || ''} onChange={e => save({ ...data, totalBudget: Number(e.target.value) })} placeholder="0" /></div>
+            </div>
+            <div className="food-stats">
+              <div className="food-stat"><span className="food-stat-lbl">Total a gastos (Alquiler + Servicios)</span><span className="food-stat-val">${(data.monthlyRent + totalServices).toLocaleString('es-AR')}</span></div>
+              <div className="food-stat"><span className="food-stat-lbl">Restante para alimentos</span><span className="food-stat-val" style={{ color: remainingForFood >= 0 ? '#22c55e' : '#ef4444' }}>${remainingForFood.toLocaleString('es-AR')}</span></div>
+              <div className="food-stat"><span className="food-stat-lbl">Alimentos configurado</span><span className="food-stat-val">${foodActual.toLocaleString('es-AR')}</span></div>
+            </div>
+            {totalBudget > 0 && (
+              <div className={`food-diff ${foodDiff > 0 ? 'over' : 'under'}`}>
+                {foodDiff > 0
+                  ? <>⚠️ Estás destinando <strong>${Math.abs(foodDiff).toLocaleString('es-AR')}</strong> de más a alimentos respecto al restante disponible.</>
+                  : foodDiff < 0
+                    ? <>✅ Te queda un margen de <strong>${Math.abs(foodDiff).toLocaleString('es-AR')}</strong> para alimentos.</>
+                    : <>Alimentos coincide exactamente con el restante disponible.</>}
+              </div>
+            )}
+            {totalBudget === 0 && <p className="food-hint">Cargá un presupuesto total y un servicio «Alimentos» para ver el cálculo.</p>}
+          </div>
+
           <div className="alquiler-summary card">
             <div className="alquiler-rent-section">
               <span className="alquiler-label">Alquiler mensual</span>
@@ -298,6 +341,22 @@ function AlquilerView() {
                 {expandedSvc === cat.id && (
                   <div className="svc-detail">
                     <label className="svc-field"><Calendar size={11} /> Vence día <input type="number" min={1} max={31} value={cat.dueDay} onChange={e => updateCategory(cat.id, { dueDay: Math.min(31, Math.max(1, Number(e.target.value))) })} /></label>
+                    <div className="svc-info-grid">
+                      <label className="svc-info-field"><span>Empresa</span><input value={cat.company || ''} onChange={e => updateCategory(cat.id, { company: e.target.value })} placeholder="Nombre de la empresa" /></label>
+                      <label className="svc-info-field"><span>N° de cuenta</span><input value={cat.account || ''} onChange={e => updateCategory(cat.id, { account: e.target.value })} placeholder="Número de cuenta" /></label>
+                      <label className="svc-info-field"><span>DNI del titular</span><input value={cat.dni || ''} onChange={e => updateCategory(cat.id, { dni: e.target.value })} placeholder="DNI" /></label>
+                      <label className="svc-info-field"><span>N° de contacto</span><input value={cat.contact || ''} onChange={e => updateCategory(cat.id, { contact: e.target.value })} placeholder="Teléfono" /></label>
+                    </div>
+                    <div className="svc-custom-fields">
+                      <div className="svc-custom-head"><span className="svc-history-label">Campos personalizados</span><button className="svc-field-add" onClick={() => addSvcField(cat.id)}><Plus size={11} /> Agregar campo</button></div>
+                      {(cat.fields || []).map(f => (
+                        <div key={f.id} className="svc-custom-row">
+                          <input className="svc-custom-title" value={f.title} onChange={e => updSvcField(cat.id, f.id, { title: e.target.value })} placeholder="Título" />
+                          <input className="svc-custom-desc" value={f.desc} onChange={e => updSvcField(cat.id, f.id, { desc: e.target.value })} placeholder="Descripción" />
+                          <button className="shopping-item-delete" onClick={() => delSvcField(cat.id, f.id)}><X size={11} /></button>
+                        </div>
+                      ))}
+                    </div>
                     <div className="svc-history">
                       <span className="svc-history-label"><TrendingUp size={11} /> Historial de aumentos</span>
                       {cat.history.length === 0 && <span className="svc-history-empty">Sin aumentos registrados</span>}
@@ -348,6 +407,11 @@ function AlquilerView() {
           <div className="card-title"><Wrench size={14} /> Mantenimiento</div>
           <div className="maint-add">
             <input value={newMaintText} onChange={e => setNewMaintText(e.target.value)} placeholder="Agregar elemento..." onKeyDown={e => e.key === 'Enter' && addMaintenance()} />
+            <select className="maint-add-type" value={newMaintType} onChange={e => setNewMaintType(e.target.value as MaintType)} style={{ color: maintColors[newMaintType] }}>
+              <option value="revisar">Revisar</option>
+              <option value="arreglar">Arreglar</option>
+              <option value="obligacion">Obligación</option>
+            </select>
             <button onClick={addMaintenance} disabled={!newMaintText.trim()}><Plus size={14} /></button>
           </div>
           <div className="maint-list">
@@ -356,13 +420,16 @@ function AlquilerView() {
               return (
               <div key={m.id} className={`maint-item ${m.done ? 'done' : ''}`} style={{ borderLeft: `3px solid ${maintColors[mt]}` }}>
                 <button className={`shopping-check ${m.done ? 'checked' : ''}`} onClick={() => toggleMaint(m.id)}>{m.done && <Check size={10} />}</button>
-                <span className={m.done ? 'struck' : ''}>{m.text}</span>
+                {editingMaint === m.id
+                  ? <input className="maint-edit" value={m.text} onChange={e => updateMaint(m.id, { text: e.target.value })} onBlur={() => setEditingMaint(null)} onKeyDown={e => e.key === 'Enter' && setEditingMaint(null)} autoFocus />
+                  : <span className={m.done ? 'struck' : ''} onDoubleClick={() => setEditingMaint(m.id)}>{m.text}</span>}
                 <span className="maint-badge" style={{ background: maintColors[mt] + '20', color: maintColors[mt] }}>{maintLabels[mt]}</span>
-                <select className="maint-type" value={mt} onChange={e => save({ ...data, maintenance: data.maintenance.map(mm => mm.id === m.id ? { ...mm, type: e.target.value as MaintType } : mm) })}>
+                <select className="maint-type" value={mt} onChange={e => updateMaint(m.id, { type: e.target.value as MaintType })}>
                   <option value="revisar">Revisar</option>
                   <option value="arreglar">Arreglar</option>
                   <option value="obligacion">Obligación</option>
                 </select>
+                <button className="shopping-group-edit" onClick={() => setEditingMaint(editingMaint === m.id ? null : m.id)} title="Editar"><Edit3 size={11} /></button>
                 <button className="shopping-item-delete" onClick={() => removeMaint(m.id)}><X size={11} /></button>
               </div>
             )})}
@@ -373,7 +440,7 @@ function AlquilerView() {
 
       {view === 'extras' && (
         <div className="card alquiler-extras">
-          <div className="card-title"><Lightbulb size={14} /> Gastos extraordinarios</div>
+          <div className="card-title"><Lightbulb size={14} /> Gastos Extras</div>
           <div className="extras-add">
             <input value={newExtraName} onChange={e => setNewExtraName(e.target.value)} placeholder="Descripción..." />
             <div className="extras-amount-wrap"><span>$</span><input type="number" value={newExtraAmount} onChange={e => setNewExtraAmount(e.target.value)} placeholder="0" /></div>
@@ -388,7 +455,7 @@ function AlquilerView() {
                 <button className="shopping-item-delete" onClick={() => removeExtra(e.id)}><X size={11} /></button>
               </div>
             ))}
-            {data.extras.length === 0 && <p className="maint-empty">Sin gastos extraordinarios</p>}
+            {data.extras.length === 0 && <p className="maint-empty">Sin gastos extras</p>}
           </div>
         </div>
       )}
@@ -406,7 +473,12 @@ const ownCatColors: Record<OwnCat, string> = { casa: '#22c55e', mensuales: '#3b8
 const repeatOptions = [
   { v: '', label: 'No se repite' }, { v: '1w', label: 'Cada semana' }, { v: '2w', label: 'Cada 2 semanas' },
   { v: '1m', label: 'Cada mes' }, { v: '2m', label: 'Cada 2 meses' }, { v: '3m', label: 'Cada 3 meses' },
+  { v: '3m+', label: '+3 meses' },
 ]
+// Veces por mes de cada frecuencia (para proyectar el gasto en un período).
+const repeatPerMonth: Record<string, number> = { '1w': 52 / 12, '2w': 26 / 12, '1m': 1, '2m': 1 / 2, '3m': 1 / 3, '3m+': 1 / 4 }
+// Duración (en meses) de cada opción, usada como período de proyección.
+const periodMonths: Record<string, number> = { '1w': 0.25, '2w': 0.5, '1m': 1, '2m': 2, '3m': 3, '3m+': 4 }
 const quickAmounts = [1000, 5000, 8000, 10000]
 
 function loadOwnExpenses(): OwnExpense[] { try { const s = localStorage.getItem('nn-gastos-propios'); return s ? JSON.parse(s) : [] } catch { return [] } }
@@ -417,6 +489,12 @@ function GastosPropiosView() {
   const [newName, setNewName] = useState('')
   const [newAmount, setNewAmount] = useState(0)
   const [newRepeat, setNewRepeat] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [projPeriod, setProjPeriod] = useState('1m')
+  const [showInfl, setShowInfl] = useState(false)
+  const [inflPct, setInflPct] = useState('')
+  const [inflLoading, setInflLoading] = useState(false)
+  const confirm = useConfirm()
 
   const save = (e: OwnExpense[]) => { setExpenses(e); localStorage.setItem('nn-gastos-propios', JSON.stringify(e)) }
   const add = () => {
@@ -425,10 +503,37 @@ function GastosPropiosView() {
     setNewName(''); setNewAmount(0); setNewRepeat('')
   }
   const remove = (id: string) => save(expenses.filter(e => e.id !== id))
+  const update = (id: string, u: Partial<OwnExpense>) => save(expenses.map(e => e.id === id ? { ...e, ...u } : e))
+
+  // Inflation increase: bump every expense's amount by the given percentage.
+  const applyInflation = async () => {
+    const pct = parseFloat(inflPct.replace(',', '.'))
+    if (!pct || pct <= 0) return
+    if (!await confirm({ title: 'Aumento por inflación', message: `¿Aplicar un aumento del ${pct}% a los precios de TODOS los gastos propios?`, confirmLabel: 'Aplicar aumento' })) return
+    save(expenses.map(e => e.amount != null ? { ...e, amount: Math.round(e.amount * (1 + pct / 100)) } : e))
+    setShowInfl(false); setInflPct('')
+  }
+  // Best-effort: fetch Argentina's latest monthly inflation index to prefill the %.
+  const fetchInflation = async () => {
+    setInflLoading(true)
+    try {
+      const res = await fetch('https://api.argentinadatos.com/v1/finanzas/indices/inflacion')
+      const arr = await res.json()
+      const last = Array.isArray(arr) && arr.length ? arr[arr.length - 1] : null
+      if (last?.valor != null) setInflPct(String(last.valor))
+    } catch {}
+    setInflLoading(false)
+  }
 
   const current = expenses.filter(e => e.category === subtab)
   const subtotal = current.reduce((a, e) => a + (e.amount || 0), 0)
   const repeatLabel = (v?: string) => repeatOptions.find(r => r.v === v)?.label
+  // Projected spend over the selected period (recurring × occurrences + one-offs once).
+  const projTotal = current.reduce((sum, e) => {
+    const amt = e.amount || 0
+    if (!e.repeat) return sum + amt
+    return sum + amt * (repeatPerMonth[e.repeat] || 0) * (periodMonths[projPeriod] || 1)
+  }, 0)
 
   return (
     <div className="gastos-propios">
@@ -450,6 +555,26 @@ function GastosPropiosView() {
         <span className="gastos-bc-count">{current.length} {current.length === 1 ? 'gasto' : 'gastos'}</span>
       </div>
 
+      <div className="card gastos-proj-card">
+        <div className="gastos-proj-row">
+          <span className="gastos-proj-label">Proyección de gasto ·</span>
+          <select value={projPeriod} onChange={e => setProjPeriod(e.target.value)}>
+            {Object.keys(periodMonths).map(k => <option key={k} value={k}>{repeatOptions.find(r => r.v === k)?.label}</option>)}
+          </select>
+          <span className="gastos-proj-total" style={{ color: ownCatColors[subtab] }}>${Math.round(projTotal).toLocaleString('es-AR')}</span>
+        </div>
+        <div className="gastos-infl">
+          <button className="gastos-infl-btn" onClick={() => setShowInfl(v => !v)}><InflationIcon size={13} /> Aumento por inflación</button>
+          {showInfl && (
+            <div className="gastos-infl-form">
+              <div className="extras-amount-wrap"><input type="number" value={inflPct} onChange={e => setInflPct(e.target.value)} placeholder="%" /><span>%</span></div>
+              <button className="gastos-infl-fetch" onClick={fetchInflation} disabled={inflLoading}>{inflLoading ? '…' : 'Traer inflación AR'}</button>
+              <button className="gastos-add-btn" onClick={applyInflation} disabled={!inflPct} style={{ background: ownCatColors[subtab] }}>Aplicar a todos</button>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="card gastos-add-card">
         <input className="gastos-add-name" value={newName} onChange={e => setNewName(e.target.value)} placeholder="¿En qué gastaste / vas a gastar?" onKeyDown={e => e.key === 'Enter' && add()} autoFocus />
         <div className="gastos-add-row2">
@@ -466,7 +591,14 @@ function GastosPropiosView() {
       </div>
 
       <div className="gastos-list">
-        {current.map(e => (
+        {current.map(e => editingId === e.id ? (
+          <div key={e.id} className="gastos-item-new editing" style={{ borderLeft: `3px solid ${ownCatColors[subtab]}` }}>
+            <input className="gastos-edit-name" value={e.name} onChange={ev => update(e.id, { name: ev.target.value })} placeholder="Nombre" autoFocus />
+            <div className="extras-amount-wrap"><span>$</span><input type="number" value={e.amount ?? ''} onChange={ev => update(e.id, { amount: ev.target.value === '' ? undefined : Number(ev.target.value) })} placeholder="0" /></div>
+            <select value={e.repeat || ''} onChange={ev => update(e.id, { repeat: ev.target.value || undefined })}>{repeatOptions.map(r => <option key={r.v} value={r.v}>{r.label}</option>)}</select>
+            <button className="gastos-edit-done" onClick={() => setEditingId(null)}><Check size={14} /></button>
+          </div>
+        ) : (
           <div key={e.id} className="gastos-item-new" style={{ borderLeft: `3px solid ${ownCatColors[subtab]}` }}>
             <div className="gastos-item-main">
               <span className="gastos-item-name">{e.name}</span>
@@ -474,6 +606,7 @@ function GastosPropiosView() {
             </div>
             {e.amount != null && <span className="gastos-item-amount">${e.amount.toLocaleString('es-AR')}</span>}
             <span className="gastos-item-date">{new Date(e.date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>
+            <button className="shopping-group-edit" onClick={() => setEditingId(e.id)} title="Editar"><Edit3 size={12} /></button>
             <button className="shopping-item-delete" onClick={() => remove(e.id)}><X size={11} /></button>
           </div>
         ))}
@@ -514,6 +647,7 @@ function GastosUsdView() {
   const [payType, setPayType] = useState<UsdPayType>('mensual')
   const [search, setSearch] = useState('')
   const [filterPay, setFilterPay] = useState<UsdPayType | 'all'>('all')
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const save = (e: UsdExpense[]) => { setExpenses(e); localStorage.setItem('nn-gastos-usd', JSON.stringify(e)) }
   const add = () => {
@@ -523,6 +657,7 @@ function GastosUsdView() {
     setName(''); setAmount('')
   }
   const remove = (id: string) => save(expenses.filter(e => e.id !== id))
+  const update = (id: string, u: Partial<UsdExpense>) => save(expenses.map(e => e.id === id ? { ...e, ...u } : e))
 
   const tabColor = usdTabs.find(t => t.id === subtab)!.color
   const inTab = expenses.filter(e => e.tab === subtab)
@@ -576,7 +711,14 @@ function GastosUsdView() {
       </div>
 
       <div className="gastos-list">
-        {list.map(e => (
+        {list.map(e => editingId === e.id ? (
+          <div key={e.id} className="gastos-item-new usd-item editing" style={{ borderLeft: `3px solid ${tabColor}` }}>
+            <input className="gastos-edit-name" value={e.name} onChange={ev => update(e.id, { name: ev.target.value })} placeholder="Nombre" autoFocus />
+            <div className="extras-amount-wrap"><span>US$</span><input type="number" value={e.amountUsd || ''} onChange={ev => update(e.id, { amountUsd: Number(ev.target.value) })} placeholder="0.00" /></div>
+            <select value={e.payType} onChange={ev => update(e.id, { payType: ev.target.value as UsdPayType })}>{usdPayTypes.map(p => <option key={p.v} value={p.v}>{p.label}</option>)}</select>
+            <button className="gastos-edit-done" onClick={() => setEditingId(null)}><Check size={14} /></button>
+          </div>
+        ) : (
           <div key={e.id} className="gastos-item-new usd-item" style={{ borderLeft: `3px solid ${tabColor}` }}>
             <div className="gastos-item-main">
               <span className="gastos-item-name">{e.name}</span>
@@ -587,6 +729,7 @@ function GastosUsdView() {
               {rate && <span className="usd-item-ars">{toArs(e.amountUsd, rate)}</span>}
             </div>
             <span className="gastos-item-date">{new Date(e.date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>
+            <button className="shopping-group-edit" onClick={() => setEditingId(e.id)} title="Editar"><Edit3 size={12} /></button>
             <button className="shopping-item-delete" onClick={() => remove(e.id)}><X size={11} /></button>
           </div>
         ))}
@@ -596,8 +739,116 @@ function GastosUsdView() {
   )
 }
 
+// ============ INGRESOS ============
+type IncomeCur = 'ars' | 'usd'
+interface IncomeItem { id: string; name: string; amount: number; currency: IncomeCur; deductFrom: string; date: string }
+function loadIncomes(): IncomeItem[] { try { const s = localStorage.getItem('nn-ingresos'); return s ? JSON.parse(s) : [] } catch { return [] } }
+
+function IngresosView() {
+  const rate = useDolarBlue()
+  const [incomes, setIncomes] = useState<IncomeItem[]>(loadIncomes)
+  const [subtab, setSubtab] = useState<IncomeCur>('ars')
+  const [name, setName] = useState('')
+  const [amount, setAmount] = useState('')
+  const [deduct, setDeduct] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const save = (e: IncomeItem[]) => { setIncomes(e); localStorage.setItem('nn-ingresos', JSON.stringify(e)) }
+
+  // Totals of each associable expense tab (recomputed from their own keys).
+  const gastosTotal = loadOwnExpenses().reduce((a, e) => a + (e.amount || 0), 0)
+  const alquilerTotal = (() => { const d = loadRent(); return d.monthlyRent + d.categories.reduce((a, c) => a + c.amount, 0) + d.extras.reduce((a, e) => a + e.amount, 0) })()
+  const usdTotal = loadUsdExpenses().reduce((a, e) => a + e.amountUsd, 0)
+  const deductTotal = (key: string) => key === 'gastos' ? gastosTotal : key === 'alquiler' ? alquilerTotal : key === 'gastos-usd' ? usdTotal : 0
+
+  // Deduction options depend on the currency (USD income → only "Gastos en USD").
+  const deductOpts = subtab === 'ars'
+    ? [{ v: '', label: 'Sin asociar' }, { v: 'gastos', label: 'Gastos propios' }, { v: 'alquiler', label: 'Alquiler' }]
+    : [{ v: '', label: 'Sin asociar' }, { v: 'gastos-usd', label: 'Gastos en USD' }]
+  const deductLabel = (v: string) => (v === 'gastos' ? 'Gastos propios' : v === 'alquiler' ? 'Alquiler' : v === 'gastos-usd' ? 'Gastos en USD' : '')
+
+  const add = () => {
+    const amt = parseFloat(amount.replace(',', '.')) || 0
+    if (!name.trim() || amt <= 0) return
+    save([{ id: 'inc-' + Date.now(), name: name.trim(), amount: amt, currency: subtab, deductFrom: deduct, date: new Date().toISOString() }, ...incomes])
+    setName(''); setAmount(''); setDeduct('')
+  }
+  const remove = (id: string) => save(incomes.filter(e => e.id !== id))
+  const update = (id: string, u: Partial<IncomeItem>) => save(incomes.map(e => e.id === id ? { ...e, ...u } : e))
+
+  const list = incomes.filter(e => e.currency === subtab)
+  const sym = subtab === 'usd' ? 'US$' : '$'
+  const totalIncome = list.reduce((a, e) => a + e.amount, 0)
+  const totalNet = list.reduce((a, e) => a + (e.amount - deductTotal(e.deductFrom)), 0)
+  const fmt = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 2 })
+
+  return (
+    <div className="gastos-propios">
+      <div className="gastos-tabs-new">
+        <button className={`gastos-tab-card ${subtab === 'ars' ? 'active' : ''}`} onClick={() => { setSubtab('ars'); setDeduct('') }} style={{ '--cat': '#22c55e' } as React.CSSProperties}>
+          <span className="gastos-tab-name">Ingresos en pesos</span>
+          <span className="gastos-tab-total">${fmt(incomes.filter(e => e.currency === 'ars').reduce((a, e) => a + e.amount, 0))}</span>
+        </button>
+        <button className={`gastos-tab-card ${subtab === 'usd' ? 'active' : ''}`} onClick={() => { setSubtab('usd'); setDeduct('') }} style={{ '--cat': '#3b82f6' } as React.CSSProperties}>
+          <span className="gastos-tab-name">Ingresos en dólares</span>
+          <span className="gastos-tab-total">US$ {fmt(incomes.filter(e => e.currency === 'usd').reduce((a, e) => a + e.amount, 0))}</span>
+        </button>
+      </div>
+
+      <div className="alquiler-stats-grid">
+        <div className="card alquiler-stat"><span className="alquiler-stat-label">Total ingresos</span><span className="alquiler-stat-value" style={{ color: '#22c55e' }}>{sym} {fmt(totalIncome)}</span></div>
+        <div className="card alquiler-stat"><span className="alquiler-stat-label">Neto tras descuentos</span><span className="alquiler-stat-value" style={{ color: totalNet >= 0 ? '#22c55e' : '#ef4444' }}>{sym} {fmt(totalNet)}</span></div>
+        <div className="card alquiler-stat"><span className="alquiler-stat-label">Cantidad</span><span className="alquiler-stat-value">{list.length}</span></div>
+      </div>
+
+      <div className="card gastos-add-card">
+        <input className="gastos-add-name" value={name} onChange={e => setName(e.target.value)} placeholder="¿De qué es el ingreso?" onKeyDown={e => e.key === 'Enter' && add()} />
+        <div className="gastos-add-row2">
+          <div className="extras-amount-wrap"><span>{sym}</span><input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" /></div>
+          {subtab === 'usd' && amount && rate && <span className="usd-conv-hint">≈ {toArs(parseFloat(amount.replace(',', '.')) || 0, rate)}</span>}
+        </div>
+        <div className="gastos-add-row3">
+          <select value={deduct} onChange={e => setDeduct(e.target.value)}>{deductOpts.map(o => <option key={o.v} value={o.v}>{o.v ? `Descontar: ${o.label}` : o.label}</option>)}</select>
+          <button className="gastos-add-btn" onClick={add} disabled={!name.trim() || !(parseFloat(amount.replace(',', '.')) > 0)} style={{ background: subtab === 'usd' ? '#3b82f6' : '#22c55e' }}><Plus size={14} /> Agregar</button>
+        </div>
+      </div>
+
+      <div className="gastos-list">
+        {list.map(e => {
+          const ded = deductTotal(e.deductFrom)
+          const net = e.amount - ded
+          if (editingId === e.id) return (
+            <div key={e.id} className="gastos-item-new editing" style={{ borderLeft: '3px solid #22c55e' }}>
+              <input className="gastos-edit-name" value={e.name} onChange={ev => update(e.id, { name: ev.target.value })} placeholder="Nombre" autoFocus />
+              <div className="extras-amount-wrap"><span>{sym}</span><input type="number" value={e.amount || ''} onChange={ev => update(e.id, { amount: Number(ev.target.value) })} placeholder="0" /></div>
+              <select value={e.deductFrom} onChange={ev => update(e.id, { deductFrom: ev.target.value })}>{deductOpts.map(o => <option key={o.v} value={o.v}>{o.v ? `Descontar: ${o.label}` : o.label}</option>)}</select>
+              <button className="gastos-edit-done" onClick={() => setEditingId(null)}><Check size={14} /></button>
+            </div>
+          )
+          return (
+            <div key={e.id} className="gastos-item-new income-item" style={{ borderLeft: '3px solid #22c55e' }}>
+              <div className="gastos-item-main">
+                <span className="gastos-item-name">{e.name}</span>
+                {e.deductFrom && <span className="gastos-repeat-tag">− {deductLabel(e.deductFrom)} ({sym} {fmt(ded)})</span>}
+              </div>
+              <div className="usd-item-amounts">
+                <span className="gastos-item-amount">{sym} {fmt(e.amount)}</span>
+                {e.deductFrom && <span className="income-net" style={{ color: net >= 0 ? '#22c55e' : '#ef4444' }}>Neto: {sym} {fmt(net)}</span>}
+              </div>
+              <button className="shopping-group-edit" onClick={() => setEditingId(e.id)} title="Editar"><Edit3 size={12} /></button>
+              <button className="shopping-item-delete" onClick={() => remove(e.id)}><X size={11} /></button>
+            </div>
+          )
+        })}
+        {list.length === 0 && <p className="maint-empty">Sin ingresos en {subtab === 'usd' ? 'dólares' : 'pesos'}</p>}
+      </div>
+    </div>
+  )
+}
+
 // ============ MAIN ============
 const FIN_TABS: { id: string; label: string; icon: React.ReactNode }[] = [
+  { id: 'ingresos', label: 'Ingresos', icon: <ArrowDownCircle size={14} /> },
   { id: 'alquiler', label: 'Alquiler', icon: <Home size={14} /> },
   { id: 'gastos', label: 'Gastos Propios', icon: <Wallet size={14} /> },
   { id: 'gastos-usd', label: 'Gastos en USD', icon: <DollarSign size={14} /> },
@@ -617,6 +868,7 @@ export default function FinanzasSection() {
           </button>
         ) })}
       </div>
+      {tab === 'ingresos' && <IngresosView />}
       {tab === 'alquiler' && <AlquilerView />}
       {tab === 'gastos' && <GastosPropiosView />}
       {tab === 'gastos-usd' && <GastosUsdView />}

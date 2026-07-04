@@ -5,19 +5,58 @@ import './CriptomonedasSection.css'
 interface CoinDef { id: string; symbol: string; name: string; color: string }
 
 const COINS: CoinDef[] = [
+  { id: 'axie-infinity', symbol: 'AXS', name: 'Axie Infinity', color: '#0055d5' },
   { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin', color: '#f7931a' },
-  { id: 'pax-gold', symbol: 'PAXG', name: 'PAX Gold', color: '#e5c100' },
-  { id: 'hyperliquid', symbol: 'HYPE', name: 'Hyperliquid', color: '#6ee7b7' },
+  { id: 'cardano', symbol: 'ADA', name: 'Cardano', color: '#0033ad' },
   { id: 'cosmos', symbol: 'ATOM', name: 'Cosmos', color: '#6f7cba' },
+  { id: 'decentraland', symbol: 'MANA', name: 'Decentraland', color: '#ff2d55' },
+  { id: 'enjincoin', symbol: 'ENJ', name: 'Enjin Coin', color: '#624dbf' },
+  { id: 'ethereum', symbol: 'ETH', name: 'Ethereum', color: '#627eea' },
+  { id: 'gala', symbol: 'GALA', name: 'Gala', color: '#00d1ff' },
+  { id: 'hyperliquid', symbol: 'HYPE', name: 'Hyperliquid', color: '#6ee7b7' },
+  { id: 'pax-gold', symbol: 'PAXG', name: 'PAX Gold', color: '#e5c100' },
+  { id: 'polkadot', symbol: 'DOT', name: 'Polkadot', color: '#e6007a' },
+  { id: 'polygon-ecosystem-token', symbol: 'POL', name: 'Polygon', color: '#8247e5' },
+  { id: 'quant-network', symbol: 'QNT', name: 'Quant', color: '#ffbb00' },
+  { id: 'shiba-inu', symbol: 'SHIB', name: 'Shiba', color: '#f00500' },
   { id: 'solana', symbol: 'SOL', name: 'Solana', color: '#9945ff' },
+  { id: 'stellar', symbol: 'XLM', name: 'Stellar', color: '#14b6e7' },
+  { id: 'xpla', symbol: 'XPL', name: 'XPLA', color: '#4b6cff' },
+  { id: 'ripple', symbol: 'XRP', name: 'XRP', color: '#00aae4' },
+  { id: 'zcash', symbol: 'ZEC', name: 'Zcash', color: '#f4b728' },
 ]
 
 interface PriceData { ars: number; usd: number; change24h: number; updatedAt: number }
 
 // User-editable metadata per coin (persisted + cloud-synced via nn- key).
-interface CoinMeta { tipo: string; riesgo: 'Bajo' | 'Medio' | 'Alto'; plazo: 'Corto' | 'Mediano' | 'Largo'; rinde: boolean }
+type Riesgo = 'Bajo' | 'Bajo - Medio' | 'Medio' | 'Medio - Alto' | 'Alto'
+const RIESGO_OPTS: Riesgo[] = ['Bajo', 'Bajo - Medio', 'Medio', 'Medio - Alto', 'Alto']
+interface CoinMeta { tipo: string; riesgo: Riesgo; plazo: 'Corto' | 'Mediano' | 'Largo'; rinde: boolean }
 const DEFAULT_META: CoinMeta = { tipo: '', riesgo: 'Medio', plazo: 'Mediano', rinde: false }
-const RIESGO_COLOR: Record<string, string> = { Bajo: '#22c55e', Medio: '#f59e0b', Alto: '#ef4444' }
+const RIESGO_COLOR: Record<string, string> = { 'Bajo': '#22c55e', 'Bajo - Medio': '#84cc16', 'Medio': '#f59e0b', 'Medio - Alto': '#f97316', 'Alto': '#ef4444' }
+
+// Seed metadata from the reference table (shown until the user edits it).
+const SEED_META: Record<string, CoinMeta> = {
+  'axie-infinity': { tipo: 'Juegos', riesgo: 'Alto', plazo: 'Mediano', rinde: false },
+  'bitcoin': { tipo: 'Reserva', riesgo: 'Bajo', plazo: 'Largo', rinde: false },
+  'cardano': { tipo: 'Contratos', riesgo: 'Medio', plazo: 'Mediano', rinde: true },
+  'cosmos': { tipo: 'Conexión / Nodo', riesgo: 'Medio', plazo: 'Largo', rinde: true },
+  'decentraland': { tipo: 'Juegos', riesgo: 'Alto', plazo: 'Mediano', rinde: false },
+  'enjincoin': { tipo: 'Juegos', riesgo: 'Medio - Alto', plazo: 'Corto', rinde: false },
+  'ethereum': { tipo: 'Contratos', riesgo: 'Medio', plazo: 'Largo', rinde: true },
+  'gala': { tipo: 'Juegos', riesgo: 'Alto', plazo: 'Mediano', rinde: false },
+  'hyperliquid': { tipo: 'Transferencias', riesgo: 'Medio', plazo: 'Mediano', rinde: false },
+  'pax-gold': { tipo: 'Stablecoin', riesgo: 'Bajo', plazo: 'Largo', rinde: false },
+  'polkadot': { tipo: 'Conexión / Nodo', riesgo: 'Bajo - Medio', plazo: 'Largo', rinde: true },
+  'polygon-ecosystem-token': { tipo: 'Transferencias', riesgo: 'Bajo - Medio', plazo: 'Mediano', rinde: false },
+  'quant-network': { tipo: 'Conexión / Nodo', riesgo: 'Bajo - Medio', plazo: 'Largo', rinde: false },
+  'shiba-inu': { tipo: 'Memes', riesgo: 'Alto', plazo: 'Corto', rinde: false },
+  'solana': { tipo: 'Transferencias', riesgo: 'Medio - Alto', plazo: 'Corto', rinde: true },
+  'stellar': { tipo: 'Transferencias', riesgo: 'Bajo - Medio', plazo: 'Mediano', rinde: false },
+  'xpla': { tipo: 'Juegos', riesgo: 'Alto', plazo: 'Corto', rinde: false },
+  'ripple': { tipo: 'Transferencias', riesgo: 'Medio - Alto', plazo: 'Mediano', rinde: false },
+  'zcash': { tipo: 'Transferencias', riesgo: 'Alto', plazo: 'Largo', rinde: false },
+}
 function loadMeta(): Record<string, CoinMeta> { try { const s = localStorage.getItem('nn-cripto-meta'); return s ? JSON.parse(s) : {} } catch { return {} } }
 
 const PERIODS = [
@@ -100,18 +139,20 @@ export default function CriptomonedasSection() {
   const [selectedCoin, setSelectedCoin] = useState<string | null>(null)
   const [period, setPeriod] = useState(7)
   const [meta, setMeta] = useState<Record<string, CoinMeta>>(loadMeta)
+  // Effective metadata: user edits override the seeded reference values.
+  const metaOf = (id: string): CoinMeta => ({ ...DEFAULT_META, ...SEED_META[id], ...meta[id] })
   const updateMeta = (id: string, u: Partial<CoinMeta>) => {
-    const next = { ...meta, [id]: { ...DEFAULT_META, ...meta[id], ...u } }
+    const next = { ...meta, [id]: { ...metaOf(id), ...u } }
     setMeta(next); localStorage.setItem('nn-cripto-meta', JSON.stringify(next))
   }
 
   const fetchPrices = useCallback(async () => {
     try {
       let result: any
+      const ids = COINS.map(c => c.id).join(',')
       if (window.electronAPI?.getCryptoPrices) {
-        result = await window.electronAPI.getCryptoPrices()
+        result = await window.electronAPI.getCryptoPrices(ids)
       } else {
-        const ids = COINS.map(c => c.id).join(',')
         const res = await globalThis.fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ars,usd&include_24hr_change=true&include_last_updated_at=true`)
         result = { success: true, data: await res.json() }
       }
@@ -173,14 +214,14 @@ export default function CriptomonedasSection() {
                 <span className="cripto-price-ars">{data ? fmtArs(data.ars) : '...'}</span>
                 <span className="cripto-price-usd">{data ? `USD ${data.usd.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : ''}</span>
               </div>
-              {meta[coin.id] && (
+              {(() => { const m = metaOf(coin.id); return (
                 <div className="cripto-tags">
-                  {meta[coin.id].tipo && <span className="cripto-tag">{meta[coin.id].tipo}</span>}
-                  <span className="cripto-tag" style={{ color: RIESGO_COLOR[meta[coin.id].riesgo], borderColor: RIESGO_COLOR[meta[coin.id].riesgo] }}>{meta[coin.id].riesgo}</span>
-                  <span className="cripto-tag">{meta[coin.id].plazo}</span>
-                  {meta[coin.id].rinde && <span className="cripto-tag rinde">Rinde</span>}
+                  {m.tipo && <span className="cripto-tag">{m.tipo}</span>}
+                  <span className="cripto-tag" style={{ color: RIESGO_COLOR[m.riesgo], borderColor: RIESGO_COLOR[m.riesgo] }}>{m.riesgo}</span>
+                  <span className="cripto-tag">{m.plazo}</span>
+                  {m.rinde && <span className="cripto-tag rinde">Rinde</span>}
                 </div>
-              )}
+              ) })()}
             </button>
           )
         })}
@@ -202,11 +243,11 @@ export default function CriptomonedasSection() {
           </div>
           <MiniChart coinId={selected.id} days={period} color={selected.color} />
           {(() => {
-            const m = meta[selected.id] || DEFAULT_META
+            const m = metaOf(selected.id)
             return (
               <div className="cripto-meta">
-                <label className="cripto-meta-field"><span>Tipo</span><input value={m.tipo} onChange={e => updateMeta(selected.id, { tipo: e.target.value })} placeholder="Reserva de valor, L1, DeFi, oro…" /></label>
-                <label className="cripto-meta-field"><span>Riesgo</span><select value={m.riesgo} onChange={e => updateMeta(selected.id, { riesgo: e.target.value as CoinMeta['riesgo'] })}><option>Bajo</option><option>Medio</option><option>Alto</option></select></label>
+                <label className="cripto-meta-field"><span>Tipo</span><input value={m.tipo} onChange={e => updateMeta(selected.id, { tipo: e.target.value })} placeholder="Reserva, Contratos, Juegos, Transferencias…" /></label>
+                <label className="cripto-meta-field"><span>Riesgo</span><select value={m.riesgo} onChange={e => updateMeta(selected.id, { riesgo: e.target.value as CoinMeta['riesgo'] })}>{RIESGO_OPTS.map(r => <option key={r}>{r}</option>)}</select></label>
                 <label className="cripto-meta-field"><span>Plazo</span><select value={m.plazo} onChange={e => updateMeta(selected.id, { plazo: e.target.value as CoinMeta['plazo'] })}><option>Corto</option><option>Mediano</option><option>Largo</option></select></label>
                 <label className="cripto-meta-field"><span>Genera rendimientos</span><button type="button" className={`cripto-rinde ${m.rinde ? 'on' : ''}`} onClick={() => updateMeta(selected.id, { rinde: !m.rinde })}>{m.rinde ? 'Sí' : 'No'}</button></label>
               </div>
