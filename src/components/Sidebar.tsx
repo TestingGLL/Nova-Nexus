@@ -106,7 +106,7 @@ function ClimaHora({ isOpen }: { isOpen: boolean }) {
     const id = setInterval(fetchW, 600000)
     return () => { active = false; clearInterval(id) }
   }, [])
-  const hh = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+  const hh = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })
   return (
     <div className={`sidebar-clima ${isOpen ? '' : 'collapsed'}`} title={w ? `${hh} · ${w.temp}° ${wDesc(w.code)}` : hh}>
       <span className="sidebar-hora">{hh}</span>

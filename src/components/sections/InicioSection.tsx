@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
-import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy } from 'lucide-react'
+import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy, Bot } from 'lucide-react'
+import { APP_VERSION } from '../../App'
 import { loadNotifications } from '../../lib/notifications'
 import { subscribeMundial, getMundialSnapshot } from '../../lib/mundialStore'
 import { subscribeTimer, getTimerSnapshot, toggleTimer, resetTimer, setTimerTotal } from '../../lib/timerStore'
@@ -188,6 +189,91 @@ function QuickChat() {
         <button onClick={send} disabled={!message.trim()} className="quick-chat-send"><Send size={14} /></button>
       </div>
       {saved && <span className="quick-chat-saved">Guardado en Notas</span>}
+    </div>
+  )
+}
+
+// ============ APP ASSISTANT (chat de ayuda sobre la app) ============
+
+const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+interface KbEntry { k: string[]; a: string }
+// Base de conocimiento de la app: cada entrada tiene palabras clave y una respuesta exacta.
+const KB: KbEntry[] = [
+  { k: ['hola', 'buenas', 'hey', 'hello', 'buen dia'], a: '¡Hola! 👋 Soy el asistente de Nova Nexus. Preguntame cómo usar una sección o dónde configurar algo.' },
+  { k: ['gracias', 'genial', 'perfecto', 'buenisimo'], a: '¡De nada! 🙂 Cualquier otra duda sobre la app, preguntame.' },
+  { k: ['ayuda', 'que podes hacer', 'que puedo preguntar', 'opciones', 'help', 'para que servis'], a: 'Puedo explicarte cualquier parte de Nova Nexus: sus 12 secciones (Inicio, Personal, Finanzas, Etsy, Software, Edición, Notas, Proyectos, Extras, Alertas, Configuración) y funciones como tarjetas, contraseñas/seguridad, sincronización a la nube, criptomonedas, alquiler, rutinas, transferencia por WiFi y más. Preguntame por lo que necesites.' },
+  { k: ['que es nova nexus', 'que es esta app', 'de que se trata', 'para que sirve la app', 'que es la app'], a: 'Nova Nexus es una app de escritorio "todo en uno" que reúne tu vida personal y profesional: finanzas, tiendas Etsy, salud, notas, proyectos, edición, alertas y más. Todos tus datos se guardan localmente y se sincronizan a la nube.' },
+  { k: ['secciones', 'cuantas secciones', 'que secciones', 'menu', 'barra lateral'], a: 'Las secciones son: Inicio, Personal, Finanzas, Etsy, Proyectos, Software, Edición, Notas, Extras, Alertas y Configuración. Podés reordenarlas arrastrándolas en la barra lateral.' },
+  { k: ['sincroniza', 'nube', 'sincronizacion', 'se guarda', 'supabase', 'se pierden', 'respaldo', 'otro dispositivo'], a: 'Todo lo que cargás se guarda automáticamente y se sincroniza a la nube (Supabase). Funciona offline: los cambios se suben cuando hay conexión. Al iniciar sesión en otro dispositivo, baja tu información.' },
+  { k: ['version', 'que version', 'actualizado'], a: `Estás usando Nova Nexus v${APP_VERSION}. La versión se muestra abajo a la derecha de la app.` },
+  { k: ['contraseña', 'password', 'seguridad', 'bloquear', 'proteger', 'pin', 'clave'], a: 'La contraseña se maneja en Configuración → Sistema → Seguridad. Podés proteger toda la app, secciones puntuales, o el Diario y los Objetivos. Todo viene desactivado por defecto y la contraseña por defecto es M1-E6-G96.' },
+  { k: ['tarjeta', 'tarjetas', 'pedidos ya', 'pedidosya'], a: 'En Personal → Tarjetas guardás tus tarjetas (protegidas por contraseña) y en su subpestaña "Pedidos Ya" cargás las promos por tarjeta. Tocá "Agregar tarjeta" para sumar una.' },
+  { k: ['contacto', 'contactos', 'agenda', 'telefono de'], a: 'En Personal → Contactos podés agregar contactos con nombre, teléfono, correo, dirección y notas. Se pueden editar, eliminar y duplicar.' },
+  { k: ['lista de compras', 'listas', 'compras del super', 'super', 'shopping'], a: 'En Personal → Listas organizás varias listas dentro de pestañas. Creá una pestaña, agregá listas y sumá ítems con su categoría.' },
+  { k: ['ejercicio', 'rutina', 'salud', 'gimnasio', 'entrenar', 'creador de rutinas'], a: 'En Personal → Salud tenés el Creador de Rutinas: asignás una rutina a cada día y semana. En Inicio, el widget "Rutina de hoy" muestra los ejercicios del día y al hacer clic te lleva a ese ejercicio. Cada ejercicio permite reps o tiempo y un link de YouTube.' },
+  { k: ['agua', 'vasos', 'hidratacion'], a: 'El contador de agua está en Personal → Salud. Tocá el vaso para sumar; se reinicia cada día.' },
+  { k: ['anotaciones', 'bloques', 'notion'], a: 'En Personal → Anotaciones escribís en páginas estilo Notion (con formato rico). Podés crear varias páginas y renombrarlas.' },
+  { k: ['diario', 'journal', 'pensamientos'], a: 'El Diario está en Personal → Diario, organizado por capítulos. Podés protegerlo con contraseña desde Configuración → Seguridad.' },
+  { k: ['objetivo', 'objetivos', 'metas', 'goals'], a: 'En Personal → Objetivos cargás metas con progreso. Se pueden editar, clonar, eliminar y agrupar por categoría; hay un progreso global.' },
+  { k: ['ingreso', 'ingresos', 'sueldo', 'cobro', 'cuanto gano'], a: 'En Finanzas → Ingresos cargás ingresos en pesos o dólares, y podés asociar una pestaña (Gastos propios, Alquiler o Gastos en USD) para descontarla y ver el neto.' },
+  { k: ['alquiler', 'renta', 'cierre de mes', 'servicios', 'expensas'], a: 'En Finanzas → Alquiler gestionás alquiler y servicios (con historial de aumentos), el dashboard de alimentos, mantenimiento y "Cierre de mes" (que archiva el mes y arranca uno nuevo; también se cierra solo al cambiar de mes).' },
+  { k: ['gasto', 'gastos', 'gastos propios', 'inflacion', 'aumento'], a: 'En Finanzas → Gastos Propios cargás gastos por categoría, con proyección por período y un botón de "Aumento por inflación" que sube todos los precios por un %.' },
+  { k: ['dolar', 'dolares', 'usd', 'suscripcion', 'gastos en dolares'], a: 'En Finanzas → Gastos en USD llevás gastos en dólares (fijos, pendientes y futuros) con conversión al dólar blue. Se pueden editar y filtrar.' },
+  { k: ['cripto', 'criptomoneda', 'bitcoin', 'crypto'], a: 'En Finanzas → Criptomonedas ves precios en vivo y gráficos de varias monedas, cada una con su riesgo, plazo, tipo e intereses. Tocá una para ver el detalle.' },
+  { k: ['etsy', 'tienda', 'tiendas', 'organizador', 'lanzamiento', 'reseña', 'reseñas'], a: 'En Etsy administrás tus tiendas: información y reseñas, artículos (con grupos y subartículos), un Organizador con flujo de lanzamiento, creaciones/prompts, clientes y planificación de fechas comerciales.' },
+  { k: ['navegador', 'chrome', 'edge', 'navegador por defecto'], a: 'En Software → Navegador podés fijar Chrome o Edge como navegador por defecto del sistema.' },
+  { k: ['bluetooth', 'dispositivo', 'auriculares', 'control', 'joystick'], a: 'En Software → Dispositivos ves los dispositivos Bluetooth conectados; también aparecen en el HUD de la barra superior.' },
+  { k: ['transferencia', 'transferir', 'wifi', 'pasar archivos', 'qr', 'celular'], a: 'En Software → Transferencias podés pasar archivos entre la PC y el celular por WiFi escaneando un QR.' },
+  { k: ['edicion', 'editor', 'imagen', 'canvas', 'marco', 'diseño'], a: 'La sección Edición es un editor gráfico con capas, formas, texto y guías sobre un canvas.' },
+  { k: ['notas', 'carpetas', 'etiquetas de notas'], a: 'La sección Notas guarda notas con carpetas, etiquetas y búsqueda; podés marcar notas efímeras que se auto-eliminan.' },
+  { k: ['proyecto', 'proyectos', 'kanban', 'tablero'], a: 'En Proyectos gestionás proyectos en lista o tablero Kanban. Las etiquetas (tipos) se pueden agregar desde Configuración → Adicionales.' },
+  { k: ['extras', 'ruleta', 'aleatorio', 'sorteo', 'random'], a: 'En Extras tenés una ruleta configurable y una grilla aleatoria para sorteos y decisiones.' },
+  { k: ['alerta', 'alertas', 'recordatorio', 'notificacion', 'campana'], a: 'En Alertas ves tus recordatorios y notificaciones. La campana arriba a la derecha muestra las no leídas. La anticipación se configura en Configuración → Alertas.' },
+  { k: ['tema', 'oscuro', 'claro', 'color', 'acento', 'apariencia', 'personalizar'], a: 'El tema (claro/oscuro) y el color de acento se cambian en Configuración → Personalización.' },
+  { k: ['sonido', 'sonidos', 'volumen', 'silenciar'], a: 'Los sonidos de interfaz y su volumen se controlan en Configuración → Sistema → Sonidos.' },
+  { k: ['escala', 'tamaño de texto', 'tipografia', 'zoom', 'letra mas grande'], a: 'El tamaño de la tipografía/interfaz se ajusta en Configuración → Sistema → Tamaño de la tipografía.' },
+  { k: ['temporizador', 'timer', 'cronometro', 'cuenta regresiva'], a: 'El Temporizador es un widget de Inicio: elegí los minutos y suena al terminar aunque estés en otra sección o minimizado.' },
+  { k: ['mundial', 'futbol', 'partido', 'gol'], a: 'El widget "Mundial 2026" en Inicio muestra los partidos en vivo y los de Argentina, con aviso de goles y penales.' },
+  { k: ['widget', 'widgets', 'inicio', 'pantalla principal', 'reorganizar'], a: 'En Inicio podés combinar y reordenar los widgets (reloj, clima, temporizador, calendario, rutina, alertas, etc.). Podés ocultarlos desde Configuración → Paneles.' },
+]
+
+function answerFor(qRaw: string): string {
+  const q = normalize(qRaw)
+  if (!q.trim()) return ''
+  let best: KbEntry | null = null
+  let bestScore = 0
+  for (const e of KB) {
+    let score = 0
+    for (const kw of e.k) { const nk = normalize(kw); if (q.includes(nk)) score += nk.split(' ').length }
+    if (score > bestScore) { bestScore = score; best = e }
+  }
+  if (best && bestScore > 0) return best.a
+  return 'No estoy seguro de eso 🤔. Puedo ayudarte con las secciones (Inicio, Personal, Finanzas, Etsy, Software, Edición, Notas, Proyectos, Extras, Alertas, Configuración) y con funciones como tarjetas, contraseñas, sincronización, criptos, alquiler o rutinas. Preguntame por alguna 🙂.'
+}
+
+interface ChatMsg { role: 'user' | 'bot'; text: string }
+function AppAssistant() {
+  const [messages, setMessages] = useState<ChatMsg[]>([{ role: 'bot', text: '¡Hola! Soy el asistente de Nova Nexus. Preguntame cualquier cosa sobre la app: cómo usar una sección o dónde configurar algo.' }])
+  const [input, setInput] = useState('')
+  const listRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, [messages])
+  const send = () => {
+    const t = input.trim(); if (!t) return
+    const reply = answerFor(t)
+    setMessages(m => [...m, { role: 'user', text: t }, { role: 'bot', text: reply }])
+    setInput('')
+  }
+  return (
+    <div className="quick-chat card app-assistant">
+      <div className="card-title"><Bot size={14} /> Asistente de la app</div>
+      <div className="assistant-messages" ref={listRef}>
+        {messages.map((m, i) => <div key={i} className={`assistant-msg ${m.role}`}>{m.text}</div>)}
+      </div>
+      <div className="quick-chat-input-row">
+        <input placeholder="Preguntá sobre la app..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
+        <button onClick={send} disabled={!input.trim()} className="quick-chat-send"><Send size={14} /></button>
+      </div>
     </div>
   )
 }
@@ -417,10 +503,24 @@ function DayRoutineWidget() {
       <div className="card-title"><Dumbbell size={16} /> Rutina de hoy</div>
       <div className="day-routine-day">{dayName}</div>
       {routine ? (
-        <div className="day-routine-info" style={{ background: `linear-gradient(135deg, ${routine.color}, ${routine.color}aa)` }}>
-          <span className="day-routine-emoji">{routine.emoji}</span>
-          <div><span className="day-routine-name">{routine.name}</span><span className="day-routine-count">{weekEx.length} ejercicios · Semana {activeWeek + 1}</span></div>
-        </div>
+        <>
+          <div className="day-routine-info" style={{ background: `linear-gradient(135deg, ${routine.color}, ${routine.color}aa)` }}>
+            <span className="day-routine-emoji">{routine.emoji}</span>
+            <div><span className="day-routine-name">{routine.name}</span><span className="day-routine-count">{weekEx.length} ejercicios · Semana {activeWeek + 1}</span></div>
+          </div>
+          {weekEx.length > 0 && (
+            <div className="day-routine-exs">
+              <span className="day-routine-exs-label">Ejercicios del día</span>
+              {weekEx.map((e: any, i: number) => (
+                <button key={i} className="day-routine-ex" onClick={ev => { ev.stopPropagation(); openRoutine() }} title="Ir al ejercicio">
+                  <span className="day-routine-ex-dot" style={{ background: routine.color }} />
+                  <span className="day-routine-ex-name">{e.name}</span>
+                  <span className="day-routine-ex-meta">{e.sets}×{e.mode === 'time' ? (e.time || e.reps) : e.reps}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       ) : (
         <div className="day-routine-empty">Día de descanso · asigná una rutina en Salud</div>
       )}
@@ -576,13 +676,14 @@ function loadReminders(): ReminderItem[] { try { const s = localStorage.getItem(
 
 // ============ MAIN SECTION ============
 
-type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'routine' | 'alerts' | 'mundial'
+type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'assistant' | 'routine' | 'alerts' | 'mundial'
 const widgetRegistry: Record<WidgetId, { name: string; component: React.FC; icon: React.ReactNode; defaultSpan: number }> = {
   timer: { name: 'Temporizador', component: TimerWidget, icon: <Timer size={14} />, defaultSpan: 1 },
   weather: { name: 'Clima', component: WeatherWidget, icon: <CloudSun size={14} />, defaultSpan: 1 },
   calendar: { name: 'Calendario', component: CalendarWidget, icon: <Calendar size={14} />, defaultSpan: 1 },
   quote: { name: 'Frase del día', component: QuotePanel, icon: <Sparkles size={14} />, defaultSpan: 2 },
   chat: { name: 'Chat rápido', component: QuickChat, icon: <MessageSquare size={14} />, defaultSpan: 1 },
+  assistant: { name: 'Asistente de la app', component: AppAssistant, icon: <Bot size={14} />, defaultSpan: 2 },
   routine: { name: 'Rutina de hoy', component: DayRoutineWidget, icon: <Dumbbell size={14} />, defaultSpan: 1 },
   alerts: { name: 'Próximas alertas', component: NextAlertsWidget, icon: <Bell size={14} />, defaultSpan: 1 },
   mundial: { name: 'Mundial 2026', component: MundialWidget, icon: <Trophy size={14} />, defaultSpan: 3 },
@@ -600,7 +701,7 @@ const spanCols = (s: number) => Math.max(2, Math.round(s * 2))
 
 const defaultBlocks: LayoutBlock[] = [
   { key: newKey(), span: 1, widgets: ['routine'] }, { key: newKey(), span: 1, widgets: ['alerts'] }, { key: newKey(), span: 1, widgets: ['quote'] },
-  { key: newKey(), span: 1, widgets: ['chat'] }, { key: newKey(), span: 1, widgets: ['timer'] }, { key: newKey(), span: 1, widgets: ['weather'] }, { key: newKey(), span: 1, widgets: ['calendar'] },
+  { key: newKey(), span: 1, widgets: ['chat'] }, { key: newKey(), span: 2, widgets: ['assistant'] }, { key: newKey(), span: 1, widgets: ['timer'] }, { key: newKey(), span: 1, widgets: ['weather'] }, { key: newKey(), span: 1, widgets: ['calendar'] },
   { key: newKey(), span: 3, widgets: ['mundial'] },
 ]
 

@@ -11,6 +11,10 @@ const isDev = !app.isPackaged;
 // session (and its entry in the Windows volume mixer) is created on launch.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
+// Stable AppUserModelID so Windows groups the running window with the pinned
+// taskbar shortcut into a SINGLE icon (instead of showing a duplicate).
+try { app.setAppUserModelId('com.novanexus.desktop'); } catch {}
+
 const CHROME_PROGID = 'ChromeHTML';
 const EDGE_PROGID = 'MSEdgeHTM';
 
