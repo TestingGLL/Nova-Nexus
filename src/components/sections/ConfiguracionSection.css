@@ -256,3 +256,21 @@
 .estado-badge.checking { color: var(--text-secondary); background: var(--bg-hover); }
 .estado-spin { animation: estado-spin 0.8s linear infinite; }
 @keyframes estado-spin { to { transform: rotate(360deg); } }
+
+/* Seguridad (Sistema) */
+.security-live { display: flex; gap: 10px; margin-bottom: 14px; }
+.security-live-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px; background: var(--bg-hover); border: 1px solid var(--border); border-radius: 10px; }
+.security-live-num { font-size: 20px; font-weight: 700; color: var(--accent); }
+.security-live-lbl { font-size: 11px; color: var(--text-secondary); text-align: center; }
+.security-pw-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; flex-wrap: wrap; }
+.security-pw-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary); }
+.security-pw-input { display: flex; align-items: center; gap: 6px; }
+.security-pw-input input { padding: 7px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); outline: none; min-width: 150px; }
+.security-pw-input input:focus { border-color: var(--accent); }
+.security-pw-input button { display: flex; padding: 7px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-secondary); border-radius: 8px; cursor: pointer; }
+.security-pw-input button:hover { border-color: var(--accent); color: var(--accent); }
+.security-pw-reset:hover { border-color: #ef4444 !important; color: #ef4444 !important; }
+
+/* Etiquetas de Proyectos (Adicionales) */
+.proj-label-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: middle; }
+.proj-label-color { width: 34px; height: 34px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); cursor: pointer; flex-shrink: 0; }

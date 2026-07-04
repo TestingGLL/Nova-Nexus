@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react'
 import { Lock, Loader } from 'lucide-react'
 import type { Section } from '../App'
 import SectionErrorBoundary from './SectionErrorBoundary'
+import { useSecurity, SecurityGate } from '../lib/security'
 import './MainContent.css'
 
 // Sections are code-split and only the active one is mounted. This keeps the
@@ -56,9 +57,11 @@ export default function MainContent({ section, sidebarOpen }: MainContentProps) 
     return () => { clearInterval(id); window.removeEventListener('storage', sync) }
   }, [])
 
+  const security = useSecurity()
   const current = sections.find(s => s.key === section) ?? sections[0]
   const { key, title, Component } = current
   const isLocked = locked.includes(key) && !unlockedNow.has(key)
+  const secLocked = security.lockedSections.includes(key)
 
   return (
     <main className={`main-content ${sidebarOpen ? '' : 'expanded'}`}>
@@ -72,7 +75,7 @@ export default function MainContent({ section, sidebarOpen }: MainContentProps) 
           <div style={isLocked ? { pointerEvents: 'none', opacity: 0.55, filter: 'grayscale(0.3)' } : undefined}>
             <SectionErrorBoundary name={title}>
               <Suspense fallback={<div className="section-loading"><Loader size={22} className="section-loading-spin" /></div>}>
-                <Component />
+                {secLocked ? <SecurityGate title={title}><Component /></SecurityGate> : <Component />}
               </Suspense>
             </SectionErrorBoundary>
           </div>

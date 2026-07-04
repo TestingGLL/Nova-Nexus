@@ -1,22 +1,20 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { FolderKanban, Plus, Trash2, Tag, Search, LayoutList, Columns3, GripVertical, ChevronDown } from 'lucide-react'
 import { useConfirm } from '../ConfirmDialog'
+import { allProjectLabels } from '../../lib/projectLabels'
 import './ProyectosSection.css'
 
-type ProjectType = 'freelancer' | 'propio' | 'etsy' | 'producto' | 'servicio'
 type ProjectStatus = 'todo' | 'progress' | 'done' | 'archived'
 
 interface Project {
   id: string
   title: string
   description: string
-  type: ProjectType
+  type: string
   status: ProjectStatus
   createdAt: string
 }
 
-const typeLabels: Record<ProjectType, string> = { freelancer: 'Freelancer', propio: 'Propio', etsy: 'Etsy', producto: 'Producto', servicio: 'Servicio' }
-const typeColors: Record<ProjectType, string> = { freelancer: '#8b5cf6', propio: '#3b82f6', etsy: '#f97316', producto: '#22c55e', servicio: '#06b6d4' }
 const statusLabels: Record<ProjectStatus, string> = { todo: 'Por hacer', progress: 'En progreso', done: 'Completado', archived: 'Archivado' }
 const statusColors: Record<ProjectStatus, string> = { todo: '#6b7280', progress: '#3b82f6', done: '#22c55e', archived: '#8b5cf6' }
 const statusOrder: ProjectStatus[] = ['todo', 'progress', 'done', 'archived']
@@ -33,7 +31,7 @@ function loadProjects(): Project[] {
 }
 function saveProjects(p: Project[]) { localStorage.setItem('nn-projects', JSON.stringify(p)) }
 
-function ProjectCard({ p, onDelete, onStatusChange, dragHandlers }: { p: Project; onDelete: () => void; onStatusChange?: (s: ProjectStatus) => void; dragHandlers?: Record<string, any> }) {
+function ProjectCard({ p, typeLabel, typeColor, onDelete, onStatusChange, dragHandlers }: { p: Project; typeLabel: string; typeColor: string; onDelete: () => void; onStatusChange?: (s: ProjectStatus) => void; dragHandlers?: Record<string, any> }) {
   const [showStatusMenu, setShowStatusMenu] = useState(false)
   return (
     <div className="card proyecto-item" {...dragHandlers}>
@@ -41,7 +39,7 @@ function ProjectCard({ p, onDelete, onStatusChange, dragHandlers }: { p: Project
       <div className="proyecto-header">
         <h3 className="proyecto-title">{p.title}</h3>
         <div className="proyecto-actions">
-          <span className="proyecto-type-badge" style={{ background: typeColors[p.type] + '18', color: typeColors[p.type] }}><Tag size={10} /> {typeLabels[p.type]}</span>
+          <span className="proyecto-type-badge" style={{ background: typeColor + '18', color: typeColor }}><Tag size={10} /> {typeLabel}</span>
           {onStatusChange && (
             <div className="proyecto-status-wrap">
               <button className="proyecto-status-btn" style={{ color: statusColors[p.status] }} onClick={() => setShowStatusMenu(!showStatusMenu)}>
@@ -73,13 +71,24 @@ export default function ProyectosSection() {
   const [showNew, setShowNew] = useState(false)
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
-  const [type, setType] = useState<ProjectType>('propio')
-  const [filter, setFilter] = useState<ProjectType | 'all'>('all')
+  const [type, setType] = useState<string>('propio')
+  const [filter, setFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [view, setView] = useState<'list' | 'kanban'>('list')
   const dragRef = useRef<string | null>(null)
   const [dragOverCol, setDragOverCol] = useState<ProjectStatus | null>(null)
   const confirm = useConfirm()
+
+  // Built-in + custom labels (managed from Configuración → Adicionales).
+  const [labels, setLabels] = useState(allProjectLabels)
+  useEffect(() => {
+    const refresh = () => setLabels(allProjectLabels())
+    window.addEventListener('nn-project-labels-updated', refresh)
+    window.addEventListener('storage', refresh)
+    return () => { window.removeEventListener('nn-project-labels-updated', refresh); window.removeEventListener('storage', refresh) }
+  }, [])
+  const typeLabel = (id: string) => labels.find(l => l.id === id)?.label || id
+  const typeColor = (id: string) => labels.find(l => l.id === id)?.color || '#6b7280'
 
   const save = (p: Project[]) => { setProjects(p); saveProjects(p) }
 
@@ -122,9 +131,9 @@ export default function ProyectosSection() {
           <input className="proyectos-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Título del proyecto" autoFocus />
           <textarea className="proyectos-textarea" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción (opcional)" rows={3} />
           <div className="proyectos-type-row">
-            {(Object.keys(typeLabels) as ProjectType[]).map(t => (
-              <button key={t} className={`proyectos-type-btn ${type === t ? 'active' : ''}`} style={{ '--type-color': typeColors[t] } as React.CSSProperties} onClick={() => setType(t)}>
-                {typeLabels[t]}
+            {labels.map(t => (
+              <button key={t.id} className={`proyectos-type-btn ${type === t.id ? 'active' : ''}`} style={{ '--type-color': t.color } as React.CSSProperties} onClick={() => setType(t.id)}>
+                {t.label}
               </button>
             ))}
           </div>
@@ -134,18 +143,18 @@ export default function ProyectosSection() {
 
       <div className="proyectos-filters">
         <button className={`proyectos-filter ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>Todos</button>
-        {(Object.keys(typeLabels) as ProjectType[]).map(t => (
-          <button key={t} className={`proyectos-filter ${filter === t ? 'active' : ''}`} onClick={() => setFilter(t)} style={{ '--type-color': typeColors[t] } as React.CSSProperties}>
-            {typeLabels[t]}
+        {labels.map(t => (
+          <button key={t.id} className={`proyectos-filter ${filter === t.id ? 'active' : ''}`} onClick={() => setFilter(t.id)} style={{ '--type-color': t.color } as React.CSSProperties}>
+            {t.label}
           </button>
         ))}
       </div>
 
       {view === 'list' ? (
         <div className="proyectos-list">
-          {searched.length === 0 && <div className="proyectos-empty"><FolderKanban size={28} /><p>Sin proyectos{filter !== 'all' ? ` de tipo ${typeLabels[filter as ProjectType]}` : ''}</p></div>}
+          {searched.length === 0 && <div className="proyectos-empty"><FolderKanban size={28} /><p>Sin proyectos{filter !== 'all' ? ` de tipo ${typeLabel(filter)}` : ''}</p></div>}
           {searched.map(p => (
-            <ProjectCard key={p.id} p={p} onDelete={() => removeProject(p.id)} onStatusChange={s => changeStatus(p.id, s)} />
+            <ProjectCard key={p.id} p={p} typeLabel={typeLabel(p.type)} typeColor={typeColor(p.type)} onDelete={() => removeProject(p.id)} onStatusChange={s => changeStatus(p.id, s)} />
           ))}
         </div>
       ) : (
@@ -174,6 +183,8 @@ export default function ProyectosSection() {
                     <ProjectCard
                       key={p.id}
                       p={p}
+                      typeLabel={typeLabel(p.type)}
+                      typeColor={typeColor(p.type)}
                       onDelete={() => removeProject(p.id)}
                       dragHandlers={{
                         draggable: true,

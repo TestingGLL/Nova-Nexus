@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, EyeOff, Tag, Sparkles, Plus, X, Volume2, Settings, Lock, GripVertical, Type, CheckCircle2, XCircle, Loader, Activity } from 'lucide-react'
+import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, EyeOff, Tag, Sparkles, Plus, X, Volume2, Settings, Lock, GripVertical, Type, CheckCircle2, XCircle, Loader, Activity, Shield, KeyRound, BookOpen, Target } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { getSoundsEnabled, setSoundsEnabled, getSoundsVolume, setSoundsVolume, sfx } from '../../lib/sounds'
 import { UI_SCALES, getUiScale, setUiScale } from '../../lib/uiScale'
 import { supabase, supabaseEnabled } from '../../lib/supabase'
 import { hasPendingSync } from '../../lib/cloudSync'
+import { loadSecurity, saveSecurity, DEFAULT_SECURITY_PASSWORD, type SecurityConfig } from '../../lib/security'
+import { BUILTIN_PROJECT_LABELS, loadCustomProjectLabels, saveCustomProjectLabels, type ProjectLabel } from '../../lib/projectLabels'
 import { APP_VERSION } from '../../App'
 import './ConfiguracionSection.css'
 
@@ -150,10 +152,19 @@ export default function ConfiguracionSection() {
   const [soundVol, setSoundVol] = useState(getSoundsVolume())
   const [uiScale, setUiScaleState] = useState(getUiScale())
   const [autoDeleteDays, setAutoDeleteDays] = useState<number>(() => { try { return Number(localStorage.getItem('nn-notes-autodelete-days')) || 7 } catch { return 7 } })
+  const [security, setSecurity] = useState<SecurityConfig>(loadSecurity)
+  const [showPw, setShowPw] = useState(false)
+  const [projectLabels, setProjectLabels] = useState<ProjectLabel[]>(loadCustomProjectLabels)
+  const [newProjLabel, setNewProjLabel] = useState('')
+  const [newProjColor, setNewProjColor] = useState('#8b5cf6')
 
   const updWordGroups = (g: WordGroup[]) => { setWordGroups(g); saveWordGroups(g) }
   const updCategories = (c: CustomCategories) => { setCategories(c); saveCategories(c) }
   const updNoteTags = (t: string[]) => { setNoteTags(t); saveNoteTags(t) }
+  const updSecurity = (u: Partial<SecurityConfig>) => { const c = { ...security, ...u }; setSecurity(c); saveSecurity(c) }
+  const toggleSecSection = (key: string) => { const on = security.lockedSections.includes(key); updSecurity({ lockedSections: on ? security.lockedSections.filter(k => k !== key) : [...security.lockedSections, key] }) }
+  const updProjectLabels = (l: ProjectLabel[]) => { setProjectLabels(l); saveCustomProjectLabels(l) }
+  const addProjectLabel = () => { const t = newProjLabel.trim(); if (!t) return; updProjectLabels([...projectLabels, { id: 'pl-' + Date.now(), label: t, color: newProjColor }]); setNewProjLabel('') }
 
   const updateProfile = (u: Partial<ProfileData>) => { const p = { ...profile, ...u }; setProfile(p); saveProfile(p) }
   const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -392,12 +403,76 @@ export default function ConfiguracionSection() {
               <button onClick={() => { if (newCat.compras.trim()) { updCategories({ ...categories, compras: [...categories.compras, newCat.compras.trim()] }); setNewCat({ ...newCat, compras: '' }) } }}><Plus size={14} /></button>
             </div>
           </div>
+
+          <div className="card config-card">
+            <div className="card-title"><Tag size={16} /> Etiquetas de Proyectos</div>
+            <p className="config-desc">Etiquetas (tipos) disponibles al crear un proyecto en la sección Proyectos. Las predeterminadas no se pueden quitar.</p>
+            <div className="cfg-chips">
+              {BUILTIN_PROJECT_LABELS.map(l => (
+                <span key={l.id} className="cfg-chip" style={{ borderColor: l.color, color: l.color }}><span className="proj-label-dot" style={{ background: l.color }} />{l.label}</span>
+              ))}
+              {projectLabels.map(l => (
+                <span key={l.id} className="cfg-chip" style={{ borderColor: l.color, color: l.color }}><span className="proj-label-dot" style={{ background: l.color }} />{l.label}<button onClick={() => updProjectLabels(projectLabels.filter(x => x.id !== l.id))}><X size={10} /></button></span>
+              ))}
+            </div>
+            <div className="cfg-add-row">
+              <input type="color" className="proj-label-color" value={newProjColor} onChange={e => setNewProjColor(e.target.value)} title="Color de la etiqueta" />
+              <input value={newProjLabel} onChange={e => setNewProjLabel(e.target.value)} placeholder="Nueva etiqueta de proyecto..." onKeyDown={e => e.key === 'Enter' && addProjectLabel()} />
+              <button onClick={addProjectLabel}><Plus size={14} /></button>
+            </div>
+          </div>
         </>
       )}
 
       {tab === 'sistema' && (
         <>
           <SistemaEstado />
+
+          <div className="card config-card">
+            <div className="card-title"><Shield size={16} /> Seguridad</div>
+            <p className="config-desc">Protegé con contraseña la app, secciones puntuales o áreas sensibles. Todo está desactivado por defecto.</p>
+            <div className="security-live">
+              <div className="security-live-item"><span className="security-live-num">{(security.lockApp ? 1 : 0) + (security.lockDiary ? 1 : 0) + (security.lockGoals ? 1 : 0) + security.lockedSections.length}</span><span className="security-live-lbl">Áreas protegidas</span></div>
+              <div className="security-live-item"><span className="security-live-num">{security.lockApp ? 'Sí' : 'No'}</span><span className="security-live-lbl">Bloqueo total</span></div>
+              <div className="security-live-item"><span className="security-live-num">{security.lockedSections.length}</span><span className="security-live-lbl">Secciones</span></div>
+            </div>
+            <div className="security-pw-row">
+              <span className="security-pw-label"><KeyRound size={13} /> Contraseña</span>
+              <div className="security-pw-input">
+                <input type={showPw ? 'text' : 'password'} value={security.password} onChange={e => updSecurity({ password: e.target.value })} placeholder="Contraseña" />
+                <button onClick={() => setShowPw(s => !s)} title={showPw ? 'Ocultar' : 'Mostrar'}>{showPw ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+                {security.password !== DEFAULT_SECURITY_PASSWORD && <button className="security-pw-reset" onClick={() => updSecurity({ password: DEFAULT_SECURITY_PASSWORD })} title="Restablecer a la predeterminada"><RotateCcw size={13} /></button>}
+              </div>
+            </div>
+            <div className="alert-config-row">
+              <span><Lock size={13} /> Bloquear toda la app al iniciar</span>
+              <button className={`alert-config-toggle ${security.lockApp ? 'active' : ''}`} onClick={() => updSecurity({ lockApp: !security.lockApp })}>{security.lockApp ? 'Activado' : 'Desactivado'}</button>
+            </div>
+            <div className="alert-config-row">
+              <span><BookOpen size={13} /> Contraseña en «Diario» (Personal)</span>
+              <button className={`alert-config-toggle ${security.lockDiary ? 'active' : ''}`} onClick={() => updSecurity({ lockDiary: !security.lockDiary })}>{security.lockDiary ? 'Activado' : 'Desactivado'}</button>
+            </div>
+            <div className="alert-config-row">
+              <span><Target size={13} /> Contraseña en «Objetivos» (Personal)</span>
+              <button className={`alert-config-toggle ${security.lockGoals ? 'active' : ''}`} onClick={() => updSecurity({ lockGoals: !security.lockGoals })}>{security.lockGoals ? 'Activado' : 'Desactivado'}</button>
+            </div>
+          </div>
+
+          <div className="card config-card">
+            <div className="card-title"><Lock size={16} /> Contraseña por sección</div>
+            <p className="config-desc">Pedí la contraseña al entrar a cada sección elegida (independiente del bloqueo de edición de Adicionales).</p>
+            <div className="widgets-list">
+              {LOCKABLE_SECTIONS.map(s => (
+                <div key={s.key} className="widget-toggle-row">
+                  <span className="widget-toggle-name">{s.label}</span>
+                  <button className={`widget-toggle-btn ${security.lockedSections.includes(s.key) ? 'active' : ''}`} onClick={() => toggleSecSection(s.key)}>
+                    {security.lockedSections.includes(s.key) ? <><Lock size={12} /> Con contraseña</> : <><Eye size={12} /> Libre</>}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="card config-card">
             <div className="card-title"><Volume2 size={16} /> Sonidos de interfaz</div>
             <p className="config-desc">Sonidos sutiles tipo burbuja al interactuar. También podés controlar el volumen de la app desde el mezclador de sonido de Windows.</p>

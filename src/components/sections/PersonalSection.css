@@ -730,3 +730,64 @@
 .bloque-fmt-menu button:hover { background: var(--bg-hover); color: var(--accent); }
 .bloque-fmt-sep { height: 1px; background: var(--border); margin: 4px 0; }
 .bloque-fmt-backdrop { position: fixed; inset: 0; z-index: 20; }
+
+/* ===== Spec Personal: ejercicio (modo/YouTube), boards de listas, páginas de anotaciones, contactos ===== */
+
+/* Salud → detalle de ejercicio: toggle reps/tiempo + link de YouTube */
+.ex-mode-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; align-self: flex-end; }
+.ex-mode-toggle button { padding: 5px 10px; border: none; background: var(--bg-hover); color: var(--text-secondary); font-size: 11px; font-weight: 600; cursor: pointer; }
+.ex-mode-toggle button.active { background: var(--accent-soft); color: var(--accent); }
+.ex-youtube-row { display: flex; align-items: center; gap: 6px; }
+.ex-youtube-icon { color: #ef4444; flex-shrink: 0; }
+.ex-youtube { flex: 1; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 6px; font-size: 11px; color: var(--text-primary); outline: none; padding: 4px 8px; }
+.ex-youtube:focus { border-color: var(--accent); }
+.ex-youtube-open { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border: none; background: #ef4444; color: #fff; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.ex-youtube-open:hover { opacity: 0.9; }
+
+/* Listas → pestañas (boards) que contienen varias listas */
+.shopping-boards { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.shopping-board-tab { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-secondary); border-radius: 9px; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.shopping-board-tab:hover { border-color: var(--accent); }
+.shopping-board-tab.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.shopping-board-name-edit { border: none; background: transparent; color: inherit; font-size: 13px; font-weight: 600; font-family: inherit; outline: none; width: 100px; }
+.shopping-board-count { font-size: 10px; background: rgba(0,0,0,0.12); padding: 1px 6px; border-radius: 8px; }
+.shopping-board-edit, .shopping-board-del { display: flex; padding: 2px; border: none; background: none; color: inherit; cursor: pointer; opacity: 0.7; border-radius: 4px; }
+.shopping-board-edit:hover { opacity: 1; }
+.shopping-board-del:hover { opacity: 1; color: #ef4444; }
+.shopping-board-add { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px dashed var(--border); background: none; color: var(--text-secondary); border-radius: 8px; cursor: pointer; }
+.shopping-board-add:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Anotaciones → páginas estilo Notion */
+.anotaciones-pages { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.anotaciones-page-tab { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-secondary); border-radius: 9px; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.anotaciones-page-tab:hover { border-color: var(--accent); }
+.anotaciones-page-tab.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.anotaciones-page-edit { border: none; background: transparent; color: inherit; font-size: 13px; font-weight: 600; font-family: inherit; outline: none; width: 110px; }
+.anotaciones-page-editbtn, .anotaciones-page-del { display: flex; padding: 2px; border: none; background: none; color: inherit; cursor: pointer; opacity: 0.7; border-radius: 4px; }
+.anotaciones-page-editbtn:hover { opacity: 1; }
+.anotaciones-page-del:hover { opacity: 1; color: #ef4444; }
+.anotaciones-page-add { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px dashed var(--border); background: none; color: var(--text-secondary); border-radius: 8px; cursor: pointer; }
+.anotaciones-page-add:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Contactos */
+.contactos-content { display: flex; flex-direction: column; gap: 14px; }
+.contactos-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.contacto-form { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px !important; }
+.contacto-name-input { padding: 9px 12px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--text-primary); font-family: inherit; outline: none; }
+.contacto-name-input:focus { border-color: var(--accent); }
+.contacto-form-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.contacto-field { flex: 1; min-width: 160px; display: flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; color: var(--text-secondary); }
+.contacto-field-full { width: 100%; }
+.contacto-field input { flex: 1; border: none; background: none; color: var(--text-primary); font-size: 13px; font-family: inherit; outline: none; }
+.contacto-notes-input { padding: 8px 12px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); font-family: inherit; outline: none; resize: vertical; }
+.contacto-notes-input:focus { border-color: var(--accent); }
+.contactos-list { display: flex; flex-direction: column; gap: 10px; }
+.contacto-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px !important; }
+.contacto-item.editing { flex-direction: column; align-items: stretch; gap: 10px; }
+.contacto-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; flex-shrink: 0; }
+.contacto-info { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.contacto-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.contacto-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.contacto-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); background: var(--bg-hover); border: 1px solid var(--border); padding: 3px 9px; border-radius: 12px; }
+.contacto-notes { font-size: 12px; color: var(--text-secondary); margin: 2px 0 0; white-space: pre-wrap; }
+.contacto-item .cliente-done { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: none; background: var(--accent); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }

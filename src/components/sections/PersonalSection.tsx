@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
-import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Bold, Italic, Underline, List, Palette, Type, Eye, EyeOff, Search, Save } from 'lucide-react'
+import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Bold, Italic, Underline, List, Palette, Type, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder } from 'lucide-react'
 import { addNotification } from '../../lib/notifications'
 import { useConfirm } from '../ConfirmDialog'
+import { useSecurity, SecurityGate } from '../../lib/security'
 import './PersonalSection.css'
 
 // ============ SALUD ============
@@ -62,8 +63,17 @@ function WaterCounter() {
   )
 }
 
-interface ExerciseData { name: string; sets: number; reps: string; rest: string; tip: string }
+interface ExerciseData { name: string; sets: number; reps: string; rest: string; tip: string; mode?: 'reps' | 'time'; time?: string; youtube?: string }
 interface Routine { id: string; name: string; description: string; exercises: ExerciseData[]; color: string; emoji: string; weeks?: ExerciseData[][] }
+
+// Notify HoyPanel (and Inicio) so it re-reads routines/week in real time.
+function notifyRoutines() { try { window.dispatchEvent(new CustomEvent('nn-routines-updated')) } catch {} }
+// Open a YouTube (or any) link in the system browser, from Electron or the web.
+function openLink(url?: string) {
+  if (!url) return
+  const u = /^https?:\/\//i.test(url) ? url : `https://${url}`
+  try { if (window.electronAPI?.openExternal) window.electronAPI.openExternal(u); else window.open(u, '_blank') } catch { window.open(u, '_blank') }
+}
 
 const EMOJI_OPTIONS = ['💪', '🏋️', '🤸', '🦵', '🧘', '🔥', '⚡', '🏃', '🤾', '🚴', '🧗', '🥊']
 const ROUTINE_COLORS = ['#ef4444', '#3b82f6', '#8b5cf6', '#f97316', '#22c55e', '#06b6d4', '#eab308', '#ec4899']
@@ -98,7 +108,7 @@ function ExercisePanel() {
   const [newPanelName, setNewPanelName] = useState('')
   const [weekPlan, setWeekPlan] = useState<Record<string, string>>(() => { try { const s = localStorage.getItem('nn-week-routine'); return s ? JSON.parse(s) : {} } catch { return {} } })
   const [activeWeek, setActiveWeek] = useState<number>(() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })
-  const saveActiveWeek = (w: number) => { setActiveWeek(w); localStorage.setItem('nn-active-week', String(w)) }
+  const saveActiveWeek = (w: number) => { setActiveWeek(w); localStorage.setItem('nn-active-week', String(w)); notifyRoutines() }
 
   // Deep-link from Inicio's "Rutina de hoy" panel: open today's routine directly.
   useEffect(() => {
@@ -114,8 +124,8 @@ function ExercisePanel() {
 
   const isStretch = showSection === 'estiramientos'
   const list = isStretch ? stretches : routines
-  const saveList = (l: Routine[]) => { if (isStretch) { setStretches(l); localStorage.setItem('nn-stretches', JSON.stringify(l)) } else { setRoutines(l); localStorage.setItem('nn-exercise-routines', JSON.stringify(l)) } }
-  const saveWeek = (w: Record<string, string>) => { setWeekPlan(w); localStorage.setItem('nn-week-routine', JSON.stringify(w)) }
+  const saveList = (l: Routine[]) => { if (isStretch) { setStretches(l); localStorage.setItem('nn-stretches', JSON.stringify(l)) } else { setRoutines(l); localStorage.setItem('nn-exercise-routines', JSON.stringify(l)) } notifyRoutines() }
+  const saveWeek = (w: Record<string, string>) => { setWeekPlan(w); localStorage.setItem('nn-week-routine', JSON.stringify(w)); notifyRoutines() }
 
   // Week-aware exercise storage. Week 0 stays in `exercises` for backwards-compat;
   // all 4 weeks live in `weeks` once edited.
@@ -129,7 +139,7 @@ function ExercisePanel() {
 
   const updateRoutine = (id: string, u: Partial<Routine>) => saveList(list.map(r => r.id === id ? { ...r, ...u } : r))
   const updateExercise = (rid: string, idx: number, u: Partial<ExerciseData>) => { const r = list.find(x => x.id === rid); if (!r) return; setWeekExercises(rid, week, exercisesOf(r, week).map((e, i) => i === idx ? { ...e, ...u } : e)) }
-  const addExercise = (rid: string) => { const r = list.find(x => x.id === rid); if (!r) return; setWeekExercises(rid, week, [...exercisesOf(r, week), { name: 'Nuevo ejercicio', sets: 3, reps: '12', rest: '60s', tip: '' }]) }
+  const addExercise = (rid: string) => { const r = list.find(x => x.id === rid); if (!r) return; setWeekExercises(rid, week, [...exercisesOf(r, week), { name: 'Nuevo ejercicio', sets: 3, reps: '12', rest: '60s', tip: '', mode: 'reps' }]) }
   const removeExercise = (rid: string, idx: number) => { const r = list.find(x => x.id === rid); if (!r) return; setWeekExercises(rid, week, exercisesOf(r, week).filter((_, i) => i !== idx)) }
   const removeRoutine = (id: string) => { saveList(list.filter(r => r.id !== id)); setActiveRoutine(null) }
 
@@ -170,18 +180,31 @@ function ExercisePanel() {
           ))}
         </div>
         <div className="exercise-edit-list">
-          {exercisesOf(routine, week).map((e, i) => (
+          {exercisesOf(routine, week).map((e, i) => {
+            const mode = e.mode || 'reps'
+            return (
             <div key={i} className="exercise-edit-item">
               <input className="ex-name" value={e.name} onChange={ev => updateExercise(routine.id, i, { name: ev.target.value })} />
               <div className="ex-fields">
                 <label>Series<input type="number" value={e.sets} onChange={ev => updateExercise(routine.id, i, { sets: Number(ev.target.value) })} /></label>
-                <label>Reps<input value={e.reps} onChange={ev => updateExercise(routine.id, i, { reps: ev.target.value })} /></label>
-                <label>Desc.<input value={e.rest} onChange={ev => updateExercise(routine.id, i, { rest: ev.target.value })} /></label>
+                <div className="ex-mode-toggle">
+                  <button className={mode === 'reps' ? 'active' : ''} onClick={() => updateExercise(routine.id, i, { mode: 'reps' })}>Reps</button>
+                  <button className={mode === 'time' ? 'active' : ''} onClick={() => updateExercise(routine.id, i, { mode: 'time' })}>Tiempo</button>
+                </div>
+                {mode === 'time'
+                  ? <label>Tiempo<input value={e.time || ''} placeholder="30s" onChange={ev => updateExercise(routine.id, i, { time: ev.target.value })} /></label>
+                  : <label>Reps<input value={e.reps} onChange={ev => updateExercise(routine.id, i, { reps: ev.target.value })} /></label>}
                 <button className="ex-del" onClick={() => removeExercise(routine.id, i)}><X size={12} /></button>
               </div>
-              <input className="ex-tip" value={e.tip} placeholder="Tip (opcional)..." onChange={ev => updateExercise(routine.id, i, { tip: ev.target.value })} />
+              <div className="ex-youtube-row">
+                <Play size={14} className="ex-youtube-icon" />
+                <input className="ex-youtube" value={e.youtube || ''} placeholder="Link de YouTube (opcional)..." onChange={ev => updateExercise(routine.id, i, { youtube: ev.target.value })} />
+                {e.youtube?.trim() && <button className="ex-youtube-open" onClick={() => openLink(e.youtube)} title="Ver video"><Play size={13} /> Ver</button>}
+              </div>
+              <input className="ex-tip" value={e.tip} placeholder="Descripción o tips..." onChange={ev => updateExercise(routine.id, i, { tip: ev.target.value })} />
             </div>
-          ))}
+            )
+          })}
           <button className="custom-panel-add-ex" onClick={() => addExercise(routine.id)}><Plus size={12} /> Agregar ejercicio</button>
           <button className="exercise-delete-routine" onClick={() => removeRoutine(routine.id)}><Trash2 size={12} /> Eliminar rutina</button>
         </div>
@@ -387,7 +410,7 @@ function TarjetasTab() {
     save(cards.filter(c => c.id !== id))
   }
 
-  if (!unlocked) return (<div className="tarjetas-lock"><Lock size={32} /><p>Ingresá la contraseña para acceder</p><div className="tarjetas-lock-form"><input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(false) }} onKeyDown={e => e.key === 'Enter' && tryUnlock()} placeholder="Contraseña" /><button onClick={tryUnlock}>Ingresar</button></div>{error && <span className="tarjetas-error">Contraseña incorrecta</span>}</div>)
+  const lockScreen = (<div className="tarjetas-lock"><Lock size={32} /><p>Ingresá la contraseña para acceder</p><div className="tarjetas-lock-form"><input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(false) }} onKeyDown={e => e.key === 'Enter' && tryUnlock()} placeholder="Contraseña" /><button onClick={tryUnlock}>Ingresar</button></div>{error && <span className="tarjetas-error">Contraseña incorrecta</span>}</div>)
 
   const filtered = cards.filter(c => {
     if (filterType !== 'all' && c.type !== filterType) return false
@@ -398,10 +421,10 @@ function TarjetasTab() {
   return (
     <div className="tarjetas-content">
       <div className="tarjetas-subtabs">
-        <button className={subtab === 'tarjetas' ? 'active' : ''} onClick={() => setSubtab('tarjetas')}><CreditCard size={13} /> Tarjetas</button>
+        <button className={subtab === 'tarjetas' ? 'active' : ''} onClick={() => setSubtab('tarjetas')}><CreditCard size={13} /> Tarjetas {!unlocked && <Lock size={11} />}</button>
         <button className={subtab === 'pedidosya' ? 'active' : ''} onClick={() => setSubtab('pedidosya')}>🛵 Pedidos Ya</button>
       </div>
-      {subtab === 'pedidosya' ? <PedidosYaTab cards={cards} /> : (
+      {subtab === 'pedidosya' ? <PedidosYaTab cards={cards} /> : !unlocked ? lockScreen : (
       <>
       <div className="tarjetas-toolbar">
         <div className="tarjetas-search"><Search size={14} /><input placeholder="Buscar por nombre o banco..." value={search} onChange={e => setSearch(e.target.value)} /></div>
@@ -484,15 +507,29 @@ function BlockEditor({ block, onChange, onEnter, onBackspaceEmpty }: { block: Te
 
 const BLOCK_COLORS = ['#1d1d1f', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899']
 
+// Anotaciones estilo Notion: cada "página" guarda su propio set de bloques.
+interface NotePage { id: string; name: string; blocks: TextBlock[] }
+function loadPages(): NotePage[] {
+  try {
+    const s = localStorage.getItem('nn-reminder-blocks')
+    if (s) {
+      const parsed = JSON.parse(s)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed[0]?.blocks)) return parsed as NotePage[]
+        // Legacy: a flat array of blocks → wrap into a single page.
+        return [{ id: 'page-0', name: 'Página 1', blocks: parsed.map((b: any) => ({ id: b.id, html: b.html ?? (b.text || '') })) }]
+      }
+    }
+  } catch {}
+  return [{ id: 'page-0', name: 'Página 1', blocks: [{ id: 'blk-0', html: '' }] }]
+}
+
 function RecordatoriosTab() {
   const [reminders, setReminders] = useState<Reminder[]>(() => { try { const s = localStorage.getItem('nn-reminders'); return s ? JSON.parse(s) : [] } catch { return [] } })
-  const [blocks, setBlocks] = useState<TextBlock[]>(() => {
-    try {
-      const s = localStorage.getItem('nn-reminder-blocks')
-      if (s) { const arr = JSON.parse(s); return arr.map((b: any) => ({ id: b.id, html: b.html ?? (b.text || '') })) }
-    } catch {}
-    return [{ id: 'blk-0', html: '' }]
-  })
+  const [pages, setPages] = useState<NotePage[]>(loadPages)
+  const [activePage, setActivePage] = useState<string>(pages[0]?.id || 'page-0')
+  const [editingPage, setEditingPage] = useState<string | null>(null)
+  const confirm = useConfirm()
   const [showReminders, setShowReminders] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [newText, setNewText] = useState('')
@@ -504,7 +541,20 @@ function RecordatoriosTab() {
   const [fmtMenu, setFmtMenu] = useState<string | null>(null)
 
   const save = (r: Reminder[]) => { setReminders(r); localStorage.setItem('nn-reminders', JSON.stringify(r)) }
-  const saveBlocks = (b: TextBlock[]) => { setBlocks(b); localStorage.setItem('nn-reminder-blocks', JSON.stringify(b)) }
+  const savePages = (p: NotePage[]) => { setPages(p); localStorage.setItem('nn-reminder-blocks', JSON.stringify(p)) }
+  const page = pages.find(p => p.id === activePage) || pages[0]
+  const blocks = page?.blocks || []
+  const saveBlocks = (b: TextBlock[]) => savePages(pages.map(p => p.id === page.id ? { ...p, blocks: b } : p))
+  const addPage = () => { const id = 'page-' + Date.now(); savePages([...pages, { id, name: 'Nueva página', blocks: [{ id: 'blk-' + Date.now(), html: '' }] }]); setActivePage(id); setEditingPage(id) }
+  const renamePage = (id: string, name: string) => savePages(pages.map(p => p.id === id ? { ...p, name } : p))
+  const removePage = async (id: string) => {
+    const p = pages.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar página', message: `¿Eliminar la página «${p?.name || ''}» y todas sus anotaciones?`, confirmLabel: 'Eliminar' })) return
+    const next = pages.filter(p => p.id !== id)
+    const safe = next.length ? next : [{ id: 'page-0', name: 'Página 1', blocks: [{ id: 'blk-0', html: '' }] }]
+    savePages(safe)
+    if (activePage === id) setActivePage(safe[0].id)
+  }
   const addReminder = () => {
     if (!newText.trim()) return
     const r: Reminder = { id: 'rem-' + Date.now(), text: newText.trim(), type: newType, date: newType === 'planificado' ? newDate : undefined, done: false, createdAt: new Date().toISOString() }
@@ -550,6 +600,21 @@ function RecordatoriosTab() {
 
   return (
     <div className="anotaciones-content">
+      <div className="anotaciones-pages">
+        {pages.map(p => (
+          <div key={p.id} className={`anotaciones-page-tab ${activePage === p.id ? 'active' : ''}`} onClick={() => setActivePage(p.id)}>
+            <Folder size={12} />
+            {editingPage === p.id ? (
+              <input className="anotaciones-page-edit" value={p.name} onChange={e => renamePage(p.id, e.target.value)} onBlur={() => setEditingPage(null)} onKeyDown={e => e.key === 'Enter' && setEditingPage(null)} autoFocus onClick={e => e.stopPropagation()} />
+            ) : (
+              <span className="anotaciones-page-name" onDoubleClick={() => setEditingPage(p.id)}>{p.name}</span>
+            )}
+            {activePage === p.id && <button className="anotaciones-page-editbtn" onClick={e => { e.stopPropagation(); setEditingPage(editingPage === p.id ? null : p.id) }} title="Renombrar"><Edit3 size={10} /></button>}
+            {pages.length > 1 && activePage === p.id && <button className="anotaciones-page-del" onClick={e => { e.stopPropagation(); removePage(p.id) }} title="Eliminar página"><X size={11} /></button>}
+          </div>
+        ))}
+        <button className="anotaciones-page-add" onClick={addPage} title="Nueva página"><Plus size={13} /></button>
+      </div>
       <div className="bloques-toolbar">
         <button className="bloques-btn bloques-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h1')} title="Encabezado 1">H1</button>
         <button className="bloques-btn bloques-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h2')} title="Encabezado 2">H2</button>
@@ -595,7 +660,7 @@ function RecordatoriosTab() {
           </div>
         ))}
         {fmtMenu && <div className="bloque-fmt-backdrop" onClick={() => setFmtMenu(null)} />}
-        <button className="bloque-add" onClick={() => addBlockAfter(blocks[blocks.length - 1].id)}><Plus size={12} /> Agregar bloque</button>
+        <button className="bloque-add" onClick={() => addBlockAfter(blocks[blocks.length - 1]?.id || '')}><Plus size={12} /> Agregar bloque</button>
       </div>
 
       {showReminders && (
@@ -631,8 +696,27 @@ interface ShoppingGroup { id: string; name: string; color: string; items: Shoppi
 const defaultGroupColors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
 const defaultCategories = ['Bebidas', 'Alimentos', 'Higiene', 'Limpieza', 'Otros']
 
+// Lists live inside boards ("pestañas"); each board holds several lists (groups).
+interface ShoppingBoard { id: string; name: string; groups: ShoppingGroup[] }
+function loadBoards(): ShoppingBoard[] {
+  try {
+    const s = localStorage.getItem('nn-shopping')
+    if (s) {
+      const parsed = JSON.parse(s)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed[0]?.groups)) return parsed as ShoppingBoard[]
+        // Legacy: a flat array of lists → wrap into a single default board.
+        return [{ id: 'board-0', name: 'General', groups: parsed as ShoppingGroup[] }]
+      }
+    }
+  } catch {}
+  return [{ id: 'board-0', name: 'General', groups: [] }]
+}
+
 function ListaComprasTab() {
-  const [groups, setGroups] = useState<ShoppingGroup[]>(() => { try { const s = localStorage.getItem('nn-shopping'); return s ? JSON.parse(s) : [] } catch { return [] } })
+  const [boards, setBoards] = useState<ShoppingBoard[]>(loadBoards)
+  const [activeBoard, setActiveBoard] = useState<string>(boards[0]?.id || 'board-0')
+  const [editingBoard, setEditingBoard] = useState<string | null>(null)
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupColor, setNewGroupColor] = useState('#3b82f6')
   const [showNewGroup, setShowNewGroup] = useState(false)
@@ -643,41 +727,72 @@ function ListaComprasTab() {
   const [filterCat, setFilterCat] = useState<string | null>(null)
 
   const confirm = useConfirm()
-  const save = (g: ShoppingGroup[]) => { setGroups(g); localStorage.setItem('nn-shopping', JSON.stringify(g)) }
+  const saveBoards = (b: ShoppingBoard[]) => { setBoards(b); localStorage.setItem('nn-shopping', JSON.stringify(b)) }
+  const board = boards.find(b => b.id === activeBoard) || boards[0]
+  const groups = board?.groups || []
+  const setGroups = (g: ShoppingGroup[]) => saveBoards(boards.map(b => b.id === board.id ? { ...b, groups: g } : b))
+
+  // Board (pestaña) management
+  const addBoard = () => { const id = 'board-' + Date.now(); saveBoards([...boards, { id, name: 'Nueva pestaña', groups: [] }]); setActiveBoard(id); setEditingBoard(id) }
+  const renameBoard = (id: string, name: string) => saveBoards(boards.map(b => b.id === id ? { ...b, name } : b))
+  const removeBoard = async (id: string) => {
+    const b = boards.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar pestaña', message: `¿Eliminar la pestaña «${b?.name || ''}» y sus ${b?.groups.length || 0} listas?`, confirmLabel: 'Eliminar' })) return
+    const next = boards.filter(b => b.id !== id)
+    const safe = next.length ? next : [{ id: 'board-0', name: 'General', groups: [] }]
+    saveBoards(safe)
+    if (activeBoard === id) setActiveBoard(safe[0].id)
+  }
 
   const addGroup = () => {
     if (!newGroupName.trim()) return
     const id = 'sg-' + Date.now()
-    save([...groups, { id, name: newGroupName.trim(), color: newGroupColor, items: [] }])
+    setGroups([...groups, { id, name: newGroupName.trim(), color: newGroupColor, items: [] }])
     setNewGroupName(''); setShowNewGroup(false); setNewGroupColor(defaultGroupColors[(groups.length + 1) % defaultGroupColors.length])
   }
   const removeGroup = async (id: string) => {
     const g = groups.find(x => x.id === id)
     if (!await confirm({ title: 'Eliminar lista', message: `¿Eliminar la lista «${g?.name || ''}» y sus ${g?.items.length || 0} ítems?`, confirmLabel: 'Eliminar lista' })) return
-    save(groups.filter(g => g.id !== id))
+    setGroups(groups.filter(g => g.id !== id))
   }
-  const updateGroup = (id: string, u: Partial<ShoppingGroup>) => save(groups.map(g => g.id === id ? { ...g, ...u } : g))
+  const updateGroup = (id: string, u: Partial<ShoppingGroup>) => setGroups(groups.map(g => g.id === id ? { ...g, ...u } : g))
   const duplicateGroup = (id: string) => {
     const g = groups.find(g => g.id === id); if (!g) return
     const dup: ShoppingGroup = { ...g, id: 'sg-' + Date.now(), name: g.name + ' (copia)', items: g.items.map(i => ({ ...i, id: 'si-' + Date.now() + Math.random().toString(36).slice(2, 5) })) }
     const idx = groups.findIndex(x => x.id === id)
-    const next = [...groups]; next.splice(idx + 1, 0, dup); save(next)
+    const next = [...groups]; next.splice(idx + 1, 0, dup); setGroups(next)
   }
 
   const addItem = (groupId: string) => {
     const text = newItemTexts[groupId]?.trim(); if (!text) return
     const cat = newItemCats[groupId] || undefined
-    save(groups.map(g => g.id === groupId ? { ...g, items: [...g.items, { id: 'si-' + Date.now(), text, done: false, category: cat }] } : g))
+    setGroups(groups.map(g => g.id === groupId ? { ...g, items: [...g.items, { id: 'si-' + Date.now(), text, done: false, category: cat }] } : g))
     setNewItemTexts({ ...newItemTexts, [groupId]: '' })
   }
-  const toggleItem = (groupId: string, itemId: string) => save(groups.map(g => g.id === groupId ? { ...g, items: g.items.map(i => i.id === itemId ? { ...i, done: !i.done } : i) } : g))
-  const removeItem = (groupId: string, itemId: string) => save(groups.map(g => g.id === groupId ? { ...g, items: g.items.filter(i => i.id !== itemId) } : g))
+  const toggleItem = (groupId: string, itemId: string) => setGroups(groups.map(g => g.id === groupId ? { ...g, items: g.items.map(i => i.id === itemId ? { ...i, done: !i.done } : i) } : g))
+  const removeItem = (groupId: string, itemId: string) => setGroups(groups.map(g => g.id === groupId ? { ...g, items: g.items.filter(i => i.id !== itemId) } : g))
 
   const totalItems = groups.reduce((a, g) => a + g.items.length, 0)
   const doneItems = groups.reduce((a, g) => a + g.items.filter(i => i.done).length, 0)
 
   return (
     <div className="shopping-content">
+      <div className="shopping-boards">
+        {boards.map(b => (
+          <div key={b.id} className={`shopping-board-tab ${activeBoard === b.id ? 'active' : ''}`} onClick={() => setActiveBoard(b.id)}>
+            {editingBoard === b.id ? (
+              <input className="shopping-board-name-edit" value={b.name} onChange={e => renameBoard(b.id, e.target.value)} onBlur={() => setEditingBoard(null)} onKeyDown={e => e.key === 'Enter' && setEditingBoard(null)} autoFocus onClick={e => e.stopPropagation()} />
+            ) : (
+              <span className="shopping-board-name" onDoubleClick={() => setEditingBoard(b.id)}>{b.name}</span>
+            )}
+            <span className="shopping-board-count">{b.groups.length}</span>
+            {activeBoard === b.id && <button className="shopping-board-edit" onClick={e => { e.stopPropagation(); setEditingBoard(editingBoard === b.id ? null : b.id) }} title="Renombrar pestaña"><Edit3 size={10} /></button>}
+            {boards.length > 1 && activeBoard === b.id && <button className="shopping-board-del" onClick={e => { e.stopPropagation(); removeBoard(b.id) }} title="Eliminar pestaña"><X size={11} /></button>}
+          </div>
+        ))}
+        <button className="shopping-board-add" onClick={addBoard} title="Nueva pestaña"><Plus size={13} /></button>
+      </div>
+
       <div className="shopping-header">
         <div className="shopping-stats">
           {totalItems > 0 && <span className="shopping-progress">{doneItems}/{totalItems} completados</span>}
@@ -958,6 +1073,12 @@ function ObjetivosTab() {
   }
   const update = (id: string, u: Partial<Goal>) => save(goals.map(g => g.id === id ? { ...g, ...u } : g))
   const remove = (id: string) => save(goals.filter(g => g.id !== id))
+  const duplicate = (id: string) => {
+    const g = goals.find(x => x.id === id); if (!g) return
+    const idx = goals.findIndex(x => x.id === id)
+    const dup: Goal = { ...g, id: 'goal-' + Date.now(), title: g.title + ' (copia)' }
+    const next = [...goals]; next.splice(idx + 1, 0, dup); save(next)
+  }
   const move = (id: string, dir: -1 | 1) => {
     const idx = goals.findIndex(g => g.id === id); const ni = idx + dir
     if (ni < 0 || ni >= goals.length) return
@@ -986,6 +1107,7 @@ function ObjetivosTab() {
           <button onClick={() => move(g.id, -1)}><ChevronUp size={12} /></button>
           <button onClick={() => move(g.id, 1)}><ChevronDown size={12} /></button>
         </div>
+        <button className="shopping-group-edit" onClick={() => duplicate(g.id)} title="Clonar objetivo"><Copy size={13} /></button>
         <button className="shopping-item-delete" onClick={() => remove(g.id)}><Trash2 size={13} /></button>
       </div>
     </div>
@@ -1035,11 +1157,98 @@ function ObjetivosTab() {
   )
 }
 
+// ============ CONTACTOS ============
+interface Contact { id: string; name: string; phone: string; email: string; address: string; notes: string }
+const emptyContact = { name: '', phone: '', email: '', address: '', notes: '' }
+
+function ContactosTab() {
+  const [contacts, setContacts] = useState<Contact[]>(() => { try { const s = localStorage.getItem('nn-contacts'); return s ? JSON.parse(s) : [] } catch { return [] } })
+  const [search, setSearch] = useState('')
+  const [showNew, setShowNew] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [form, setForm] = useState({ ...emptyContact })
+  const confirm = useConfirm()
+
+  const save = (c: Contact[]) => { setContacts(c); localStorage.setItem('nn-contacts', JSON.stringify(c)) }
+  const add = () => { if (!form.name.trim()) return; save([{ id: 'ct-' + Date.now(), ...form, name: form.name.trim() }, ...contacts]); setForm({ ...emptyContact }); setShowNew(false) }
+  const update = (id: string, u: Partial<Contact>) => save(contacts.map(c => c.id === id ? { ...c, ...u } : c))
+  const remove = async (id: string) => { const c = contacts.find(x => x.id === id); if (!await confirm({ title: 'Eliminar contacto', message: `¿Eliminar a «${c?.name || 'este contacto'}»?` })) return; save(contacts.filter(c => c.id !== id)) }
+  const duplicate = (id: string) => { const c = contacts.find(x => x.id === id); if (!c) return; const idx = contacts.findIndex(x => x.id === id); const dup: Contact = { ...c, id: 'ct-' + Date.now(), name: c.name + ' (copia)' }; const next = [...contacts]; next.splice(idx + 1, 0, dup); save(next) }
+
+  const q = search.trim().toLowerCase()
+  const filtered = contacts.filter(c => !q || c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.email.toLowerCase().includes(q) || c.address.toLowerCase().includes(q))
+
+  return (
+    <div className="contactos-content">
+      <div className="contactos-toolbar">
+        <div className="tarjetas-search"><Search size={14} /><input placeholder="Buscar por nombre, teléfono, correo o dirección..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <button className="shopping-add-group-btn" onClick={() => setShowNew(!showNew)}><Plus size={14} /> Nuevo contacto</button>
+      </div>
+
+      {showNew && (
+        <div className="card contacto-form">
+          <input className="contacto-name-input" placeholder="Nombre *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && add()} autoFocus />
+          <div className="contacto-form-row">
+            <label className="contacto-field"><Phone size={13} /><input placeholder="Teléfono" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></label>
+            <label className="contacto-field"><Mail size={13} /><input placeholder="Correo electrónico" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></label>
+          </div>
+          <label className="contacto-field contacto-field-full"><MapPin size={13} /><input placeholder="Dirección" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></label>
+          <textarea className="contacto-notes-input" placeholder="Notas..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} />
+          <div className="form-actions">
+            <button className="form-cancel" onClick={() => { setShowNew(false); setForm({ ...emptyContact }) }}>Cancelar</button>
+            <button className="shopping-create-btn" onClick={add} disabled={!form.name.trim()}>Guardar</button>
+          </div>
+        </div>
+      )}
+
+      <div className="contactos-list">
+        {filtered.map(c => editId === c.id ? (
+          <div key={c.id} className="card contacto-item editing">
+            <input className="contacto-name-input" value={c.name} onChange={e => update(c.id, { name: e.target.value })} placeholder="Nombre" />
+            <div className="contacto-form-row">
+              <label className="contacto-field"><Phone size={13} /><input value={c.phone} onChange={e => update(c.id, { phone: e.target.value })} placeholder="Teléfono" /></label>
+              <label className="contacto-field"><Mail size={13} /><input value={c.email} onChange={e => update(c.id, { email: e.target.value })} placeholder="Correo" /></label>
+            </div>
+            <label className="contacto-field contacto-field-full"><MapPin size={13} /><input value={c.address} onChange={e => update(c.id, { address: e.target.value })} placeholder="Dirección" /></label>
+            <textarea className="contacto-notes-input" value={c.notes} onChange={e => update(c.id, { notes: e.target.value })} placeholder="Notas..." rows={2} />
+            <button className="cliente-done" onClick={() => setEditId(null)}><Check size={14} /> Listo</button>
+          </div>
+        ) : (
+          <div key={c.id} className="card contacto-item">
+            <div className="contacto-avatar">{c.name.charAt(0).toUpperCase() || <User size={18} />}</div>
+            <div className="contacto-info">
+              <span className="contacto-name">{c.name}</span>
+              <div className="contacto-meta">
+                {c.phone && <span className="contacto-tag"><Phone size={11} /> {c.phone}</span>}
+                {c.email && <span className="contacto-tag"><Mail size={11} /> {c.email}</span>}
+                {c.address && <span className="contacto-tag"><MapPin size={11} /> {c.address}</span>}
+              </div>
+              {c.notes && <p className="contacto-notes">{c.notes}</p>}
+            </div>
+            <button className="shopping-group-edit" onClick={() => setEditId(c.id)} title="Editar"><Edit3 size={13} /></button>
+            <button className="shopping-group-edit" onClick={() => duplicate(c.id)} title="Duplicar"><Copy size={13} /></button>
+            <button className="shopping-item-delete" onClick={() => remove(c.id)}><Trash2 size={13} /></button>
+          </div>
+        ))}
+        {filtered.length === 0 && <div className="shopping-empty"><ContactIcon size={28} /><p>{q ? 'Sin resultados' : 'Sin contactos todavía. Agregá el primero.'}</p></div>}
+      </div>
+    </div>
+  )
+}
+
 // ============ HOY PANEL (today's routine) ============
 const FULL_WEEKDAYS_ES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const WEEK_KEYS_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'] // index by getDay()
 
 function HoyPanel() {
+  // Re-read routines/week whenever the Creador saves (real-time sync).
+  const [, force] = useState(0)
+  useEffect(() => {
+    const onChange = () => force(x => x + 1)
+    window.addEventListener('nn-routines-updated', onChange)
+    window.addEventListener('storage', onChange)
+    return () => { window.removeEventListener('nn-routines-updated', onChange); window.removeEventListener('storage', onChange) }
+  }, [])
   const now = new Date()
   const dow = now.getDay()
   const activeWeek = (() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })()
@@ -1069,7 +1278,7 @@ function HoyPanel() {
         <div className="hoy-exercises">
           <span className="hoy-ex-label">Ejercicios de hoy</span>
           {weekEx.map((e, i) => (
-            <div key={i} className="hoy-ex-item"><span className="hoy-ex-dot" style={{ background: routine?.color }} />{e.name}<span className="hoy-ex-meta">{e.sets}×{e.reps}</span></div>
+            <div key={i} className="hoy-ex-item"><span className="hoy-ex-dot" style={{ background: routine?.color }} />{e.name}<span className="hoy-ex-meta">{e.sets}×{e.mode === 'time' ? (e.time || e.reps) : e.reps}</span></div>
           ))}
         </div>
       )}
@@ -1078,16 +1287,17 @@ function HoyPanel() {
 }
 
 // ============ MAIN ============
-type PersonalTab = 'salud' | 'tarjetas' | 'anotaciones' | 'compras' | 'wishlist' | 'diario' | 'objetivos'
+type PersonalTab = 'salud' | 'tarjetas' | 'anotaciones' | 'compras' | 'wishlist' | 'diario' | 'objetivos' | 'contactos'
 
 const defaultTabOrder: { id: PersonalTab; label: string; iconName: string }[] = [
   { id: 'salud', label: 'Salud', iconName: 'heart' },
   { id: 'tarjetas', label: 'Tarjetas', iconName: 'creditcard' },
   { id: 'anotaciones', label: 'Anotaciones', iconName: 'stickynote' },
-  { id: 'compras', label: 'Lista de compras', iconName: 'shoppingcart' },
+  { id: 'compras', label: 'Listas', iconName: 'shoppingcart' },
   { id: 'wishlist', label: 'Compras', iconName: 'shoppingbag' },
   { id: 'diario', label: 'Diario', iconName: 'book' },
   { id: 'objetivos', label: 'Objetivos', iconName: 'target' },
+  { id: 'contactos', label: 'Contactos', iconName: 'contact' },
 ]
 
 const tabIcons: Record<string, React.ReactNode> = {
@@ -1098,17 +1308,20 @@ const tabIcons: Record<string, React.ReactNode> = {
   shoppingbag: <ShoppingBag size={13} />,
   book: <BookOpen size={13} />,
   target: <Target size={13} />,
+  contact: <ContactIcon size={13} />,
 }
 
 function loadTabOrder(): typeof defaultTabOrder {
   try {
     const s = localStorage.getItem('nn-personal-tab-order')
     if (s) {
-      // Alquiler moved to the new Finanzas section — drop any stale saved entry.
-      const saved = (JSON.parse(s) as typeof defaultTabOrder).filter(t => (t.id as string) !== 'alquiler')
-      const existingIds = new Set(saved.map(t => t.id))
-      const missing = defaultTabOrder.filter(t => !existingIds.has(t.id))
-      return [...saved, ...missing]
+      // Preserve only the saved ORDER; labels/icons always come from defaults
+      // (so renames like "Lista de compras" → "Listas" apply) and new tabs
+      // (e.g. Contactos) are appended. Alquiler moved to Finanzas → drop it.
+      const savedIds = (JSON.parse(s) as { id: string }[]).map(t => t.id).filter(id => id !== 'alquiler' && defaultTabOrder.some(d => d.id === id))
+      const ordered = savedIds.map(id => defaultTabOrder.find(d => d.id === id)!)
+      const missing = defaultTabOrder.filter(d => !savedIds.includes(d.id))
+      return [...ordered, ...missing]
     }
   } catch {}
   return defaultTabOrder
@@ -1119,6 +1332,7 @@ export default function PersonalSection() {
   const [tabOrder, setTabOrder] = useState(loadTabOrder)
   const dragRef = useRef<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
+  const security = useSecurity()
 
   const saveOrder = (order: typeof defaultTabOrder) => { setTabOrder(order); localStorage.setItem('nn-personal-tab-order', JSON.stringify(order)) }
   const onDragStart = (idx: number) => { dragRef.current = idx }
@@ -1148,8 +1362,9 @@ export default function PersonalSection() {
       {tab === 'anotaciones' && <RecordatoriosTab />}
       {tab === 'compras' && <ListaComprasTab />}
       {tab === 'wishlist' && <WishlistTab />}
-      {tab === 'diario' && <DiarioTab />}
-      {tab === 'objetivos' && <ObjetivosTab />}
+      {tab === 'diario' && (security.lockDiary ? <SecurityGate title="Diario"><DiarioTab /></SecurityGate> : <DiarioTab />)}
+      {tab === 'objetivos' && (security.lockGoals ? <SecurityGate title="Objetivos"><ObjetivosTab /></SecurityGate> : <ObjetivosTab />)}
+      {tab === 'contactos' && <ContactosTab />}
     </div>
   )
 }
