@@ -83,7 +83,6 @@ async function fetchScores() {
         if (m.away.score > prev.away) triggerGoal(m.away.name, m)
       }
       prevScores[m.id] = { home: m.home.score, away: m.away.score }
-      if (m.state === 'post') penaltyNotified.delete(m.id) // allow re-arm if the id is reused
     }
 
     hasLive = newMatches.some(m => m.state === 'in')
