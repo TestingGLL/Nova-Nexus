@@ -10,7 +10,7 @@
 .search-result-item:hover { background: var(--bg-hover); }
 
 /* Animated Clock */
-.animated-clock { position: relative; border-radius: 16px; overflow: hidden; min-height: 200px; }
+.animated-clock { position: relative; border-radius: 16px; overflow: hidden; min-height: 200px; background: linear-gradient(135deg, #1a1a2e, #16213e); }
 .clock-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .clock-content { position: relative; z-index: 1; text-align: center; padding: 28px 0 20px; }
 .animated-clock.with-weather .clock-content { padding-left: 150px; }

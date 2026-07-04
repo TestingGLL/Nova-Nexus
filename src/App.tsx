@@ -16,7 +16,7 @@ import './App.css'
 
 export type Section = 'inicio' | 'personal' | 'finanzas' | 'etsy' | 'proyectos' | 'software' | 'edicion' | 'notas' | 'extras' | 'alertas' | 'configuracion'
 
-export const APP_VERSION = '1.00.84'
+export const APP_VERSION = '1.00.85'
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -35,6 +35,23 @@ function App() {
     const id = setInterval(update, 2000)
     return () => clearInterval(id)
   }, [])
+
+  // On first load the app can mis-lay-out under the zoomed root until a reflow
+  // (the "UI se arregla al cambiar de sección o esperar" glitch). Force Chromium
+  // to re-layout right after mount instead of waiting for a later interaction.
+  useEffect(() => {
+    if (!isLoggedIn) return
+    const root = document.documentElement
+    const settle = () => { void document.body.offsetHeight; window.dispatchEvent(new Event('resize')) }
+    const raf = requestAnimationFrame(() => {
+      const z = root.style.zoom
+      if (z) { root.style.zoom = ''; void root.offsetHeight; root.style.zoom = z } // re-apply zoom → full re-layout
+      settle()
+    })
+    const t1 = setTimeout(settle, 250)
+    const t2 = setTimeout(settle, 800)
+    return () => { cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2) }
+  }, [isLoggedIn])
 
   if (!isLoggedIn) {
     return <Login onLogin={() => setIsLoggedIn(true)} />
