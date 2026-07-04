@@ -70,11 +70,12 @@ function BrowserTab() {
 interface BtDevice { id: string; name: string; battery: number | null; class?: string }
 type DevType = 'controller' | 'keyboard' | 'mouse' | 'phone' | 'audio' | 'generic'
 
-function deviceType(name: string): DevType {
+function deviceType(name: string, cls = ''): DevType {
   const n = name.toLowerCase()
+  const c = cls.toLowerCase()
   if (/control|gamepad|joystick|dualsense|dualshock|xbox|8bitdo|gulikit|vstar|dehuka/.test(n)) return 'controller'
-  if (/teclado|keyboard|keychron|rdkm-?9|magic keyboard/.test(n)) return 'keyboard'
-  if (/mouse|rat[oó]n/.test(n)) return 'mouse'
+  if (/mouse|rat[oó]n|mx master|mx anywhere|m720|m590|bolt|logi/.test(n) || c === 'mouse') return 'mouse'
+  if (/teclado|keyboard|keychron|rdkm-?9|magic keyboard/.test(n) || c === 'keyboard') return 'keyboard'
   if (/phone|m[oó]vil|celular|galaxy|iphone|redmi|xiaomi|samsung|android|pixel|motorola|moto |huawei|oppo/.test(n)) return 'phone'
   if (/auricular|headphone|headset|speaker|buds|airpods|jbl|bose|parlante|cascos|wh-|freebuds|earbuds/.test(n)) return 'audio'
   return 'generic'
@@ -129,7 +130,7 @@ function DispositivosTab() {
 
   const nameCounts: Record<string, number> = {}
   const items = devices.map(d => {
-    const type = deviceType(d.name); const base = norm(d.name)
+    const type = deviceType(d.name, d.class); const base = norm(d.name)
     nameCounts[base] = (nameCounts[base] || 0) + 1
     return { key: d.id, name: d.name, type, battery: d.battery, dupIndex: nameCounts[base] }
   })
@@ -326,7 +327,9 @@ function TransferenciasTab() {
   }
 
   const openFolder = () => window.electronAPI?.transferOpenFolder()
-  const clearHistory = async () => { await window.electronAPI?.transferClearReceived(); setReceived([]); setPcMessages([]) }
+  const clearHistory = async () => { setReceived([]); setPcMessages([]); await window.electronAPI?.transferClearReceived(); toast.info('Historial borrado') }
+  // Received files are already saved to the downloads folder — "Descargar todos" reveals them.
+  const downloadAll = () => { openFolder(); toast.success('Los archivos recibidos están en tu carpeta de descargas') }
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
@@ -408,7 +411,16 @@ function TransferenciasTab() {
   }
 
   return (
-    <div className="transfer-panel">
+    <div className={`transfer-panel ${dragOver ? 'drag-over' : ''}`}
+      onDragOver={e => { e.preventDefault(); if (!dragOver) setDragOver(true) }}
+      onDragLeave={e => { if (e.currentTarget === e.target) setDragOver(false) }}
+      onDrop={handleDrop}>
+      {dragOver && (
+        <div className="transfer-drop-overlay">
+          <Download size={44} />
+          <span>Soltá acá para compartir con el celular</span>
+        </div>
+      )}
       <div className="transfer-header">
         <div className="transfer-status"><span className="transfer-dot" /> Servidor activo</div>
         <button className="system-btn-sm danger" onClick={stop}>Detener</button>
@@ -422,15 +434,12 @@ function TransferenciasTab() {
           <p className="transfer-hint">Abrí la cámara de tu Android y escaneá el código.</p>
         </div>
 
-        <div className={`card transfer-shared-card ${dragOver ? 'drag-over' : ''}`}
-          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}>
+        <div className="card transfer-shared-card">
           <div className="transfer-card-head">
             <h4>📤 Compartir desde la PC</h4>
             <button className="system-btn-sm" onClick={addFiles}><Plus size={12} /> Agregar</button>
           </div>
-          {shared.length === 0 && <p className="transfer-empty">Arrastrá archivos acá o hacé clic en Agregar.</p>}
+          {shared.length === 0 && <p className="transfer-empty">Arrastrá archivos o imágenes a cualquier parte, o hacé clic en Agregar.</p>}
           <div className="transfer-file-list">
             {shared.map(f => (
               <div key={f.id} className="transfer-file">
@@ -469,8 +478,9 @@ function TransferenciasTab() {
         <div className="transfer-card-head">
           <h4>📥 Recibidos ({received.length})</h4>
           <div className="transfer-received-actions">
-            {received.length > 0 && <button className="system-btn-sm" onClick={clearHistory}><Trash2 size={12} /> Limpiar</button>}
+            {received.some(f => f.type !== 'text') && <button className="system-btn-sm" onClick={downloadAll}><Download size={12} /> Descargar todos</button>}
             {dir && <button className="system-btn-sm" onClick={openFolder}><FolderOpen size={12} /> Abrir carpeta</button>}
+            {(received.length > 0 || pcMessages.length > 0) && <button className="system-btn-sm danger" onClick={clearHistory}><Trash2 size={12} /> Borrar historial</button>}
           </div>
         </div>
         {received.length === 0 && <p className="transfer-empty">Los archivos del celular aparecen acá. Se limpian automáticamente a las 2 horas.</p>}
@@ -525,7 +535,7 @@ export default function SoftwareSection() {
   const tabMap = Object.fromEntries(SOFT_TABS.map(t => [t.id, t]))
 
   return (
-    <div className="software-section">
+    <div className={`software-section ${tab === 'transferencias' ? 'wide' : ''}`}>
       <div className="software-tabs">
         {order.map((id, i) => { const t = tabMap[id]; if (!t) return null; const dp = tabProps(i); return (
           <button key={id} className={`software-tab ${tab === id ? 'active' : ''} ${dp.className}`} onClick={() => setTab(id)} draggable={dp.draggable} onDragStart={dp.onDragStart} onDragOver={dp.onDragOver} onDrop={dp.onDrop} onDragEnd={dp.onDragEnd}>

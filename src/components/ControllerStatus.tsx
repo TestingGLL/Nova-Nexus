@@ -7,11 +7,12 @@ type DevType = 'controller' | 'keyboard' | 'mouse' | 'phone' | 'audio' | 'generi
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
-function deviceType(name: string): DevType {
+function deviceType(name: string, cls = ''): DevType {
   const n = name.toLowerCase()
+  const c = cls.toLowerCase()
   if (/control|gamepad|joystick|dualsense|dualshock|xbox|8bitdo|gulikit|vstar|dehuka/.test(n)) return 'controller'
-  if (/teclado|keyboard|keychron|rdkm-?9|magic keyboard/.test(n)) return 'keyboard'
-  if (/mouse|rat[oó]n/.test(n)) return 'mouse'
+  if (/mouse|rat[oó]n|mx master|mx anywhere|m720|m590|bolt|logi/.test(n) || c === 'mouse') return 'mouse'
+  if (/teclado|keyboard|keychron|rdkm-?9|magic keyboard/.test(n) || c === 'keyboard') return 'keyboard'
   if (/phone|m[oó]vil|celular|galaxy|iphone|redmi|xiaomi|samsung|android|pixel|motorola|moto |huawei|oppo/.test(n)) return 'phone'
   if (/auricular|headphone|headset|speaker|buds|airpods|jbl|bose|parlante|cascos|wh-|freebuds|earbuds/.test(n)) return 'audio'
   return 'generic'
@@ -78,7 +79,7 @@ export default function ControllerStatus() {
   // Build display list. Number duplicate names so two identical controllers both show distinctly.
   const nameCounts: Record<string, number> = {}
   const items = btVisible.map(d => {
-    const type = deviceType(d.name)
+    const type = deviceType(d.name, d.class)
     const base = norm(d.name)
     nameCounts[base] = (nameCounts[base] || 0) + 1
     let charging = false
@@ -92,14 +93,20 @@ export default function ControllerStatus() {
   // Add a suffix for duplicated names (only when >1 of that name exists).
   const totalByName: Record<string, number> = {}
   for (const it of items) totalByName[norm(it.name)] = (totalByName[norm(it.name)] || 0) + 1
-  const display = items.map(it => ({ ...it, label: totalByName[norm(it.name)] > 1 ? `${it.name} (${it.dupIndex})` : it.name }))
+  // Only show devices that are actually powered on in the top HUD: audio and
+  // controllers that report no battery are treated as OFF (paired but off linger
+  // as present PnP nodes). Battery-reporting devices, mice, keyboards and phones
+  // stay. Active gamepads are added below and always kept.
+  const display = items
+    .map(it => ({ ...it, label: totalByName[norm(it.name)] > 1 ? `${it.name} (${it.dupIndex})` : it.name }))
+    .filter(it => it.battery != null || (it.type !== 'audio' && it.type !== 'controller'))
 
   // Supplement: USB / active gamepads not already represented by a Bluetooth entry.
   for (const g of gamepads) {
     const gn = norm(g.id)
     const label = g.id.replace(/\(.*\)/, '').trim() || `Control ${g.index + 1}`
     if (hidden.includes(norm(label))) continue
-    const already = btVisible.some(d => { const dn = norm(d.name); return dn.includes(gn) || gn.includes(dn) || (deviceType(d.name) === 'controller' && /control|gamepad|wireless/.test(gn)) })
+    const already = btVisible.some(d => { const dn = norm(d.name); return dn.includes(gn) || gn.includes(dn) || (deviceType(d.name, d.class) === 'controller' && /control|gamepad|wireless/.test(gn)) })
     if (!already) {
       display.push({ key: 'gp-' + g.index, name: label, label, type: 'controller', battery: null, charging: false, dupIndex: 1 })
     }
