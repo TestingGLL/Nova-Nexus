@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
-import { FolderKanban, Plus, Trash2, Tag, Search, LayoutList, Columns3, GripVertical, ChevronDown } from 'lucide-react'
+import { FolderKanban, Plus, Trash2, Tag, Search, LayoutList, Columns3, GripVertical, ChevronDown, Edit3, Check } from 'lucide-react'
 import { useConfirm } from '../ConfirmDialog'
-import { allProjectLabels } from '../../lib/projectLabels'
+import { allProjectLabels, type ProjectLabel } from '../../lib/projectLabels'
 import './ProyectosSection.css'
 
-type ProjectStatus = 'todo' | 'progress' | 'done' | 'archived'
+type ProjectStatus = 'sinempezar' | 'todo' | 'progress' | 'done' | 'archived'
 
 interface Project {
   id: string
@@ -15,9 +15,9 @@ interface Project {
   createdAt: string
 }
 
-const statusLabels: Record<ProjectStatus, string> = { todo: 'Por hacer', progress: 'En progreso', done: 'Completado', archived: 'Archivado' }
-const statusColors: Record<ProjectStatus, string> = { todo: '#6b7280', progress: '#3b82f6', done: '#22c55e', archived: '#8b5cf6' }
-const statusOrder: ProjectStatus[] = ['todo', 'progress', 'done', 'archived']
+const statusLabels: Record<ProjectStatus, string> = { sinempezar: 'Sin Empezar', todo: 'Por hacer', progress: 'En progreso', done: 'Completado', archived: 'Archivado' }
+const statusColors: Record<ProjectStatus, string> = { sinempezar: '#94a3b8', todo: '#6b7280', progress: '#3b82f6', done: '#22c55e', archived: '#8b5cf6' }
+const statusOrder: ProjectStatus[] = ['sinempezar', 'todo', 'progress', 'done', 'archived']
 
 function loadProjects(): Project[] {
   try {
@@ -31,15 +31,30 @@ function loadProjects(): Project[] {
 }
 function saveProjects(p: Project[]) { localStorage.setItem('nn-projects', JSON.stringify(p)) }
 
-function ProjectCard({ p, typeLabel, typeColor, onDelete, onStatusChange, dragHandlers }: { p: Project; typeLabel: string; typeColor: string; onDelete: () => void; onStatusChange?: (s: ProjectStatus) => void; dragHandlers?: Record<string, any> }) {
+function ProjectCard({ p, labels, typeLabel, typeColor, onUpdate, onDelete, onStatusChange, dragHandlers }: { p: Project; labels: ProjectLabel[]; typeLabel: string; typeColor: string; onUpdate: (u: Partial<Project>) => void; onDelete: () => void; onStatusChange?: (s: ProjectStatus) => void; dragHandlers?: Record<string, any> }) {
   const [showStatusMenu, setShowStatusMenu] = useState(false)
+  const [showTypeMenu, setShowTypeMenu] = useState(false)
+  const [editing, setEditing] = useState(false)
   return (
     <div className="card proyecto-item" {...dragHandlers}>
       {dragHandlers && <GripVertical size={12} className="proyecto-grip" />}
       <div className="proyecto-header">
-        <h3 className="proyecto-title">{p.title}</h3>
+        {editing
+          ? <input className="proyecto-title-edit" value={p.title} onChange={e => onUpdate({ title: e.target.value })} placeholder="Título del proyecto" autoFocus />
+          : <h3 className="proyecto-title">{p.title}</h3>}
         <div className="proyecto-actions">
-          <span className="proyecto-type-badge" style={{ background: typeColor + '18', color: typeColor }}><Tag size={10} /> {typeLabel}</span>
+          <div className="proyecto-type-wrap">
+            <button className="proyecto-type-badge" style={{ background: typeColor + '18', color: typeColor }} onClick={() => setShowTypeMenu(v => !v)} title="Cambiar etiqueta"><Tag size={10} /> {typeLabel} <ChevronDown size={9} /></button>
+            {showTypeMenu && (
+              <div className="proyecto-status-menu">
+                {labels.map(l => (
+                  <button key={l.id} className={`proyecto-status-option ${p.type === l.id ? 'active' : ''}`} onClick={() => { onUpdate({ type: l.id }); setShowTypeMenu(false) }} style={{ '--status-color': l.color } as React.CSSProperties}>
+                    <span className="proyecto-status-dot" style={{ background: l.color }} />{l.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {onStatusChange && (
             <div className="proyecto-status-wrap">
               <button className="proyecto-status-btn" style={{ color: statusColors[p.status] }} onClick={() => setShowStatusMenu(!showStatusMenu)}>
@@ -57,10 +72,13 @@ function ProjectCard({ p, typeLabel, typeColor, onDelete, onStatusChange, dragHa
               )}
             </div>
           )}
+          <button className="proyecto-edit" onClick={() => setEditing(e => !e)} title={editing ? 'Listo' : 'Editar'}>{editing ? <Check size={14} /> : <Edit3 size={14} />}</button>
           <button className="proyecto-delete" onClick={onDelete}><Trash2 size={14} /></button>
         </div>
       </div>
-      {p.description && <p className="proyecto-desc">{p.description}</p>}
+      {editing
+        ? <textarea className="proyecto-desc-edit" value={p.description} onChange={e => onUpdate({ description: e.target.value })} placeholder="Descripción (opcional)" rows={2} />
+        : (p.description && <p className="proyecto-desc">{p.description}</p>)}
       <span className="proyecto-date">{new Date(p.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
     </div>
   )
@@ -94,7 +112,7 @@ export default function ProyectosSection() {
 
   const addProject = () => {
     if (!title.trim()) return
-    save([{ id: 'proj-' + Date.now(), title: title.trim(), description: desc.trim(), type, status: 'todo', createdAt: new Date().toISOString() }, ...projects])
+    save([{ id: 'proj-' + Date.now(), title: title.trim(), description: desc.trim(), type, status: 'sinempezar', createdAt: new Date().toISOString() }, ...projects])
     setTitle(''); setDesc(''); setType('propio'); setShowNew(false)
   }
 
@@ -104,6 +122,7 @@ export default function ProyectosSection() {
     save(projects.filter(p => p.id !== id))
   }
   const changeStatus = (id: string, status: ProjectStatus) => save(projects.map(p => p.id === id ? { ...p, status } : p))
+  const updateProject = (id: string, u: Partial<Project>) => save(projects.map(p => p.id === id ? { ...p, ...u } : p))
 
   const searched = projects.filter(p => {
     if (filter !== 'all' && p.type !== filter) return false
@@ -154,7 +173,7 @@ export default function ProyectosSection() {
         <div className="proyectos-list">
           {searched.length === 0 && <div className="proyectos-empty"><FolderKanban size={28} /><p>Sin proyectos{filter !== 'all' ? ` de tipo ${typeLabel(filter)}` : ''}</p></div>}
           {searched.map(p => (
-            <ProjectCard key={p.id} p={p} typeLabel={typeLabel(p.type)} typeColor={typeColor(p.type)} onDelete={() => removeProject(p.id)} onStatusChange={s => changeStatus(p.id, s)} />
+            <ProjectCard key={p.id} p={p} labels={labels} typeLabel={typeLabel(p.type)} typeColor={typeColor(p.type)} onUpdate={u => updateProject(p.id, u)} onDelete={() => removeProject(p.id)} onStatusChange={s => changeStatus(p.id, s)} />
           ))}
         </div>
       ) : (
@@ -183,8 +202,10 @@ export default function ProyectosSection() {
                     <ProjectCard
                       key={p.id}
                       p={p}
+                      labels={labels}
                       typeLabel={typeLabel(p.type)}
                       typeColor={typeColor(p.type)}
+                      onUpdate={u => updateProject(p.id, u)}
                       onDelete={() => removeProject(p.id)}
                       dragHandlers={{
                         draggable: true,

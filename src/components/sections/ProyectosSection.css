@@ -84,7 +84,7 @@
 .proyectos-filter.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
 /* ─── List view ─── */
-.proyectos-list { display: flex; flex-direction: column; gap: 10px; max-width: 700px; }
+.proyectos-list { display: flex; flex-direction: column; gap: 10px; max-width: 100%; width: 100%; }
 .proyectos-empty { text-align: center; padding: 48px 0; color: var(--text-secondary); opacity: 0.5; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .proyectos-empty p { font-size: 14px; }
 
@@ -154,6 +154,17 @@
 .proyecto-delete:hover { opacity: 1 !important; color: #ef4444; }
 .proyecto-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 8px; }
 .proyecto-date { font-size: 11px; color: var(--text-secondary); opacity: 0.5; }
+
+/* Cambiar etiqueta + edición inline de proyectos */
+.proyecto-type-wrap { position: relative; }
+.proyecto-type-badge { border: none; cursor: pointer; transition: all 0.15s; }
+.proyecto-type-badge:hover { filter: brightness(1.1); }
+.proyecto-edit { padding: 4px; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-radius: 4px; opacity: 0; transition: all 0.2s; display: flex; }
+.proyecto-item:hover .proyecto-edit { opacity: 0.5; }
+.proyecto-edit:hover { opacity: 1 !important; color: var(--accent); }
+.proyecto-title-edit { flex: 1; min-width: 0; padding: 5px 9px; border: 1px solid var(--accent); background: var(--bg-primary); border-radius: 7px; font-size: 15px; font-weight: 600; color: var(--text-primary); font-family: inherit; outline: none; }
+.proyecto-desc-edit { width: 100%; padding: 7px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); font-family: inherit; outline: none; resize: vertical; margin-bottom: 8px; }
+.proyecto-desc-edit:focus { border-color: var(--accent); }
 
 /* ─── Kanban board ─── */
 .kanban-board {
