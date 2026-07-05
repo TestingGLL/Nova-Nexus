@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, RotateCcw } from 'lucide-react'
 import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
@@ -176,7 +176,8 @@ function ArticleItem({ art, store, groups, rate, updateArticle, removeArticle }:
   const [open, setOpen] = useState(false)
   const [editingSub, setEditingSub] = useState<string | null>(null)
   const [openSubs, setOpenSubs] = useState<Set<string>>(new Set())
-  const addSubArticle = () => { const sub: SubArticle = { id: 'sub-' + Date.now(), title: '', description: '' }; updateArticle(art.id, { subArticles: [...art.subArticles, sub] }); setEditingSub(sub.id); setOpenSubs(p => new Set(p).add(sub.id)) }
+  const [subsOpen, setSubsOpen] = useState(false)
+  const addSubArticle = () => { const sub: SubArticle = { id: 'sub-' + Date.now(), title: '', description: '' }; updateArticle(art.id, { subArticles: [...art.subArticles, sub] }); setEditingSub(sub.id); setOpenSubs(p => new Set(p).add(sub.id)); setSubsOpen(true) }
   const updateSub = (subId: string, u: Partial<SubArticle>) => updateArticle(art.id, { subArticles: art.subArticles.map(s => s.id === subId ? { ...s, ...u } : s) })
   const removeSubArticle = (subId: string) => updateArticle(art.id, { subArticles: art.subArticles.filter(s => s.id !== subId) })
   const toggleSub = (id: string) => setOpenSubs(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -200,8 +201,14 @@ function ArticleItem({ art, store, groups, rate, updateArticle, removeArticle }:
           </div>
           {priceLabel && rate && <span className="article-price-ars">≈ {priceLabel}</span>}
           <div className="subarticles">
-            <div className="subarticles-header"><span className="subarticles-label">Sub-artículos ({art.subArticles.length})</span><button className="subarticle-add-btn" onClick={addSubArticle}><Plus size={12} /> Añadir</button></div>
-            {subsSorted.map(sub => {
+            <div className="subarticles-header">
+              <button className="subarticles-toggle" onClick={() => setSubsOpen(o => !o)}>
+                {subsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                <span className="subarticles-label">Sub-artículos ({art.subArticles.length})</span>
+              </button>
+              <button className="subarticle-add-btn" onClick={() => { setSubsOpen(true); addSubArticle() }}><Plus size={12} /> Añadir</button>
+            </div>
+            {subsOpen && subsSorted.map(sub => {
               const subOpen = openSubs.has(sub.id)
               const subPrice = fmtUsdArs(sub.price, rate)
               return (
@@ -239,6 +246,19 @@ function GroupPanel({ group, store, groups, groupArticles, rate, readOnly, updat
 }) {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
+  const editFormRef = useRef<HTMLDivElement>(null)
+  const editBtnRef = useRef<HTMLButtonElement>(null)
+  // Close the banner edit dropdown when clicking anywhere outside it.
+  useEffect(() => {
+    if (!editing) return
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (editFormRef.current?.contains(t) || editBtnRef.current?.contains(t)) return
+      setEditing(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [editing])
   const color = group.color || DEFAULT_GROUP_COLOR
   const bannerStyle = readOnly
     ? { background: 'linear-gradient(135deg, #475569, #64748b)' }
@@ -260,12 +280,12 @@ function GroupPanel({ group, store, groups, groupArticles, rate, readOnly, updat
         <div className="article-group-actions">
           {sumLabel && <span className="article-group-sum" title="Suma de los precios de los artículos">Σ {sumLabel}</span>}
           {priceLabel && <span className="article-group-price"><DollarSign size={12} /> {priceLabel}</span>}
-          {!readOnly && <button type="button" className="article-group-edit" onClick={() => setEditing(e => !e)} title="Editar grupo"><Edit3 size={14} /></button>}
+          {!readOnly && <button ref={editBtnRef} type="button" className="article-group-edit" onClick={() => setEditing(e => !e)} title="Editar grupo"><Edit3 size={14} /></button>}
           {!readOnly && <button type="button" className="article-group-delete" onClick={onRemoveGroup} title="Eliminar grupo"><Trash2 size={14} /></button>}
         </div>
       </div>
       {editing && !readOnly && (
-        <div className="article-group-edit-form">
+        <div className="article-group-edit-form" ref={editFormRef}>
           <label className="modal-field"><span><Type size={12} /> Nombre del grupo</span><input value={group.name} onChange={e => onUpdateGroup({ name: e.target.value })} placeholder="Nombre del grupo" /></label>
           <label className="modal-field"><span><DollarSign size={12} /> Precio predeterminado (USD)</span><input value={group.defaultPrice || ''} onChange={e => onUpdateGroup({ defaultPrice: e.target.value })} placeholder="0.00" /></label>
           <div className="modal-field">
@@ -704,9 +724,13 @@ const commercialDates: Record<string, { name: string; dates: { date: string; lab
   us: { name: 'Estados Unidos', dates: [
     { date: '01-01', label: "New Year's Day", desc: 'Año Nuevo. Alta demanda de productos motivacionales y de propósitos.' },
     { date: '02-14', label: "Valentine's Day", desc: 'San Valentín. Pico de ventas de regalos para parejas, arte romántico y personalizados.' },
+    { date: '03-17', label: "St. Patrick's Day", desc: 'Día de San Patricio. Temática verde e irlandesa; imprimibles y decoración festiva.' },
+    { date: '04-22', label: 'Easter', desc: 'Pascua (fecha móvil, aprox. abril). Decoración de primavera, huevos y conejos.' },
     { date: '05-12', label: "Mother's Day", desc: 'Día de la Madre (2º domingo de mayo). Fuerte demanda de regalos personalizados.' },
+    { date: '06-15', label: "Father's Day", desc: 'Día del Padre (3er domingo de junio). Regalos personalizados y arte para papá.' },
     { date: '07-04', label: 'Independence Day', desc: 'Día de la Independencia. Temática patriótica (rojo/blanco/azul), decoración.' },
     { date: '10-31', label: 'Halloween', desc: 'Halloween. Gran demanda de imprimibles, decoración y disfraces.' },
+    { date: '11-26', label: 'Thanksgiving', desc: 'Acción de Gracias (4º jueves de noviembre). Decoración otoñal y de mesa.' },
     { date: '11-28', label: 'Black Friday', desc: 'Black Friday. El día de mayor volumen de ventas del año; preparar ofertas.' },
     { date: '12-25', label: 'Christmas', desc: 'Navidad. Temporada alta general; planificar stock con anticipación.' },
   ]},
@@ -726,13 +750,20 @@ const commercialDates: Record<string, { name: string; dates: { date: string; lab
   ]},
   jp: { name: 'Japón', dates: [
     { date: '01-01', label: 'Shōgatsu (Año Nuevo)', desc: 'La festividad más importante de Japón. Tarjetas (nengajō) y decoración tradicional.' },
+    { date: '02-03', label: 'Setsubun', desc: 'Fin del invierno según el calendario tradicional. Demonios (oni), frijoles y decoración.' },
     { date: '02-14', label: "Valentine's Day", desc: 'En Japón las mujeres regalan chocolate a los hombres. Gran demanda de packaging.' },
-    { date: '03-14', label: 'White Day', desc: 'Los hombres devuelven el regalo recibido en San Valentín. Regalos y dulces.' },
     { date: '03-03', label: 'Hinamatsuri', desc: 'Día de las Niñas. Muñecas y decoración tradicional.' },
+    { date: '03-14', label: 'White Day', desc: 'Los hombres devuelven el regalo recibido en San Valentín. Regalos y dulces.' },
+    { date: '05-05', label: 'Kodomo no Hi', desc: 'Día del Niño. Carpas koinobori y decoración; arte infantil y familiar.' },
+    { date: '07-07', label: 'Tanabata', desc: 'Festival de las estrellas. Deseos en tiras de papel (tanzaku) y decoración colorida.' },
+    { date: '08-15', label: 'Obon', desc: 'Festividad para honrar a los ancestros. Linternas (chōchin) y decoración tradicional.' },
     { date: '12-25', label: 'Christmas', desc: 'Navidad romántica (más para parejas que familiar). Iluminación y regalos.' },
   ]},
   mx: { name: 'México', dates: [
+    { date: '01-06', label: 'Día de Reyes', desc: 'Reyes Magos. Regalos para niños y rosca de reyes; arte y tarjetas.' },
+    { date: '02-02', label: 'Día de la Candelaria', desc: 'Se visten al Niño Dios y se comparten tamales. Tradición cultural muy arraigada.' },
     { date: '02-14', label: 'Día del Amor y la Amistad', desc: 'San Valentín mexicano. Regalos para parejas y amigos.' },
+    { date: '04-30', label: 'Día del Niño', desc: 'Celebración de la niñez. Regalos, juguetes y arte infantil.' },
     { date: '05-10', label: 'Día de las Madres', desc: 'Siempre el 10 de mayo. Una de las fechas comerciales más fuertes del año.' },
     { date: '09-16', label: 'Día de la Independencia', desc: 'Fiestas patrias. Temática tricolor (verde/blanco/rojo).' },
     { date: '11-02', label: 'Día de Muertos', desc: 'Festividad icónica. Enorme demanda de arte, calaveras y decoración.' },
@@ -814,16 +845,23 @@ function PlanificacionTab() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [openHighlight, setOpenHighlight] = useState<string | null>(null)
   const [range, setRange] = useState<'month' | '3months'>('month')
+  // Recompute "today" periodically so upcoming dates stay current in real time.
+  const [, setTick] = useState(0)
+  useEffect(() => { const id = setInterval(() => setTick(t => t + 1), 3600_000); return () => clearInterval(id) }, [])
   const data = commercialDates[country]
   const now = new Date()
   const currentMMDD = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const curMonth = now.getMonth() + 1
   const months3 = [0, 1, 2].map(i => ((curMonth - 1 + i) % 12) + 1)
   const inRange = (dt: string) => { const m = parseInt(dt.slice(0, 2)); return range === '3months' ? months3.includes(m) : m === curMonth }
+  const fmtMMDD = (dt: string) => new Date(`2024-${dt}`).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 
+  // Next upcoming dates per country (wrapping around the year), so each country
+  // shows several tradicional/cultural dates ordered from today.
   const upcomingByCountry = Object.entries(commercialDates).map(([key, val]) => {
-    const next = [...val.dates].sort((a, b) => a.date.localeCompare(b.date)).find(d => d.date >= currentMMDD) || val.dates[0]
-    return { key, name: val.name, next }
+    const sorted = [...val.dates].sort((a, b) => a.date.localeCompare(b.date))
+    const ordered = [...sorted.filter(d => d.date >= currentMMDD), ...sorted.filter(d => d.date < currentMMDD)]
+    return { key, name: val.name, nexts: ordered.slice(0, 3), next: ordered[0] || val.dates[0] }
   }).sort((a, b) => a.next.date.localeCompare(b.next.date))
 
   const q = search.trim().toLowerCase()
@@ -838,9 +876,19 @@ function PlanificacionTab() {
           {upcomingByCountry.map(u => (
             <button key={u.key} className={`plan-highlight-item ${openHighlight === u.key ? 'open' : ''}`} onClick={() => { setCountry(u.key); setOpenHighlight(openHighlight === u.key ? null : u.key) }}>
               <span className="plan-highlight-country">{u.name}</span>
-              <span className="plan-highlight-date">{new Date(`2024-${u.next.date}`).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>
+              <span className="plan-highlight-date">{fmtMMDD(u.next.date)}</span>
               <span className="plan-highlight-label">{u.next.label}</span>
-              {openHighlight === u.key && <span className="plan-highlight-desc">{u.next.desc} {dateContext(u.next.label, u.next.desc)}</span>}
+              {openHighlight === u.key && (
+                <div className="plan-highlight-nexts">
+                  {u.nexts.map((d, i) => (
+                    <div key={d.date + d.label} className="plan-highlight-next">
+                      <span className="plan-highlight-next-date">{fmtMMDD(d.date)}</span>
+                      <span className="plan-highlight-next-label">{d.label}</span>
+                      {i === 0 && <span className="plan-highlight-desc">{d.desc} {dateContext(d.label, d.desc)}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </button>
           ))}
         </div>
