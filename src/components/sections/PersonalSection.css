@@ -330,7 +330,9 @@
 .shopping-subtab.active { font-weight: 600; }
 .shopping-subtab-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .shopping-subtab-count { font-size: 10px; background: var(--bg-hover); padding: 1px 6px; border-radius: 8px; color: var(--text-secondary); }
-.shopping-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+/* auto-fit (no auto-fill) so lists stretch to fill the full app width instead of
+   sitting narrow with empty tracks; wider min for bigger, easier-to-read lists. */
+.shopping-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 14px; align-items: start; }
 .shopping-group { padding: 14px 14px 10px !important; transition: all 0.2s; }
 .shopping-group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .shopping-group-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; border: none; cursor: pointer; padding: 0; }
@@ -791,3 +793,30 @@
 .contacto-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); background: var(--bg-hover); border: 1px solid var(--border); padding: 3px 9px; border-radius: 12px; }
 .contacto-notes { font-size: 12px; color: var(--text-secondary); margin: 2px 0 0; white-space: pre-wrap; }
 .contacto-item .cliente-done { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: none; background: var(--accent); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+/* ===== Anotaciones: subpestañas por página ===== */
+.anotaciones-subs { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin: -4px 0 12px; padding-left: 6px; }
+.anotaciones-sub-tab { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-secondary); border-radius: 7px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+.anotaciones-sub-tab:hover { border-color: var(--accent); }
+.anotaciones-sub-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.anotaciones-sub-edit { border: none; background: transparent; color: inherit; font-size: 12px; font-weight: 600; font-family: inherit; outline: none; width: 84px; }
+.anotaciones-sub-editbtn, .anotaciones-sub-del { display: flex; padding: 1px; border: none; background: none; color: inherit; cursor: pointer; opacity: 0.75; border-radius: 4px; }
+.anotaciones-sub-editbtn:hover { opacity: 1; }
+.anotaciones-sub-del:hover { opacity: 1; color: #fecaca; }
+.anotaciones-sub-add { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px dashed var(--border); background: none; color: var(--text-secondary); border-radius: 6px; cursor: pointer; }
+.anotaciones-sub-add:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ===== Contactos: autocompletado de email ===== */
+.contacto-email-wrap { flex: 1; position: relative; }
+.contacto-email-wrap input { width: 100%; border: none; background: none; color: var(--text-primary); font-size: 13px; font-family: inherit; outline: none; }
+.contacto-email-suggest { position: absolute; top: calc(100% + 4px); left: -8px; right: 0; z-index: 40; display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); overflow: hidden; }
+.contacto-email-suggest button { text-align: left; padding: 7px 11px; border: none; background: none; color: var(--text-primary); font-size: 13px; font-family: inherit; cursor: pointer; }
+.contacto-email-suggest button:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* ===== Tarjetas: aviso de vencida ===== */
+.tarjeta-card-v2 { position: relative; }
+.tarjeta-card-v2.expired { outline: 2px solid #ef4444; outline-offset: -2px; }
+.tarjeta-v2-expired { position: absolute; top: 8px; right: 10px; z-index: 2; display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; color: #fff; background: #ef4444; padding: 3px 8px; border-radius: 20px; box-shadow: 0 2px 8px rgba(239,68,68,0.4); }
+
+/* Salud: descripción/tips del ejercicio (multilínea) */
+textarea.ex-tip { width: 100%; resize: vertical; min-height: 34px; font-family: inherit; line-height: 1.4; }

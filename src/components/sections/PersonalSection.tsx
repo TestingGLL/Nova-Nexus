@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Bold, Italic, Underline, List, Palette, Type, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder } from 'lucide-react'
+import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Bold, Italic, Underline, List, Palette, Type, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle } from 'lucide-react'
 import { addNotification } from '../../lib/notifications'
 import { useConfirm } from '../ConfirmDialog'
 import { useSecurity, SecurityGate } from '../../lib/security'
@@ -201,7 +201,7 @@ function ExercisePanel() {
                 <input className="ex-youtube" value={e.youtube || ''} placeholder="Link de YouTube (opcional)..." onChange={ev => updateExercise(routine.id, i, { youtube: ev.target.value })} />
                 {e.youtube?.trim() && <button className="ex-youtube-open" onClick={() => openLink(e.youtube)} title="Ver video"><Play size={13} /> Ver</button>}
               </div>
-              <input className="ex-tip" value={e.tip} placeholder="Descripción o tips..." onChange={ev => updateExercise(routine.id, i, { tip: ev.target.value })} />
+              <textarea className="ex-tip" value={e.tip} placeholder="Descripción o listado de tips (uno por línea)..." rows={2} onChange={ev => updateExercise(routine.id, i, { tip: ev.target.value })} />
             </div>
             )
           })}
@@ -302,6 +302,17 @@ function formatExpiry(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 4)
   if (digits.length > 2) return digits.slice(0, 2) + '/' + digits.slice(2)
   return digits
+}
+
+// A card is expired once the current date passes the end of its MM/AA month.
+function isCardExpired(expiry: string): boolean {
+  const d = (expiry || '').replace(/\D/g, '')
+  if (d.length < 4) return false
+  const mm = parseInt(d.slice(0, 2), 10), yy = parseInt(d.slice(2, 4), 10)
+  if (!mm || mm > 12) return false
+  const now = new Date()
+  const expYear = 2000 + yy, curYear = now.getFullYear(), curMonth = now.getMonth() + 1
+  return expYear < curYear || (expYear === curYear && mm < curMonth)
 }
 
 // ---- Pedidos Ya: promociones por tarjeta ----
@@ -414,8 +425,13 @@ function TarjetasTab() {
 
   const filtered = cards.filter(c => {
     if (filterType !== 'all' && c.type !== filterType) return false
-    if (search && !c.bank.toLowerCase().includes(search.toLowerCase()) && !c.holder.toLowerCase().includes(search.toLowerCase()) && !c.label.toLowerCase().includes(search.toLowerCase())) return false
-    return true
+    if (!search) return true
+    const q = search.toLowerCase()
+    const textMatch = c.bank.toLowerCase().includes(q) || c.holder.toLowerCase().includes(q) || c.label.toLowerCase().includes(q)
+    // Search by the last 1-4 digits of the card number.
+    const digits = search.replace(/\D/g, '')
+    const digitMatch = digits.length >= 1 && digits.length <= 4 && c.number.replace(/\D/g, '').endsWith(digits)
+    return textMatch || digitMatch
   })
 
   return (
@@ -427,7 +443,7 @@ function TarjetasTab() {
       {subtab === 'pedidosya' ? <PedidosYaTab cards={cards} /> : !unlocked ? lockScreen : (
       <>
       <div className="tarjetas-toolbar">
-        <div className="tarjetas-search"><Search size={14} /><input placeholder="Buscar por nombre o banco..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <div className="tarjetas-search"><Search size={14} /><input placeholder="Buscar por nombre, banco o últimos dígitos..." value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div className="tarjetas-filters">
           {['all', 'visa', 'mastercard', 'amex'].map(t => (
             <button key={t} className={filterType === t ? 'active' : ''} onClick={() => setFilterType(t)}>{t === 'all' ? 'Todas' : t === 'amex' ? 'Amex' : t.charAt(0).toUpperCase() + t.slice(1)}</button>
@@ -436,7 +452,8 @@ function TarjetasTab() {
       </div>
       <div className="tarjetas-grid">
         {filtered.map(card => (
-          <div key={card.id} className="tarjeta-card-v2" style={{ background: `linear-gradient(135deg, ${card.color || '#1a1a2e'}, ${card.color || '#1a1a2e'}cc)` }}>
+          <div key={card.id} className={`tarjeta-card-v2 ${isCardExpired(card.expiry) ? 'expired' : ''}`} style={{ background: `linear-gradient(135deg, ${card.color || '#1a1a2e'}, ${card.color || '#1a1a2e'}cc)` }}>
+            {isCardExpired(card.expiry) && <span className="tarjeta-v2-expired"><AlertTriangle size={11} /> Vencida</span>}
             <div className="tarjeta-v2-top">
               <span className="tarjeta-v2-bank">{card.bank || 'Banco'}</span>
               <select className="tarjeta-v2-type" value={card.type} onChange={e => updateCard(card.id, { type: e.target.value as CardData['type'] })}><option value="visa">Visa</option><option value="mastercard">Mastercard</option><option value="amex">Amex</option></select>
@@ -447,7 +464,7 @@ function TarjetasTab() {
             </div>
             <div className="tarjeta-v2-bottom">
               <div className="tarjeta-v2-field"><span>TITULAR</span><span>{card.holder || '—'}</span></div>
-              <div className="tarjeta-v2-field"><span>VENCE</span><span>{formatExpiry(card.expiry) || 'MM/AA'}</span></div>
+              <div className="tarjeta-v2-field"><span>VENCE</span><span style={isCardExpired(card.expiry) ? { color: '#fca5a5', fontWeight: 700 } : undefined}>{formatExpiry(card.expiry) || 'MM/AA'}</span></div>
               <div className="tarjeta-v2-field cvv-field">
                 <span>CVV</span>
                 <span className="tarjeta-v2-cvv">
@@ -507,28 +524,35 @@ function BlockEditor({ block, onChange, onEnter, onBackspaceEmpty }: { block: Te
 
 const BLOCK_COLORS = ['#1d1d1f', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899']
 
-// Anotaciones estilo Notion: cada "página" guarda su propio set de bloques.
-interface NotePage { id: string; name: string; blocks: TextBlock[] }
+// Anotaciones estilo Notion: cada "página" tiene subpestañas, y cada subpestaña
+// guarda su propio set de bloques.
+interface NoteSub { id: string; name: string; blocks: TextBlock[] }
+interface NotePage { id: string; name: string; subs: NoteSub[] }
+const wrapSub = (blocks: TextBlock[]): NoteSub[] => [{ id: 'sub-0', name: 'Principal', blocks: blocks.length ? blocks : [{ id: 'blk-0', html: '' }] }]
 function loadPages(): NotePage[] {
   try {
     const s = localStorage.getItem('nn-reminder-blocks')
     if (s) {
       const parsed = JSON.parse(s)
       if (Array.isArray(parsed) && parsed.length > 0) {
-        if (Array.isArray(parsed[0]?.blocks)) return parsed as NotePage[]
-        // Legacy: a flat array of blocks → wrap into a single page.
-        return [{ id: 'page-0', name: 'Página 1', blocks: parsed.map((b: any) => ({ id: b.id, html: b.html ?? (b.text || '') })) }]
+        if (Array.isArray(parsed[0]?.subs)) return parsed as NotePage[]
+        // Pages-with-blocks (previous format) → wrap each page's blocks into a sub.
+        if (Array.isArray(parsed[0]?.blocks)) return (parsed as any[]).map(p => ({ id: p.id, name: p.name, subs: wrapSub(p.blocks) }))
+        // Legacy: a flat array of blocks → one page, one sub.
+        return [{ id: 'page-0', name: 'Página 1', subs: wrapSub(parsed.map((b: any) => ({ id: b.id, html: b.html ?? (b.text || '') }))) }]
       }
     }
   } catch {}
-  return [{ id: 'page-0', name: 'Página 1', blocks: [{ id: 'blk-0', html: '' }] }]
+  return [{ id: 'page-0', name: 'Página 1', subs: [{ id: 'sub-0', name: 'Principal', blocks: [{ id: 'blk-0', html: '' }] }] }]
 }
 
 function RecordatoriosTab() {
   const [reminders, setReminders] = useState<Reminder[]>(() => { try { const s = localStorage.getItem('nn-reminders'); return s ? JSON.parse(s) : [] } catch { return [] } })
   const [pages, setPages] = useState<NotePage[]>(loadPages)
   const [activePage, setActivePage] = useState<string>(pages[0]?.id || 'page-0')
+  const [activeSub, setActiveSub] = useState<string>(pages[0]?.subs[0]?.id || 'sub-0')
   const [editingPage, setEditingPage] = useState<string | null>(null)
+  const [editingSub, setEditingSub] = useState<string | null>(null)
   const confirm = useConfirm()
   const [showReminders, setShowReminders] = useState(false)
   const [showNew, setShowNew] = useState(false)
@@ -543,17 +567,30 @@ function RecordatoriosTab() {
   const save = (r: Reminder[]) => { setReminders(r); localStorage.setItem('nn-reminders', JSON.stringify(r)) }
   const savePages = (p: NotePage[]) => { setPages(p); localStorage.setItem('nn-reminder-blocks', JSON.stringify(p)) }
   const page = pages.find(p => p.id === activePage) || pages[0]
-  const blocks = page?.blocks || []
-  const saveBlocks = (b: TextBlock[]) => savePages(pages.map(p => p.id === page.id ? { ...p, blocks: b } : p))
-  const addPage = () => { const id = 'page-' + Date.now(); savePages([...pages, { id, name: 'Nueva página', blocks: [{ id: 'blk-' + Date.now(), html: '' }] }]); setActivePage(id); setEditingPage(id) }
+  const sub = page?.subs.find(s => s.id === activeSub) || page?.subs[0]
+  const blocks = sub?.blocks || []
+  const saveBlocks = (b: TextBlock[]) => savePages(pages.map(p => p.id === page.id ? { ...p, subs: p.subs.map(s => s.id === sub.id ? { ...s, blocks: b } : s) } : p))
+  const selectPage = (id: string) => { setActivePage(id); const p = pages.find(x => x.id === id); setActiveSub(p?.subs[0]?.id || '') }
+  const addPage = () => { const id = 'page-' + Date.now(); const sid = 'sub-' + Date.now(); savePages([...pages, { id, name: 'Nueva página', subs: [{ id: sid, name: 'Principal', blocks: [{ id: 'blk-' + Date.now(), html: '' }] }] }]); setActivePage(id); setActiveSub(sid); setEditingPage(id) }
   const renamePage = (id: string, name: string) => savePages(pages.map(p => p.id === id ? { ...p, name } : p))
   const removePage = async (id: string) => {
     const p = pages.find(x => x.id === id)
     if (!await confirm({ title: 'Eliminar página', message: `¿Eliminar la página «${p?.name || ''}» y todas sus anotaciones?`, confirmLabel: 'Eliminar' })) return
     const next = pages.filter(p => p.id !== id)
-    const safe = next.length ? next : [{ id: 'page-0', name: 'Página 1', blocks: [{ id: 'blk-0', html: '' }] }]
+    const safe = next.length ? next : [{ id: 'page-0', name: 'Página 1', subs: [{ id: 'sub-0', name: 'Principal', blocks: [{ id: 'blk-0', html: '' }] }] }]
     savePages(safe)
-    if (activePage === id) setActivePage(safe[0].id)
+    if (activePage === id) { setActivePage(safe[0].id); setActiveSub(safe[0].subs[0].id) }
+  }
+  // Subpestañas de la página activa
+  const addSub = () => { const sid = 'sub-' + Date.now(); savePages(pages.map(p => p.id === page.id ? { ...p, subs: [...p.subs, { id: sid, name: 'Nueva', blocks: [{ id: 'blk-' + Date.now(), html: '' }] }] } : p)); setActiveSub(sid); setEditingSub(sid) }
+  const renameSub = (id: string, name: string) => savePages(pages.map(p => p.id === page.id ? { ...p, subs: p.subs.map(s => s.id === id ? { ...s, name } : s) } : p))
+  const removeSub = async (id: string) => {
+    if (page.subs.length <= 1) return
+    const s = page.subs.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar subpestaña', message: `¿Eliminar la subpestaña «${s?.name || ''}»?`, confirmLabel: 'Eliminar' })) return
+    const nextSubs = page.subs.filter(x => x.id !== id)
+    savePages(pages.map(p => p.id === page.id ? { ...p, subs: nextSubs } : p))
+    if (activeSub === id) setActiveSub(nextSubs[0].id)
   }
   const addReminder = () => {
     if (!newText.trim()) return
@@ -602,7 +639,7 @@ function RecordatoriosTab() {
     <div className="anotaciones-content">
       <div className="anotaciones-pages">
         {pages.map(p => (
-          <div key={p.id} className={`anotaciones-page-tab ${activePage === p.id ? 'active' : ''}`} onClick={() => setActivePage(p.id)}>
+          <div key={p.id} className={`anotaciones-page-tab ${activePage === p.id ? 'active' : ''}`} onClick={() => selectPage(p.id)}>
             <Folder size={12} />
             {editingPage === p.id ? (
               <input className="anotaciones-page-edit" value={p.name} onChange={e => renamePage(p.id, e.target.value)} onBlur={() => setEditingPage(null)} onKeyDown={e => e.key === 'Enter' && setEditingPage(null)} autoFocus onClick={e => e.stopPropagation()} />
@@ -615,6 +652,22 @@ function RecordatoriosTab() {
         ))}
         <button className="anotaciones-page-add" onClick={addPage} title="Nueva página"><Plus size={13} /></button>
       </div>
+      {page && (
+        <div className="anotaciones-subs">
+          {page.subs.map(s => (
+            <div key={s.id} className={`anotaciones-sub-tab ${activeSub === s.id ? 'active' : ''}`} onClick={() => setActiveSub(s.id)}>
+              {editingSub === s.id ? (
+                <input className="anotaciones-sub-edit" value={s.name} onChange={e => renameSub(s.id, e.target.value)} onBlur={() => setEditingSub(null)} onKeyDown={e => e.key === 'Enter' && setEditingSub(null)} autoFocus onClick={e => e.stopPropagation()} />
+              ) : (
+                <span onDoubleClick={() => setEditingSub(s.id)}>{s.name}</span>
+              )}
+              {activeSub === s.id && <button className="anotaciones-sub-editbtn" onClick={e => { e.stopPropagation(); setEditingSub(editingSub === s.id ? null : s.id) }} title="Renombrar"><Edit3 size={9} /></button>}
+              {page.subs.length > 1 && activeSub === s.id && <button className="anotaciones-sub-del" onClick={e => { e.stopPropagation(); removeSub(s.id) }} title="Eliminar subpestaña"><X size={10} /></button>}
+            </div>
+          ))}
+          <button className="anotaciones-sub-add" onClick={addSub} title="Nueva subpestaña"><Plus size={12} /></button>
+        </div>
+      )}
       <div className="bloques-toolbar">
         <button className="bloques-btn bloques-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h1')} title="Encabezado 1">H1</button>
         <button className="bloques-btn bloques-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h2')} title="Encabezado 2">H2</button>
@@ -1161,6 +1214,27 @@ function ObjetivosTab() {
 interface Contact { id: string; name: string; phone: string; email: string; address: string; notes: string }
 const emptyContact = { name: '', phone: '', email: '', address: '', notes: '' }
 
+const EMAIL_DOMAINS = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com', 'live.com', 'proton.me']
+// Email input that suggests domains after "@" (gmail.com, outlook.com, …).
+function EmailField({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const [open, setOpen] = useState(false)
+  const at = value.indexOf('@')
+  const dom = at >= 0 ? value.slice(at + 1).toLowerCase() : ''
+  const suggestions = at >= 0
+    ? EMAIL_DOMAINS.filter(d => d.startsWith(dom)).map(d => value.slice(0, at + 1) + d).filter(s => s.toLowerCase() !== value.toLowerCase())
+    : []
+  return (
+    <div className="contacto-email-wrap">
+      <input type="email" value={value} placeholder={placeholder} onChange={e => { onChange(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 160)} />
+      {open && suggestions.length > 0 && (
+        <div className="contacto-email-suggest">
+          {suggestions.map(s => <button key={s} type="button" onMouseDown={e => { e.preventDefault(); onChange(s); setOpen(false) }}>{s}</button>)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ContactosTab() {
   const [contacts, setContacts] = useState<Contact[]>(() => { try { const s = localStorage.getItem('nn-contacts'); return s ? JSON.parse(s) : [] } catch { return [] } })
   const [search, setSearch] = useState('')
@@ -1190,7 +1264,7 @@ function ContactosTab() {
           <input className="contacto-name-input" placeholder="Nombre *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && add()} autoFocus />
           <div className="contacto-form-row">
             <label className="contacto-field"><Phone size={13} /><input placeholder="Teléfono" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></label>
-            <label className="contacto-field"><Mail size={13} /><input placeholder="Correo electrónico" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></label>
+            <label className="contacto-field"><Mail size={13} /><EmailField value={form.email} onChange={v => setForm({ ...form, email: v })} placeholder="Correo electrónico" /></label>
           </div>
           <label className="contacto-field contacto-field-full"><MapPin size={13} /><input placeholder="Dirección" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></label>
           <textarea className="contacto-notes-input" placeholder="Notas..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} />
@@ -1207,7 +1281,7 @@ function ContactosTab() {
             <input className="contacto-name-input" value={c.name} onChange={e => update(c.id, { name: e.target.value })} placeholder="Nombre" />
             <div className="contacto-form-row">
               <label className="contacto-field"><Phone size={13} /><input value={c.phone} onChange={e => update(c.id, { phone: e.target.value })} placeholder="Teléfono" /></label>
-              <label className="contacto-field"><Mail size={13} /><input value={c.email} onChange={e => update(c.id, { email: e.target.value })} placeholder="Correo" /></label>
+              <label className="contacto-field"><Mail size={13} /><EmailField value={c.email} onChange={v => update(c.id, { email: v })} placeholder="Correo" /></label>
             </div>
             <label className="contacto-field contacto-field-full"><MapPin size={13} /><input value={c.address} onChange={e => update(c.id, { address: e.target.value })} placeholder="Dirección" /></label>
             <textarea className="contacto-notes-input" value={c.notes} onChange={e => update(c.id, { notes: e.target.value })} placeholder="Notas..." rows={2} />

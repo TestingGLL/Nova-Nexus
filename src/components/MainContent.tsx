@@ -3,6 +3,7 @@ import { Lock, Loader } from 'lucide-react'
 import type { Section } from '../App'
 import SectionErrorBoundary from './SectionErrorBoundary'
 import { useSecurity, SecurityGate } from '../lib/security'
+import { useToast } from './Toast'
 import './MainContent.css'
 
 // Sections are code-split and only the active one is mounted. This keeps the
@@ -46,6 +47,20 @@ function loadLocked(): string[] {
 export default function MainContent({ section, sidebarOpen }: MainContentProps) {
   const [locked, setLocked] = useState<string[]>(loadLocked)
   const [unlockedNow, setUnlockedNow] = useState<Set<string>>(new Set())
+  const [restoreNonce, setRestoreNonce] = useState(0)
+  const toast = useToast()
+
+  // On undo/redo the active section remounts so it re-reads the restored state.
+  useEffect(() => {
+    const onRestore = (e: Event) => {
+      const action = (e as CustomEvent).detail?.action
+      if (action === 'undo') { setRestoreNonce(n => n + 1); toast.info('Deshecho') }
+      else if (action === 'redo') { setRestoreNonce(n => n + 1); toast.info('Rehecho') }
+      else toast.info('Nada para deshacer')
+    }
+    window.addEventListener('nn-state-restored', onRestore)
+    return () => window.removeEventListener('nn-state-restored', onRestore)
+  }, [toast])
 
   // Locked sections can change from Configuración (same window, so the `storage`
   // event won't fire). Poll, but only update state when the value actually
@@ -65,7 +80,7 @@ export default function MainContent({ section, sidebarOpen }: MainContentProps) 
 
   return (
     <main className={`main-content ${sidebarOpen ? '' : 'expanded'}`}>
-      <div key={key} className="section-wrapper" style={{ display: 'flex' }}>
+      <div key={`${key}-${restoreNonce}`} className="section-wrapper" style={{ display: 'flex' }}>
         <header className="content-header">
           <div className="header-title">
             <h1>{title}{locked.includes(key) && <Lock size={14} className="section-lock-icon" />}</h1>
