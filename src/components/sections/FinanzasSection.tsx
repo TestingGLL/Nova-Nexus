@@ -565,30 +565,26 @@ function GastosPropiosView() {
         })}
       </div>
 
-      <div className="card gastos-big-counter" style={{ background: `linear-gradient(135deg, ${ownCatColors[subtab]}18, transparent)` }}>
-        <span className="gastos-bc-label">{ownCatLabels[subtab]}</span>
-        <span className="gastos-bc-amount" style={{ color: ownCatColors[subtab] }}>${subtotal.toLocaleString('es-AR')}</span>
-        <span className="gastos-bc-count">{current.length} {current.length === 1 ? 'gasto' : 'gastos'}</span>
-      </div>
-
-      <div className="card gastos-proj-card">
-        <div className="gastos-proj-row">
-          <span className="gastos-proj-label">Proyección de gasto ·</span>
-          <select value={projPeriod} onChange={e => setProjPeriod(e.target.value)}>
-            {Object.keys(periodMonths).map(k => <option key={k} value={k}>{repeatOptions.find(r => r.v === k)?.label}</option>)}
-          </select>
-          <span className="gastos-proj-total" style={{ color: ownCatColors[subtab] }}>${Math.round(projTotal).toLocaleString('es-AR')}</span>
+      <div className="fin-hero" style={{ background: `linear-gradient(135deg, ${ownCatColors[subtab]}, ${ownCatColors[subtab]}cc)` }}>
+        <div className="fin-hero-top">
+          <span className="fin-hero-label"><Wallet size={14} /> {ownCatLabels[subtab]}</span>
+          <span className="fin-hero-badge">{current.length} {current.length === 1 ? 'gasto' : 'gastos'}</span>
         </div>
-        <div className="gastos-infl">
-          <button className="gastos-infl-btn" onClick={() => setShowInfl(v => !v)}><InflationIcon size={13} /> Aumento por inflación</button>
-          {showInfl && (
-            <div className="gastos-infl-form">
-              <div className="extras-amount-wrap"><input type="number" value={inflPct} onChange={e => setInflPct(e.target.value)} placeholder="%" /><span>%</span></div>
-              <button className="gastos-infl-fetch" onClick={fetchInflation} disabled={inflLoading}>{inflLoading ? '…' : 'Traer inflación AR'}</button>
-              <button className="gastos-add-btn" onClick={applyInflation} disabled={!inflPct} style={{ background: ownCatColors[subtab] }}>Aplicar a todos</button>
-            </div>
-          )}
+        <span className="fin-hero-total">${subtotal.toLocaleString('es-AR')}</span>
+        <div className="fin-hero-foot">
+          <span className="fin-hero-sub">Proyección
+            <select value={projPeriod} onChange={e => setProjPeriod(e.target.value)}>{Object.keys(periodMonths).map(k => <option key={k} value={k}>{repeatOptions.find(r => r.v === k)?.label}</option>)}</select>
+            · <strong>${Math.round(projTotal).toLocaleString('es-AR')}</strong>
+          </span>
+          <button className="fin-hero-action" onClick={() => setShowInfl(v => !v)}><InflationIcon size={13} /> Inflación</button>
         </div>
+        {showInfl && (
+          <div className="fin-infl">
+            <div className="fin-infl-pct"><input type="number" value={inflPct} onChange={e => setInflPct(e.target.value)} placeholder="%" /><span>%</span></div>
+            <button className="fin-infl-fetch" onClick={fetchInflation} disabled={inflLoading}>{inflLoading ? '…' : 'Traer inflación AR'}</button>
+            <button className="fin-infl-apply" onClick={applyInflation} disabled={!inflPct}>Aplicar a todos</button>
+          </div>
+        )}
       </div>
 
       <div className="card gastos-add-card">
@@ -698,11 +694,17 @@ function GastosUsdView() {
 
       {rate === null && <div className="usd-rate-note">Cotización del dólar blue no disponible (sin conexión). Los montos se muestran solo en USD.</div>}
 
-      <div className="alquiler-stats-grid usd-dashboard">
-        <div className="card alquiler-stat"><span className="alquiler-stat-label">Total listado</span><span className="alquiler-stat-value" style={{ color: tabColor }}>US$ {totalUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span><span className="usd-stat-sub">{toArs(totalUsd, rate)}</span></div>
-        <div className="card alquiler-stat"><span className="alquiler-stat-label">Gasto mensual estimado</span><span className="alquiler-stat-value">US$ {monthlyUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span><span className="usd-stat-sub">{toArs(monthlyUsd, rate)}</span></div>
-        <div className="card alquiler-stat"><span className="alquiler-stat-label">Gasto anual estimado</span><span className="alquiler-stat-value">US$ {(monthlyUsd * 12).toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span><span className="usd-stat-sub">{toArs(monthlyUsd * 12, rate)}</span></div>
-        <div className="card alquiler-stat"><span className="alquiler-stat-label">Cantidad</span><span className="alquiler-stat-value">{inTab.length}</span><span className="usd-stat-sub">{inTab.length === 1 ? 'gasto' : 'gastos'}</span></div>
+      <div className="fin-hero" style={{ background: `linear-gradient(135deg, ${tabColor}, ${tabColor}cc)` }}>
+        <div className="fin-hero-top">
+          <span className="fin-hero-label"><DollarSign size={14} /> {usdTabs.find(t => t.id === subtab)!.label}</span>
+          <span className="fin-hero-badge">{inTab.length} {inTab.length === 1 ? 'gasto' : 'gastos'}</span>
+        </div>
+        <span className="fin-hero-total">US$ {totalUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span>
+        {rate && <span className="fin-hero-sub2">≈ {toArs(totalUsd, rate)}</span>}
+      </div>
+      <div className="fin-stats">
+        <div className="fin-stat" style={{ '--c': tabColor } as React.CSSProperties}><TrendingUp size={16} /><b>US$ {monthlyUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</b><span>Mensual estimado{rate ? ` · ${toArs(monthlyUsd, rate)}` : ''}</span></div>
+        <div className="fin-stat" style={{ '--c': '#8b5cf6' } as React.CSSProperties}><TrendingUp size={16} /><b>US$ {(monthlyUsd * 12).toLocaleString('es-AR', { maximumFractionDigits: 2 })}</b><span>Anual estimado{rate ? ` · ${toArs(monthlyUsd * 12, rate)}` : ''}</span></div>
       </div>
 
       <div className="card gastos-add-card">
@@ -811,11 +813,16 @@ function IngresosView() {
         </button>
       </div>
 
-      <div className="alquiler-stats-grid">
-        <div className="card alquiler-stat"><span className="alquiler-stat-label">Total ingresos</span><span className="alquiler-stat-value" style={{ color: '#22c55e' }}>{sym} {fmt(totalIncome)}</span></div>
-        <div className="card alquiler-stat"><span className="alquiler-stat-label">Neto tras descuentos</span><span className="alquiler-stat-value" style={{ color: totalNet >= 0 ? '#22c55e' : '#ef4444' }}>{sym} {fmt(totalNet)}</span></div>
-        <div className="card alquiler-stat"><span className="alquiler-stat-label">Cantidad</span><span className="alquiler-stat-value">{list.length}</span></div>
-      </div>
+      {(() => { const c = subtab === 'usd' ? '#3b82f6' : '#22c55e'; return (
+        <div className="fin-hero" style={{ background: `linear-gradient(135deg, ${c}, ${c}cc)` }}>
+          <div className="fin-hero-top">
+            <span className="fin-hero-label"><ArrowDownCircle size={14} /> {subtab === 'usd' ? 'Ingresos en dólares' : 'Ingresos en pesos'}</span>
+            <span className="fin-hero-badge">{list.length} {list.length === 1 ? 'ingreso' : 'ingresos'}</span>
+          </div>
+          <span className="fin-hero-total">{sym} {fmt(totalIncome)}</span>
+          <span className="fin-hero-sub2">Neto tras descuentos: <strong>{sym} {fmt(totalNet)}</strong></span>
+        </div>
+      ) })()}
 
       <div className="card gastos-add-card">
         <input className="gastos-add-name" value={name} onChange={e => setName(e.target.value)} placeholder="¿De qué es el ingreso?" onKeyDown={e => e.key === 'Enter' && add()} />

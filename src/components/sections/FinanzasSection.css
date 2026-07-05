@@ -229,3 +229,32 @@
   .alq-stats { grid-template-columns: repeat(2, 1fr); }
   .alq-hero-total { font-size: 32px; }
 }
+
+/* ===== Hero + stats compartidos (Gastos Propios / USD / Ingresos) ===== */
+.fin-hero { border-radius: 16px; padding: 18px 20px; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.12); }
+.fin-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fin-hero-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; opacity: 0.95; }
+.fin-hero-badge { font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 20px; }
+.fin-hero-total { display: block; font-size: 36px; font-weight: 800; letter-spacing: -1px; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
+.fin-hero-sub2 { font-size: 13px; opacity: 0.95; }
+.fin-hero-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.22); flex-wrap: wrap; }
+.fin-hero-sub { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; opacity: 0.97; }
+.fin-hero-sub select { border: none; background: rgba(255,255,255,0.2); color: #fff; border-radius: 7px; padding: 3px 6px; font-size: 12px; font-family: inherit; cursor: pointer; }
+.fin-hero-sub select option { color: #111827; }
+.fin-hero-sub strong { font-size: 14px; }
+.fin-hero-action { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; background: rgba(255,255,255,0.95); color: #111827; border: none; border-radius: 9px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+.fin-hero-action:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.fin-infl { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.fin-infl-pct { display: flex; align-items: center; gap: 2px; background: rgba(255,255,255,0.95); border-radius: 8px; padding: 4px 8px; }
+.fin-infl-pct input { width: 60px; border: none; background: none; outline: none; font-size: 14px; font-weight: 600; color: #111827; }
+.fin-infl-pct span { color: #6b7280; font-weight: 600; }
+.fin-infl-fetch { padding: 8px 12px; border: 1px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.15); color: #fff; border-radius: 8px; font-size: 12px; cursor: pointer; }
+.fin-infl-fetch:hover:not(:disabled) { background: rgba(255,255,255,0.28); }
+.fin-infl-apply { padding: 8px 14px; border: none; background: rgba(255,255,255,0.95); color: #111827; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.fin-infl-apply:disabled, .fin-infl-fetch:disabled { opacity: 0.5; cursor: default; }
+
+.fin-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.fin-stat { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border); border-left: 4px solid var(--c); }
+.fin-stat svg { color: var(--c); margin-bottom: 4px; }
+.fin-stat b { font-size: 18px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.fin-stat span { font-size: 11px; color: var(--text-secondary); }
