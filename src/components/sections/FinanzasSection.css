@@ -181,3 +181,51 @@
 /* Ingresos */
 .income-item .gastos-repeat-tag { background: rgba(34,197,94,0.12); color: #16a34a; }
 .income-net { font-size: 11px; font-weight: 600; }
+
+/* ===== Rediseño UX del panel de Alquiler (Resumen) ===== */
+.alq-hero { border-radius: 16px; padding: 20px 22px; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.12); }
+.alq-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.alq-hero-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; opacity: 0.95; text-transform: capitalize; }
+.alq-hero-colors { display: flex; gap: 5px; }
+.alq-color { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.5); cursor: pointer; padding: 0; transition: transform 0.12s; }
+.alq-color:hover { transform: scale(1.15); }
+.alq-color.sel { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.35); }
+.alq-hero-total { display: block; font-size: 40px; font-weight: 800; letter-spacing: -1px; margin: 8px 0 12px; font-variant-numeric: tabular-nums; }
+.alq-hero-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.alq-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; background: rgba(255,255,255,0.18); padding: 5px 11px; border-radius: 20px; }
+.alq-hero-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.22); flex-wrap: wrap; }
+.alq-hero-period { font-size: 12px; opacity: 0.95; text-transform: capitalize; }
+.alq-hero-cierre { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: rgba(255,255,255,0.95); color: #111827; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+.alq-hero-cierre:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.alq-hero-cierre:disabled { opacity: 0.5; cursor: default; }
+
+.alq-config { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 16px 18px !important; }
+.alq-config-amount { display: flex; flex-direction: column; gap: 6px; }
+.alq-config-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.alq-amount-input { display: flex; align-items: center; gap: 4px; border: 2px solid var(--border); border-radius: 12px; padding: 6px 12px; background: var(--bg-primary); }
+.alq-amount-input span { font-size: 18px; color: var(--text-secondary); font-weight: 600; }
+.alq-amount-input input { border: none; background: none; outline: none; font-size: 26px; font-weight: 700; color: var(--text-primary); width: 160px; font-variant-numeric: tabular-nums; }
+.alq-config-fields { display: flex; gap: 10px; flex-wrap: wrap; }
+.alq-field { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); background: var(--bg-hover); padding: 8px 12px; border-radius: 10px; }
+.alq-field select { border: 1px solid var(--border); background: var(--bg-primary); border-radius: 7px; padding: 3px 6px; font-size: 12px; color: var(--text-primary); font-family: inherit; }
+
+.alq-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.alq-stat { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px; border-radius: 12px; background: var(--bg-card); border: 1px solid var(--border); border-left: 4px solid var(--c); }
+.alq-stat svg { color: var(--c); margin-bottom: 4px; }
+.alq-stat b { font-size: 18px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.alq-stat span { font-size: 11px; color: var(--text-secondary); }
+
+.alq-food { display: flex; flex-direction: column; gap: 12px; }
+.alq-food-input { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.alq-food-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+.alq-food-stat { flex: 1; min-width: 130px; display: flex; flex-direction: column; gap: 3px; padding: 12px; background: var(--bg-hover); border-radius: 10px; }
+.alq-food-stat span { font-size: 11px; color: var(--text-secondary); }
+.alq-food-stat b { font-size: 17px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.alq-food-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--bg-hover); }
+.alq-food-seg { height: 100%; transition: width 0.3s; }
+.alq-food-seg.food { background: #22c55e; }
+
+@media (max-width: 720px) {
+  .alq-stats { grid-template-columns: repeat(2, 1fr); }
+  .alq-hero-total { font-size: 32px; }
+}

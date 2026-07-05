@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical, Search, Archive, Edit3, TrendingUp as InflationIcon, ArrowDownCircle } from 'lucide-react'
+import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical, Search, Archive, Edit3, TrendingUp as InflationIcon, ArrowDownCircle, Utensils } from 'lucide-react'
 import CriptomonedasSection from './CriptomonedasSection'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { useDolarBlue, toArs } from '../../lib/dolarBlue'
@@ -28,7 +28,10 @@ interface RentData {
   closures: MonthClosure[]
   activePeriod?: string // 'YYYY-MM' currently accumulating
   totalBudget?: number // monto total a destinar a todos los gastos (para el dashboard de alimentos)
+  themeColor?: string // color de acento personalizable del panel de Alquiler
 }
+
+const ALQ_THEME_COLORS = ['#6366f1', '#3b82f6', '#06b6d4', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6']
 
 const defaultExpenseColors = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
 const defaultServices = ['Luz', 'Gas', 'Expensas', 'Internet', 'Alimentos']
@@ -50,10 +53,11 @@ function loadRent(): RentData {
         closures: d.closures || [],
         activePeriod: d.activePeriod,
         totalBudget: d.totalBudget || 0,
+        themeColor: d.themeColor || '#6366f1',
       }
     }
   } catch {}
-  return { monthlyRent: 0, categories: [], people: 1, rentHistory: [], rentFrequencyMonths: 12, rentDueDay: 10, maintenance: [], extras: [], closures: [], totalBudget: 0 }
+  return { monthlyRent: 0, categories: [], people: 1, rentHistory: [], rentFrequencyMonths: 12, rentDueDay: 10, maintenance: [], extras: [], closures: [], totalBudget: 0, themeColor: '#6366f1' }
 }
 function saveRent(d: RentData) { localStorage.setItem('nn-rent', JSON.stringify(d)) }
 
@@ -78,8 +82,9 @@ function AlquilerView() {
   const totalExtras = data.extras.reduce((a, e) => a + e.amount, 0)
   const grandTotal = data.monthlyRent + totalServices + totalExtras
   const perPerson = data.people > 1 ? grandTotal / data.people : 0
+  const themeColor = data.themeColor || '#6366f1'
   // Distribution now includes the rent value itself.
-  const distItems = [{ id: '__rent', name: 'Alquiler', amount: data.monthlyRent, color: '#6366f1' }, ...data.categories]
+  const distItems = [{ id: '__rent', name: 'Alquiler', amount: data.monthlyRent, color: themeColor }, ...data.categories]
   const maxAmount = Math.max(...distItems.map(c => c.amount), 1)
 
   // Food-budget dashboard: how much of the total budget is left for food, and
@@ -180,77 +185,94 @@ function AlquilerView() {
 
       {view === 'dashboard' && (
         <>
-          <div className="card fin-food-dashboard">
-            <div className="card-title"><BarChart3 size={14} /> Resumen de gastos y alimentos</div>
-            <div className="food-budget-row">
-              <span className="food-budget-label">Presupuesto total (todos los gastos)</span>
-              <div className="alquiler-cat-input-wrap"><span>$</span><input type="number" value={data.totalBudget || ''} onChange={e => save({ ...data, totalBudget: Number(e.target.value) })} placeholder="0" /></div>
-            </div>
-            <div className="food-stats">
-              <div className="food-stat"><span className="food-stat-lbl">Total a gastos (Alquiler + Servicios)</span><span className="food-stat-val">${(data.monthlyRent + totalServices).toLocaleString('es-AR')}</span></div>
-              <div className="food-stat"><span className="food-stat-lbl">Restante para alimentos</span><span className="food-stat-val" style={{ color: remainingForFood >= 0 ? '#22c55e' : '#ef4444' }}>${remainingForFood.toLocaleString('es-AR')}</span></div>
-              <div className="food-stat"><span className="food-stat-lbl">Alimentos configurado</span><span className="food-stat-val">${foodActual.toLocaleString('es-AR')}</span></div>
-            </div>
-            {totalBudget > 0 && (
-              <div className={`food-diff ${foodDiff > 0 ? 'over' : 'under'}`}>
-                {foodDiff > 0
-                  ? <>⚠️ Estás destinando <strong>${Math.abs(foodDiff).toLocaleString('es-AR')}</strong> de más a alimentos respecto al restante disponible.</>
-                  : foodDiff < 0
-                    ? <>✅ Te queda un margen de <strong>${Math.abs(foodDiff).toLocaleString('es-AR')}</strong> para alimentos.</>
-                    : <>Alimentos coincide exactamente con el restante disponible.</>}
-              </div>
-            )}
-            {totalBudget === 0 && <p className="food-hint">Cargá un presupuesto total y un servicio «Alimentos» para ver el cálculo.</p>}
-          </div>
-
-          <div className="alquiler-summary card">
-            <div className="alquiler-rent-section">
-              <span className="alquiler-label">Alquiler mensual</span>
-              <div className="alquiler-amount-row">
-                <span className="alquiler-currency">$</span>
-                <input type="number" className="alquiler-amount-input" value={data.monthlyRent || ''} onChange={e => save({ ...data, monthlyRent: Number(e.target.value) })} onBlur={e => setRent(Number(e.target.value))} placeholder="0" />
-              </div>
-              <div className="alquiler-month-header">
-                <span className="alquiler-month-big">{new Date().toLocaleDateString('es-AR', { month: 'long' })}</span>
-                <span className="alquiler-year">{new Date().getFullYear()}</span>
-                <span className="alquiler-due">Vence: día <select value={data.rentDueDay} onChange={e => save({ ...data, rentDueDay: Number(e.target.value) })}>{Array.from({ length: 10 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}</select></span>
-              </div>
-              <div className="alquiler-freq">
-                <Calendar size={11} /> Actualiza cada
-                <select value={data.rentFrequencyMonths} onChange={e => save({ ...data, rentFrequencyMonths: Number(e.target.value) })}>
-                  <option value={3}>3 meses</option>
-                  <option value={4}>4 meses</option>
-                  <option value={6}>6 meses</option>
-                  <option value={12}>12 meses</option>
-                </select>
+          {/* HERO: total mensual + desglose + cierre + color personalizable */}
+          <div className="alq-hero" style={{ background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)` }}>
+            <div className="alq-hero-top">
+              <span className="alq-hero-label"><Wallet size={14} /> Total mensual · {new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</span>
+              <div className="alq-hero-colors" title="Color del panel">
+                {ALQ_THEME_COLORS.map(c => <button key={c} className={`alq-color ${themeColor === c ? 'sel' : ''}`} style={{ background: c }} onClick={() => save({ ...data, themeColor: c })} />)}
               </div>
             </div>
-            <div className="alquiler-totals">
-              <div className="alquiler-total-item"><span>Servicios</span><span className="alquiler-total-value">${totalServices.toLocaleString('es-AR')}</span></div>
-              {totalExtras > 0 && <div className="alquiler-total-item"><span>Extras</span><span className="alquiler-total-value">${totalExtras.toLocaleString('es-AR')}</span></div>}
-              <div className="alquiler-total-item total"><span>Total mensual</span><span className="alquiler-total-value">${grandTotal.toLocaleString('es-AR')}</span></div>
+            <span className="alq-hero-total">${grandTotal.toLocaleString('es-AR')}</span>
+            <div className="alq-hero-pills">
+              <span className="alq-pill"><Home size={11} /> Alquiler ${data.monthlyRent.toLocaleString('es-AR')}</span>
+              <span className="alq-pill"><DollarSign size={11} /> Servicios ${totalServices.toLocaleString('es-AR')}</span>
+              {totalExtras > 0 && <span className="alq-pill"><Lightbulb size={11} /> Extras ${totalExtras.toLocaleString('es-AR')}</span>}
             </div>
-            <div className="alquiler-cierre-row">
-              <span className="alquiler-cierre-period">Período activo: <strong>{fmtPeriod(data.activePeriod || currentPeriod)}</strong></span>
-              <button className="alquiler-cierre-btn" onClick={doManualClose} disabled={grandTotal <= 0}><Archive size={14} /> Cierre de mes</button>
+            <div className="alq-hero-foot">
+              <span className="alq-hero-period">Período activo: <strong>{fmtPeriod(data.activePeriod || currentPeriod)}</strong></span>
+              <button className="alq-hero-cierre" onClick={doManualClose} disabled={grandTotal <= 0}><Archive size={14} /> Cierre de mes</button>
             </div>
           </div>
 
-          {data.closures.length > 0 && (
-            <div className="card alquiler-closures">
-              <div className="card-title"><Archive size={14} /> Cierres de mes</div>
-              <div className="closures-list">
-                {data.closures.slice(0, 12).map(c => (
-                  <div key={c.id} className="closure-item">
-                    <span className="closure-period">{fmtPeriod(c.period)}</span>
-                    <span className="closure-breakdown">Alquiler ${c.rent.toLocaleString('es-AR')} · Serv. ${c.services.toLocaleString('es-AR')}{c.extras > 0 ? ` · Extras $${c.extras.toLocaleString('es-AR')}` : ''}</span>
-                    <span className="closure-total">${c.total.toLocaleString('es-AR')}</span>
+          {/* CONFIG: alquiler mensual + vencimiento + frecuencia */}
+          <div className="card alq-config">
+            <div className="alq-config-amount">
+              <span className="alq-config-label"><Home size={13} /> Alquiler mensual</span>
+              <div className="alq-amount-input" style={{ borderColor: themeColor }}><span>$</span><input type="number" value={data.monthlyRent || ''} onChange={e => save({ ...data, monthlyRent: Number(e.target.value) })} onBlur={e => setRent(Number(e.target.value))} placeholder="0" /></div>
+            </div>
+            <div className="alq-config-fields">
+              <label className="alq-field"><Calendar size={12} /> Vence día <select value={data.rentDueDay} onChange={e => save({ ...data, rentDueDay: Number(e.target.value) })}>{Array.from({ length: 10 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}</select></label>
+              <label className="alq-field"><Calendar size={12} /> Actualiza cada <select value={data.rentFrequencyMonths} onChange={e => save({ ...data, rentFrequencyMonths: Number(e.target.value) })}><option value={3}>3 meses</option><option value={4}>4 meses</option><option value={6}>6 meses</option><option value={12}>12 meses</option></select></label>
+            </div>
+          </div>
+
+          {/* STATS coloridos */}
+          <div className="alq-stats">
+            <div className="alq-stat" style={{ '--c': themeColor } as React.CSSProperties}><Wallet size={16} /><b>${grandTotal.toLocaleString('es-AR')}</b><span>Gasto mensual</span></div>
+            <div className="alq-stat" style={{ '--c': '#8b5cf6' } as React.CSSProperties}><TrendingUp size={16} /><b>${(grandTotal * 12).toLocaleString('es-AR')}</b><span>Gasto anual</span></div>
+            <div className="alq-stat" style={{ '--c': '#3b82f6' } as React.CSSProperties}><Home size={16} /><b>${data.monthlyRent.toLocaleString('es-AR')}</b><span>Solo alquiler</span></div>
+            <div className="alq-stat" style={{ '--c': '#22c55e' } as React.CSSProperties}><DollarSign size={16} /><b>${totalServices.toLocaleString('es-AR')}</b><span>Solo servicios</span></div>
+          </div>
+
+          {/* DISTRIBUCIÓN */}
+          {distItems.filter(c => c.amount > 0).length >= 1 && (
+            <div className="alquiler-chart card">
+              <span className="alquiler-chart-title"><BarChart3 size={13} /> Distribución (incluye alquiler)</span>
+              <div className="alquiler-bars">
+                {distItems.filter(c => c.amount > 0).map(cat => (
+                  <div key={cat.id} className="alquiler-bar-col">
+                    <span className="alquiler-bar-value">${cat.amount.toLocaleString('es-AR')}</span>
+                    <div className="alquiler-bar-track"><div className="alquiler-bar-fill" style={{ height: `${(cat.amount / maxAmount) * 100}%`, background: cat.color }} /></div>
+                    <span className="alquiler-bar-label">{cat.name}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
+          {/* PRESUPUESTO DE ALIMENTOS (neutro si no está configurado) */}
+          <div className="card alq-food">
+            <div className="card-title"><Utensils size={14} /> Presupuesto de alimentos</div>
+            <div className="alq-food-input">
+              <span className="alq-config-label">Presupuesto total (todos los gastos)</span>
+              <div className="alq-amount-input"><span>$</span><input type="number" value={data.totalBudget || ''} onChange={e => save({ ...data, totalBudget: Number(e.target.value) })} placeholder="0" /></div>
+            </div>
+            {totalBudget > 0 ? (
+              <>
+                <div className="alq-food-stats">
+                  <div className="alq-food-stat"><span>Gastos fijos</span><b>${(data.monthlyRent + totalServices).toLocaleString('es-AR')}</b></div>
+                  <div className="alq-food-stat"><span>Restante para alimentos</span><b style={{ color: remainingForFood >= 0 ? '#22c55e' : '#ef4444' }}>${remainingForFood.toLocaleString('es-AR')}</b></div>
+                  <div className="alq-food-stat"><span>Alimentos actual</span><b>${foodActual.toLocaleString('es-AR')}</b></div>
+                </div>
+                <div className="alq-food-bar">
+                  <div className="alq-food-seg fixed" style={{ width: `${Math.min(100, (nonFoodExpenses / totalBudget) * 100)}%`, background: themeColor }} title="Gastos fijos" />
+                  <div className="alq-food-seg food" style={{ width: `${Math.max(0, Math.min(100 - (nonFoodExpenses / totalBudget) * 100, (foodActual / totalBudget) * 100))}%` }} title="Alimentos" />
+                </div>
+                <div className={`food-diff ${foodDiff > 0 ? 'over' : 'under'}`}>
+                  {foodDiff > 0
+                    ? <>⚠️ Estás gastando <strong>${Math.abs(foodDiff).toLocaleString('es-AR')}</strong> de más en alimentos respecto al restante.</>
+                    : foodDiff < 0
+                      ? <>✅ Te queda un margen de <strong>${Math.abs(foodDiff).toLocaleString('es-AR')}</strong> para alimentos.</>
+                      : <>Alimentos coincide exactamente con el restante disponible.</>}
+                </div>
+              </>
+            ) : (
+              <p className="food-hint">Cargá un presupuesto total y un servicio «Alimentos» (pestaña Servicios) para ver cuánto te queda para comida.</p>
+            )}
+          </div>
+
+          {/* DIVISIÓN DE GASTOS */}
           <div className="alquiler-split card">
             <div className="alquiler-split-header">
               <Users size={14} /><span>División de gastos</span>
@@ -279,22 +301,16 @@ function AlquilerView() {
             )}
           </div>
 
-          <div className="alquiler-stats-grid">
-            <div className="card alquiler-stat"><span className="alquiler-stat-label">Gasto mensual</span><span className="alquiler-stat-value">${grandTotal.toLocaleString('es-AR')}</span></div>
-            <div className="card alquiler-stat"><span className="alquiler-stat-label">Gasto anual</span><span className="alquiler-stat-value">${(grandTotal * 12).toLocaleString('es-AR')}</span></div>
-            <div className="card alquiler-stat"><span className="alquiler-stat-label">Solo alquiler</span><span className="alquiler-stat-value">${data.monthlyRent.toLocaleString('es-AR')}</span></div>
-            <div className="card alquiler-stat"><span className="alquiler-stat-label">Solo servicios</span><span className="alquiler-stat-value">${totalServices.toLocaleString('es-AR')}</span></div>
-          </div>
-
-          {distItems.filter(c => c.amount > 0).length >= 1 && (
-            <div className="alquiler-chart card">
-              <span className="alquiler-chart-title">Distribución (incluye alquiler)</span>
-              <div className="alquiler-bars">
-                {distItems.filter(c => c.amount > 0).map(cat => (
-                  <div key={cat.id} className="alquiler-bar-col">
-                    <span className="alquiler-bar-value">${cat.amount.toLocaleString('es-AR')}</span>
-                    <div className="alquiler-bar-track"><div className="alquiler-bar-fill" style={{ height: `${(cat.amount / maxAmount) * 100}%`, background: cat.color }} /></div>
-                    <span className="alquiler-bar-label">{cat.name}</span>
+          {/* CIERRES DE MES */}
+          {data.closures.length > 0 && (
+            <div className="card alquiler-closures">
+              <div className="card-title"><Archive size={14} /> Cierres de mes</div>
+              <div className="closures-list">
+                {data.closures.slice(0, 12).map(c => (
+                  <div key={c.id} className="closure-item">
+                    <span className="closure-period">{fmtPeriod(c.period)}</span>
+                    <span className="closure-breakdown">Alquiler ${c.rent.toLocaleString('es-AR')} · Serv. ${c.services.toLocaleString('es-AR')}{c.extras > 0 ? ` · Extras $${c.extras.toLocaleString('es-AR')}` : ''}</span>
+                    <span className="closure-total">${c.total.toLocaleString('es-AR')}</span>
                   </div>
                 ))}
               </div>
