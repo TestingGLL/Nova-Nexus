@@ -84,3 +84,26 @@ const png = Buffer.concat([
 const out = path.join(__dirname, '..', 'public', 'icon.png');
 fs.writeFileSync(out, png);
 console.log('Wrote', out, png.length, 'bytes');
+
+// Also emit an .ico (Windows taskbar/exe icon) embedding the 256px PNG.
+// Vista+ supports PNG-compressed images inside .ico; a 256px entry (width/height
+// byte = 0) is downscaled by Windows for the taskbar.
+function makeIco(pngBuf) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0);            // reserved
+  header.writeUInt16LE(1, 2);            // type = icon
+  header.writeUInt16LE(1, 4);            // image count
+  const entry = Buffer.alloc(16);
+  entry[0] = 0;                          // width  256 → 0
+  entry[1] = 0;                          // height 256 → 0
+  entry[2] = 0;                          // palette colors
+  entry[3] = 0;                          // reserved
+  entry.writeUInt16LE(1, 4);             // color planes
+  entry.writeUInt16LE(32, 6);            // bits per pixel
+  entry.writeUInt32LE(pngBuf.length, 8); // image size
+  entry.writeUInt32LE(6 + 16, 12);       // offset to image data
+  return Buffer.concat([header, entry, pngBuf]);
+}
+const icoOut = path.join(__dirname, '..', 'public', 'icon.ico');
+fs.writeFileSync(icoOut, makeIco(png));
+console.log('Wrote', icoOut);

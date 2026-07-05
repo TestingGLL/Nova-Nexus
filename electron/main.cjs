@@ -7,13 +7,19 @@ let tray = null;
 
 const isDev = !app.isPackaged;
 
+// Prefer a real .ico for the Windows taskbar/exe icon; fall back to the PNG.
+const ICON_ICO = path.join(__dirname, '..', 'dist', 'icon.ico');
+const ICON_PNG = path.join(__dirname, '..', 'dist', 'icon.png');
+const APP_ICON = require('fs').existsSync(ICON_ICO) ? ICON_ICO : ICON_PNG;
+const APP_ID = 'com.novanexus.desktop';
+
 // Allow the Web Audio context to start without a user gesture so the app's audio
 // session (and its entry in the Windows volume mixer) is created on launch.
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 // Stable AppUserModelID so Windows groups the running window with the pinned
 // taskbar shortcut into a SINGLE icon (instead of showing a duplicate).
-try { app.setAppUserModelId('com.novanexus.desktop'); } catch {}
+try { app.setAppUserModelId(APP_ID); } catch {}
 
 const CHROME_PROGID = 'ChromeHTML';
 const EDGE_PROGID = 'MSEdgeHTM';
@@ -28,7 +34,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     title: 'Nova Nexus',
-    icon: path.join(__dirname, '..', 'dist', 'icon.png'),
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -42,6 +48,19 @@ function createWindow() {
     autoHideMenuBar: true,
     show: false,
   });
+
+  // Bind the taskbar button to the same AppUserModelID + relaunch command as the
+  // pinned shortcut, so Windows keeps a SINGLE icon (no duplicate) and pinning the
+  // running app produces a shortcut that reuses this instance.
+  try {
+    win.setAppDetails({
+      appId: APP_ID,
+      appIconPath: APP_ICON,
+      appIconIndex: 0,
+      relaunchCommand: `"${process.execPath}"`,
+      relaunchDisplayName: 'Nova Nexus',
+    });
+  } catch {}
 
   win.webContents.session.setSpellCheckerLanguages(['es']);
 
