@@ -861,7 +861,7 @@ function PlanificacionTab() {
     return Math.round((d.getTime() - today0.getTime()) / 86400000)
   }
   const inRange = (dt: string) => daysFromToday(dt) <= (range === '3months' ? 92 : 31)
-  const fmtMMDD = (dt: string) => new Date(`2024-${dt}`).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+  const fmtMMDD = (dt: string) => new Date(`2024-${dt}T12:00`).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 
   // Next upcoming dates per country (wrapping around the year), so each country
   // shows several tradicional/cultural dates ordered from today.
@@ -873,10 +873,17 @@ function PlanificacionTab() {
 
   const q = search.trim().toLowerCase()
   // Search ignores the range; otherwise show the upcoming dates (this month by
-  // default, or the next 3 months) ordered by proximity.
-  const filteredDates = q
-    ? data.dates.filter(d => d.label.toLowerCase().includes(q) || d.desc.toLowerCase().includes(q))
-    : data.dates.filter(d => inRange(d.date)).sort((a, b) => daysFromToday(a.date) - daysFromToday(b.date))
+  // default, or the next 3 months) ordered by proximity. If the country has no
+  // dates in that window, fall back to its next upcoming dates so it's never empty.
+  const byProximity = [...data.dates].sort((a, b) => daysFromToday(a.date) - daysFromToday(b.date))
+  let filteredDates: typeof data.dates
+  let isFallback = false
+  if (q) {
+    filteredDates = data.dates.filter(d => d.label.toLowerCase().includes(q) || d.desc.toLowerCase().includes(q))
+  } else {
+    filteredDates = byProximity.filter(d => inRange(d.date))
+    if (filteredDates.length === 0) { filteredDates = byProximity.slice(0, 4); isFallback = true }
+  }
 
   return (
     <div className="planificacion-tab">
@@ -935,6 +942,9 @@ function PlanificacionTab() {
         </div>
       )}
 
+      {isFallback && (
+        <p className="plan-fallback-note">No hay fechas en {range === '3months' ? 'los próximos 3 meses' : 'el mes actual'} para {data.name} — mostrando las próximas.</p>
+      )}
       <div className="plan-dates-grid">
         {filteredDates.map(d => {
           // In the upcoming view every date is future; only the free search may list past ones.
