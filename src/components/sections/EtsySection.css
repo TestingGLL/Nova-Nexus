@@ -350,6 +350,10 @@
 }
 .stat-number { font-size: 26px; font-weight: 300; color: var(--text-primary); }
 .stat-label { font-size: 11px; color: var(--text-secondary); }
+/* Reseñas stat is a toggle button that reveals the reviews list on click. */
+.stat-box-btn { cursor: pointer; font-family: inherit; transition: all 0.15s; }
+.stat-box-btn:hover { background: var(--accent-soft); transform: translateY(-2px); }
+.stat-box-btn.active { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
 
 /* Store inner tabs */
 .store-inner-tabs { display: flex; gap: 6px; margin-bottom: 18px; padding: 4px; background: var(--bg-hover); border-radius: 12px; width: fit-content; }

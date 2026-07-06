@@ -1156,6 +1156,7 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(store)
   const [storeTab, setStoreTab] = useState<'informacion' | 'articles' | 'launches' | 'creaciones' | 'planificacion' | 'clientes'>('informacion')
+  const [showReviews, setShowReviews] = useState(false)
   const bannerInputRef = useRef<HTMLInputElement>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
 
@@ -1234,13 +1235,13 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
             <p className="store-view-desc">{store.description}</p>
             <div className="store-view-stats">
               <div className="stat-box" style={{ borderColor: store.accentColor }}><Package size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.products}</span><span className="stat-label">Productos</span></div>
-              <div className="stat-box" style={{ borderColor: store.accentColor }}><Star size={18} style={{ color: store.accentColor }} /><span className="stat-number">{reviewTotal(store)}</span><span className="stat-label">Reseñas</span></div>
+              <button type="button" className={`stat-box stat-box-btn ${showReviews ? 'active' : ''}`} style={{ borderColor: store.accentColor }} onClick={() => setShowReviews(v => !v)} title="Ver / ocultar reseñas"><Star size={18} style={{ color: store.accentColor }} /><span className="stat-number">{reviewTotal(store)}</span><span className="stat-label">Reseñas {showReviews ? '▲' : '▼'}</span></button>
               <div className="stat-box" style={{ borderColor: store.accentColor }}><ShoppingCart size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.sales}</span><span className="stat-label">Ventas</span></div>
               <div className="stat-box" style={{ borderColor: store.accentColor }}><Users size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.clients}</span><span className="stat-label">Clientes</span></div>
               <div className="stat-box" style={{ borderColor: store.accentColor }}><TrendingUp size={18} style={{ color: store.accentColor }} /><span className="stat-number">{rating}★</span><span className="stat-label">Rating</span></div>
             </div>
           </div>
-          <ReviewsManager store={store} onUpdate={onUpdate} />
+          {showReviews && <ReviewsManager store={store} onUpdate={onUpdate} />}
           <BrandPanel store={store} onUpdate={onUpdate} />
         </div>
       )}
