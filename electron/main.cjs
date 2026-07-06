@@ -84,16 +84,26 @@ function createWindow() {
     if (menu.items.length) menu.popup();
   });
 
+  // The renderer can lay out at an intermediate size on first paint (the
+  // "UI se arregla al cambiar de sección o esperar" glitch). A real 1px window
+  // resize fires a genuine resize event and forces Chromium to re-layout at the
+  // final size — far more reliable than a JS-dispatched resize.
+  const relayoutNudge = () => {
+    try {
+      if (!win.isVisible() || win.isMinimized()) return;
+      const [w, h] = win.getSize();
+      win.setSize(w, h + 1);
+      setTimeout(() => { try { win.setSize(w, h); } catch {} }, 45);
+    } catch {}
+  };
   win.once('ready-to-show', () => {
     win.show();
-    // The renderer can lay out at an intermediate size on first paint (the
-    // "UI se arregla al cambiar de sección o esperar" glitch). A real 1px window
-    // resize fires a genuine resize event and forces Chromium to re-layout at the
-    // final size — far more reliable than a JS-dispatched resize.
-    const nudge = () => { try { const [w, h] = win.getSize(); win.setSize(w, h + 1); setTimeout(() => { try { win.setSize(w, h); } catch {} }, 40); } catch {} };
-    setTimeout(nudge, 120);
-    setTimeout(nudge, 500);
+    setTimeout(relayoutNudge, 120);
+    setTimeout(relayoutNudge, 500);
+    setTimeout(relayoutNudge, 1200);
   });
+  // Also nudge once the SPA bundle has finished loading (content mounts async).
+  win.webContents.on('did-finish-load', () => setTimeout(relayoutNudge, 250));
 
   // Minimize to tray instead of closing
   win.on('close', (e) => {
