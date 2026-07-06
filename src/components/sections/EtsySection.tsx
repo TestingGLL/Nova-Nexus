@@ -720,19 +720,53 @@ function CreacionesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: St
 
 // ============ PLANIFICACIÓN TAB ============
 
-const commercialDates: Record<string, { name: string; dates: { date: string; label: string; desc: string }[] }> = {
+const commercialDates: Record<string, { name: string; dates: { date: string; label: string; desc: string; stars?: number }[] }> = {
   us: { name: 'Estados Unidos', dates: [
-    { date: '01-01', label: "New Year's Day", desc: 'Año Nuevo. Alta demanda de productos motivacionales y de propósitos.' },
-    { date: '02-14', label: "Valentine's Day", desc: 'San Valentín. Pico de ventas de regalos para parejas, arte romántico y personalizados.' },
-    { date: '03-17', label: "St. Patrick's Day", desc: 'Día de San Patricio. Temática verde e irlandesa; imprimibles y decoración festiva.' },
-    { date: '04-22', label: 'Easter', desc: 'Pascua (fecha móvil, aprox. abril). Decoración de primavera, huevos y conejos.' },
-    { date: '05-12', label: "Mother's Day", desc: 'Día de la Madre (2º domingo de mayo). Fuerte demanda de regalos personalizados.' },
-    { date: '06-15', label: "Father's Day", desc: 'Día del Padre (3er domingo de junio). Regalos personalizados y arte para papá.' },
-    { date: '07-04', label: 'Independence Day', desc: 'Día de la Independencia. Temática patriótica (rojo/blanco/azul), decoración.' },
-    { date: '10-31', label: 'Halloween', desc: 'Halloween. Gran demanda de imprimibles, decoración y disfraces.' },
-    { date: '11-26', label: 'Thanksgiving', desc: 'Acción de Gracias (4º jueves de noviembre). Decoración otoñal y de mesa.' },
-    { date: '11-28', label: 'Black Friday', desc: 'Black Friday. El día de mayor volumen de ventas del año; preparar ofertas.' },
-    { date: '12-25', label: 'Christmas', desc: 'Navidad. Temporada alta general; planificar stock con anticipación.' },
+    { date: '01-01', label: "New Year's Day", desc: 'Año Nuevo. Alta demanda de productos motivacionales y de propósitos.', stars: 4 },
+    { date: '02-14', label: "Valentine's Day", desc: 'San Valentín. Pico de ventas de regalos para parejas, arte romántico y personalizados.', stars: 5 },
+    { date: '03-17', label: "St. Patrick's Day", desc: 'Día de San Patricio. Temática verde e irlandesa; imprimibles y decoración festiva.', stars: 3 },
+    { date: '04-22', label: 'Easter', desc: 'Pascua (fecha móvil, aprox. abril). Decoración de primavera, huevos y conejos.', stars: 4 },
+    { date: '05-12', label: "Mother's Day", desc: 'Día de la Madre (2º domingo de mayo). Fuerte demanda de regalos personalizados.', stars: 5 },
+    { date: '06-15', label: "Father's Day", desc: 'Día del Padre (3er domingo de junio). Regalos personalizados y arte para papá.', stars: 4 },
+    { date: '07-04', label: 'Independence Day', desc: 'Día de la Independencia. Temática patriótica (rojo/blanco/azul), decoración.', stars: 5 },
+    { date: '07-07', label: 'World Chocolate Day', desc: 'Día Mundial del Chocolate. Arte foodie, tarjetas y stickers temáticos.', stars: 3 },
+    { date: '07-08', label: 'Prime Day + Summer Sales', desc: 'Prime Day y rebajas de verano (mediados de julio). Gran volumen: preparar ofertas y bundles.', stars: 5 },
+    { date: '07-11', label: 'All-American Pet Photo Day', desc: 'Día de la foto de mascotas. Arte y retratos de mascotas, stickers.', stars: 2 },
+    { date: '07-15', label: 'National Give Something Away Day', desc: 'Día de regalar algo. Cupones, tarjetas de regalo e imprimibles.', stars: 2 },
+    { date: '07-17', label: 'World Emoji Day', desc: 'Día Mundial del Emoji. Muy fuerte en redes: stickers y arte de emojis.', stars: 3 },
+    { date: '07-18', label: 'National Ice Cream Day', desc: 'Día del Helado (3er domingo de julio). Arte veraniego y foodie.', stars: 3 },
+    { date: '07-20', label: 'National Moon Day', desc: 'Día de la Luna. Arte celestial, lunas y espacio.', stars: 1 },
+    { date: '07-24', label: 'National Tequila Day', desc: 'Día del Tequila. Arte de bar, cócteles y fiesta.', stars: 3 },
+    { date: '07-26', label: "Parents' Day", desc: 'Día de los Padres (4º domingo de julio). Regalos personalizados para familia.', stars: 2 },
+    { date: '07-30', label: 'International Friendship Day', desc: 'Día de la Amistad. Tarjetas, regalos para amigos y arte cálido.', stars: 3 },
+    { date: '08-01', label: 'Back to School', desc: 'Vuelta al cole (todo agosto). Planners, etiquetas, imprimibles educativos: temporada muy fuerte.', stars: 5 },
+    { date: '08-01', label: 'National Girlfriends Day', desc: 'Día de las Amigas. Regalos y arte para amigas.', stars: 3 },
+    { date: '08-08', label: 'International Cat Day', desc: 'Día del Gato. Arte y retratos de gatos, stickers.', stars: 3 },
+    { date: '08-09', label: 'Book Lovers Day', desc: 'Día del Amante de los Libros. Marcapáginas, arte literario y bookish.', stars: 2 },
+    { date: '08-10', label: 'National Lazy Day', desc: 'Día de la Pereza. Arte cozy y de descanso.', stars: 1 },
+    { date: '08-13', label: 'Left-Handers Day', desc: 'Día del Zurdo. Arte de nicho.', stars: 1 },
+    { date: '08-15', label: 'National Relaxation Day', desc: 'Día de la Relajación. Arte cozy, autocuidado y bienestar.', stars: 2 },
+    { date: '08-17', label: 'National Nonprofit Day', desc: 'Día de las ONG. Nicho solidario.', stars: 1 },
+    { date: '08-19', label: 'World Photography Day', desc: 'Día de la Fotografía. Presets, overlays y arte para fotógrafos.', stars: 3 },
+    { date: '08-25', label: 'Summer Clearance', desc: 'Fin de verano (última semana). Liquidación de productos veraniegos.', stars: 4 },
+    { date: '08-26', label: 'National Dog Day', desc: 'Día del Perro. Arte y retratos de perros: muy popular.', stars: 4 },
+    { date: '08-26', label: "Women's Equality Day", desc: 'Día de la Igualdad de la Mujer. Arte con mensaje y empoderamiento.', stars: 2 },
+    { date: '09-05', label: 'International Day of Charity', desc: 'Día de la Caridad. Nicho solidario.', stars: 2 },
+    { date: '09-07', label: 'Labor Day', desc: 'Día del Trabajo (1er lunes de septiembre). Rebajas de fin de verano; gran volumen.', stars: 5 },
+    { date: '09-08', label: 'International Literacy Day', desc: 'Día de la Alfabetización. Arte educativo y literario.', stars: 1 },
+    { date: '09-11', label: 'Patriot Day', desc: 'Día del Patriota (11-S). Arte conmemorativo y patriótico.', stars: 2 },
+    { date: '09-13', label: 'Grandparents Day', desc: 'Día de los Abuelos. Regalos personalizados y tarjetas.', stars: 3 },
+    { date: '09-15', label: 'Hispanic Heritage Month', desc: 'Inicio del Mes de la Herencia Hispana. Arte cultural latino.', stars: 4 },
+    { date: '09-21', label: 'International Day of Peace', desc: 'Día de la Paz. Arte con mensaje.', stars: 2 },
+    { date: '09-22', label: 'First Day of Autumn', desc: 'Primer día del otoño. Decoración otoñal, calabazas y hojas.', stars: 3 },
+    { date: '09-27', label: 'World Tourism Day', desc: 'Día del Turismo. Arte de viajes y ciudades.', stars: 2 },
+    { date: '09-29', label: 'National Coffee Day', desc: 'Día del Café. Arte foodie de café: muy popular.', stars: 4 },
+    { date: '09-30', label: 'International Podcast Day', desc: 'Día del Podcast. Arte y plantillas para creadores.', stars: 2 },
+    { date: '10-31', label: 'Halloween', desc: 'Halloween. Gran demanda de imprimibles, decoración y disfraces.', stars: 5 },
+    { date: '11-26', label: 'Thanksgiving', desc: 'Acción de Gracias (4º jueves de noviembre). Decoración otoñal y de mesa.', stars: 5 },
+    { date: '11-28', label: 'Black Friday', desc: 'Black Friday. El día de mayor volumen de ventas del año; preparar ofertas.', stars: 5 },
+    { date: '12-01', label: 'Cyber Monday', desc: 'Cyber Monday. Descuentos online masivos tras Black Friday.', stars: 5 },
+    { date: '12-25', label: 'Christmas', desc: 'Navidad. Temporada alta general; planificar stock con anticipación.', stars: 5 },
   ]},
   fr: { name: 'Francia', dates: [
     { date: '01-01', label: 'Nouvel An', desc: 'Año Nuevo. Regalos de inicio de año y papelería.' },
@@ -954,10 +988,11 @@ function PlanificacionTab() {
           return (
             <div key={key} className={`card plan-date-card clickable ${isPast ? 'past' : ''} ${sel ? 'selected' : ''}`} onClick={() => setSelectedDate(sel ? null : key)}>
               <div className="plan-date-top">
-                <span className="plan-date-month">{new Date(`2024-${d.date}`).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })}</span>
+                <span className="plan-date-month">{new Date(`2024-${d.date}T12:00`).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })}</span>
                 {!isPast && <span className="plan-date-upcoming">Próximo</span>}
               </div>
               <span className="plan-date-label">{d.label}</span>
+              {d.stars ? <span className="plan-date-stars" title={`Potencial ${d.stars}/5`}>{'★'.repeat(d.stars)}<span className="plan-date-stars-off">{'★'.repeat(5 - d.stars)}</span></span> : null}
               {sel && (
                 <div className="plan-date-detail">
                   <p className="plan-date-desc">{d.desc}</p>
