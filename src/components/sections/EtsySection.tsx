@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, RotateCcw } from 'lucide-react'
+import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, RotateCcw, Copy } from 'lucide-react'
 import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
 import './EtsySection.css'
@@ -11,7 +11,7 @@ interface Article { id: string; title: string; description: string; subArticles:
 interface ArticleGroup { id: string; name: string; color?: string; defaultPrice?: string }
 interface ClientInfo { id: string; name: string; gender: string; country: string; favGroupId?: string; recurring?: boolean }
 // Lanzamientos → Organizador: paneles con artículos ordenados (oficiales o personalizados).
-interface OrgItem { id: string; articleId?: string; customTitle?: string; customDesc?: string; launched?: boolean; launchDate?: string }
+interface OrgItem { id: string; articleId?: string; subArticleId?: string; customTitle?: string; customDesc?: string; launched?: boolean; launchDate?: string }
 interface Organizer { id: string; name: string; items: OrgItem[] }
 
 const UNGROUPED_ID = '__ungrouped'
@@ -36,7 +36,9 @@ const DEFAULT_GROUP_COLOR = '#312e81'
 // Alphabetical comparator (Spanish, case/accent-insensitive) for articles/groups/subs.
 const byName = (a: string, b: string) => (a || '').localeCompare(b || '', 'es', { sensitivity: 'base' })
 
-interface BrandInfo { slogan: string; brandColors: string[]; notes: string }
+interface BrandInfo { slogan: string; sloganEn?: string; brandColors: string[]; notes: string; fonts?: string[] }
+interface PresetMsg { id: string; groupId?: string; titleEs: string; titleEn: string; descEs: string; descEn: string }
+interface PresetGroup { id: string; name: string }
 interface PromptPanel { id: string; title: string; description: string; group?: string; mainPrompt?: string; prompts: { id: string; text: string; variables: string[] }[] }
 interface WordGroup { name: string; words: string[] }
 function loadWordGroups(): WordGroup[] { try { const s = localStorage.getItem('nn-prompt-groups'); return s ? JSON.parse(s) : [] } catch { return [] } }
@@ -51,6 +53,7 @@ interface StoreData {
   starSeller?: boolean; logoImage?: string; creaciones?: PromptPanel[]; income?: IncomeEntry[]
   articleGroups?: ArticleGroup[]; clientList?: ClientInfo[]
   organizers?: Organizer[]; flowOrganizerId?: string | null
+  presets?: PresetMsg[]; presetGroups?: PresetGroup[]
 }
 
 const defaultStores: StoreData[] = [
@@ -126,12 +129,40 @@ function AddArticleModal({ onAdd, onClose, groups, defaultGroupId }: { onAdd: (a
 
 // ============ BRAND PANEL ============
 
+// Compact rich text editor (contentEditable). innerHTML is set once on mount to
+// keep the caret stable while typing.
+function RichEditor({ html, onChange, placeholder }: { html: string; onChange: (h: string) => void; placeholder?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => { if (ref.current && ref.current.innerHTML !== html) ref.current.innerHTML = html }, [])
+  const exec = (cmd: string, val?: string) => { try { document.execCommand('styleWithCSS', false, 'true') } catch {}; document.execCommand(cmd, false, val); ref.current?.focus(); onChange(ref.current?.innerHTML || '') }
+  return (
+    <div className="brand-rich">
+      <div className="brand-rich-toolbar">
+        <button type="button" className="brand-rich-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h2')}>H1</button>
+        <button type="button" className="brand-rich-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h3')}>H2</button>
+        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'p')}><Type size={13} /></button>
+        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => exec('bold')} style={{ fontWeight: 800 }}>B</button>
+        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => exec('italic')} style={{ fontStyle: 'italic' }}>I</button>
+        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => exec('underline')} style={{ textDecoration: 'underline' }}>U</button>
+        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => exec('insertUnorderedList')}>•</button>
+      </div>
+      <div ref={ref} className="brand-rich-content" contentEditable suppressContentEditableWarning data-ph={placeholder || 'Escribí...'} onInput={() => onChange(ref.current?.innerHTML || '')} />
+    </div>
+  )
+}
+
 function BrandPanel({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
-  const brand = store.brand || { slogan: '', brandColors: [store.bannerColor, store.accentColor], notes: '' }
+  const brand = store.brand || { slogan: '', sloganEn: '', brandColors: [store.bannerColor, store.accentColor], notes: '', fonts: [] }
+  const [sloganLang, setSloganLang] = useState<'es' | 'en'>('es')
   const update = (u: Partial<BrandInfo>) => onUpdate({ ...store, brand: { ...brand, ...u } })
   const addColor = () => update({ brandColors: [...brand.brandColors, '#888888'] })
   const removeColor = (i: number) => update({ brandColors: brand.brandColors.filter((_, idx) => idx !== i) })
   const setColor = (i: number, c: string) => { const nc = [...brand.brandColors]; nc[i] = c; update({ brandColors: nc }) }
+  // Accept HEX typed by the user; only commit when it's a valid #RGB/#RRGGBB.
+  const setHex = (i: number, v: string) => { let h = v.trim(); if (h && !h.startsWith('#')) h = '#' + h; if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(h)) setColor(i, h) }
+  const fonts = brand.fonts || []
+  const setFont = (i: number, v: string) => { const f = [fonts[0] || '', fonts[1] || '', fonts[2] || '']; f[i] = v; update({ fonts: f }) }
+  const sloganVal = sloganLang === 'es' ? brand.slogan : (brand.sloganEn || '')
 
   return (
     <div className="brand-panel">
@@ -141,25 +172,44 @@ function BrandPanel({ store, onUpdate }: { store: StoreData; onUpdate: (s: Store
           <div className="brand-header-info">
             <h3>{store.name}</h3>
             {store.starSeller && <span className="star-seller-badge"><Award size={12} /> Star Seller</span>}
-            {brand.slogan && <p className="brand-slogan">"{brand.slogan}"</p>}
+            {sloganVal && <p className="brand-slogan">"{sloganVal}"</p>}
           </div>
         </div>
         <div className="brand-body">
-          <label className="brand-field"><span><Tag size={12} /> Slogan</span><input value={brand.slogan} onChange={e => update({ slogan: e.target.value })} placeholder="Tu slogan aquí..." /></label>
+          <div className="brand-field">
+            <span><Tag size={12} /> Slogan
+              <span className="brand-lang-toggle">
+                <button className={sloganLang === 'es' ? 'active' : ''} onClick={() => setSloganLang('es')}>ES</button>
+                <button className={sloganLang === 'en' ? 'active' : ''} onClick={() => setSloganLang('en')}>EN</button>
+              </span>
+            </span>
+            <input value={sloganVal} onChange={e => update(sloganLang === 'es' ? { slogan: e.target.value } : { sloganEn: e.target.value })} placeholder={sloganLang === 'es' ? 'Tu slogan en español...' : 'Your slogan in English...'} />
+          </div>
           <div className="brand-field">
             <span><Palette size={12} /> Paleta de marca</span>
             <div className="brand-colors">
               {brand.brandColors.map((c, i) => (
                 <div key={i} className="brand-color-item">
-                  <input type="color" value={c} onChange={e => setColor(i, e.target.value)} />
-                  <span className="brand-color-hex">{c.toUpperCase()}</span>
+                  <input type="color" value={/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c) ? c : '#888888'} onChange={e => setColor(i, e.target.value)} />
+                  <input className="brand-color-hex-input" value={c.toUpperCase()} onChange={e => setHex(i, e.target.value)} placeholder="#000000" spellCheck={false} />
                   {brand.brandColors.length > 1 && <button className="brand-color-remove" onClick={() => removeColor(i)}><X size={10} /></button>}
                 </div>
               ))}
               <button className="brand-color-add" onClick={addColor}><Plus size={12} /></button>
             </div>
           </div>
-          <label className="brand-field"><span><FileText size={12} /> Notas de marca</span><textarea value={brand.notes} onChange={e => update({ notes: e.target.value })} placeholder="Filosofía, público objetivo, diferenciadores..." rows={3} /></label>
+          <div className="brand-field">
+            <span><Type size={12} /> Tipografía (hasta 3)</span>
+            <div className="brand-fonts">
+              {[0, 1, 2].map(i => (
+                <input key={i} className="brand-font-input" value={fonts[i] || ''} onChange={e => setFont(i, e.target.value)} placeholder={`Tipografía ${i + 1}`} style={fonts[i] ? { fontFamily: `"${fonts[i]}", inherit` } : undefined} />
+              ))}
+            </div>
+          </div>
+          <div className="brand-field">
+            <span><FileText size={12} /> Información de Marca</span>
+            <RichEditor html={brand.notes} onChange={h => update({ notes: h })} placeholder="Filosofía, público objetivo, diferenciadores, tono de voz..." />
+          </div>
         </div>
       </div>
     </div>
@@ -349,8 +399,26 @@ function ArticlesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const ungrouped = store.articles.filter(a => !a.groupId || !groups.some(g => g.id === a.groupId))
   const ungroupedShown = ungrouped.filter(matches).sort((a, b) => byName(a.title, b.title))
 
+  const parsePrice = (p?: string) => parseFloat(String(p || '').replace(/[^0-9.,]/g, '').replace(',', '.')) || 0
+  const totalSubs = store.articles.reduce((a, art) => a + art.subArticles.length, 0)
+  const priceArticles = store.articles.reduce((a, art) => a + parsePrice(art.price), 0)
+  const priceSubs = store.articles.reduce((a, art) => a + art.subArticles.reduce((s, sub) => s + parsePrice(sub.price), 0), 0)
+
   return (
     <div className="articles-tab">
+      <div className="card articles-summary">
+        <div className="articles-summary-counts">
+          <div className="art-sum-stat"><span className="art-sum-num">{store.articles.length}</span><span className="art-sum-lbl">Artículos</span></div>
+          <div className="art-sum-stat"><span className="art-sum-num">{totalSubs}</span><span className="art-sum-lbl">Subartículos</span></div>
+          <div className="art-sum-stat"><span className="art-sum-num">{groups.length}</span><span className="art-sum-lbl">Grupos</span></div>
+        </div>
+        <div className="articles-summary-prices">
+          <div className="art-sum-price"><span className="art-sum-price-lbl">Todos los artículos</span><span className="art-sum-price-val">{fmtUsdArs(String(priceArticles), rate) || `US$ ${priceArticles.toFixed(2)}`}</span></div>
+          <div className="art-sum-price"><span className="art-sum-price-lbl">Todos los subartículos</span><span className="art-sum-price-val">{fmtUsdArs(String(priceSubs), rate) || `US$ ${priceSubs.toFixed(2)}`}</span></div>
+          <div className="art-sum-price total"><span className="art-sum-price-lbl">Combinado</span><span className="art-sum-price-val">{fmtUsdArs(String(priceArticles + priceSubs), rate) || `US$ ${(priceArticles + priceSubs).toFixed(2)}`}</span></div>
+        </div>
+      </div>
+
       <div className="articles-toolbar">
         <div className="articles-search"><Search size={14} /><input placeholder="Buscar artículos..." value={search} onChange={e => setSearch(e.target.value)} /></div>
         <button className="articles-add-btn-secondary" onClick={addGroup}><Layers size={15} /> Nuevo grupo</button>
@@ -377,31 +445,40 @@ function ArticlesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
 const ordinals = ['1º', '2º', '3º', '4º', '5º', '6º', '7º', '8º', '9º', '10º']
 
 // Picker for adding official store articles into an organizer panel.
-function OrganizerArticlePicker({ store, existing, onAdd, onClose }: { store: StoreData; existing: Set<string>; onAdd: (ids: string[]) => void; onClose: () => void }) {
+function OrganizerArticlePicker({ store, onAdd, onClose }: { store: StoreData; onAdd: (items: { articleId: string; subArticleId?: string }[]) => void; onClose: () => void }) {
   const groups = store.articleGroups || []
-  const [sel, setSel] = useState<Set<string>>(new Set())
-  const toggle = (id: string) => setSel(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
-  const available = store.articles.filter(a => !existing.has(a.id))
+  const [checked, setChecked] = useState<Set<string>>(new Set())
+  const [sub, setSub] = useState<Record<string, string>>({}) // articleId → subArticleId ('' = artículo completo)
+  const toggle = (id: string) => setChecked(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const available = store.articles
   const ungrouped = available.filter(a => !a.groupId || !groups.some(g => g.id === a.groupId))
   const row = (a: Article) => (
-    <label key={a.id} className="lsel-row">
-      <input type="checkbox" checked={sel.has(a.id)} onChange={() => toggle(a.id)} />
-      <span className="lsel-title">{a.icon || '📄'} {a.title}</span>
-    </label>
+    <div key={a.id} className="lsel-row-wrap">
+      <label className="lsel-row">
+        <input type="checkbox" checked={checked.has(a.id)} onChange={() => toggle(a.id)} />
+        <span className="lsel-title">{a.icon || '📄'} {a.title}</span>
+      </label>
+      {checked.has(a.id) && a.subArticles.length > 0 && (
+        <select className="lsel-sub-select" value={sub[a.id] || ''} onChange={e => setSub(s => ({ ...s, [a.id]: e.target.value }))}>
+          <option value="">Artículo completo</option>
+          {a.subArticles.map(s => <option key={s.id} value={s.id}>↳ {s.title || 'Sin nombre'}</option>)}
+        </select>
+      )}
+    </div>
   )
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content lsel-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header"><h3>Agregar artículos oficiales</h3><button className="modal-close" onClick={onClose}><X size={16} /></button></div>
         <div className="modal-body lsel-body">
-          {available.length === 0 && <div className="articles-empty"><Package size={24} /><p>No hay más artículos oficiales para agregar. Creá artículos en la pestaña «Artículos» o cargá uno personalizado.</p></div>}
+          {available.length === 0 && <div className="articles-empty"><Package size={24} /><p>No hay artículos oficiales. Creá artículos en la pestaña «Artículos» o cargá uno personalizado.</p></div>}
           {groups.map(g => { const ga = available.filter(a => a.groupId === g.id); return ga.length ? <div key={g.id} className="lsel-group"><span className="lsel-group-name"><Layers size={13} /> {g.name}</span><div className="lsel-group-items">{ga.map(row)}</div></div> : null })}
           {ungrouped.length > 0 && <div className="lsel-group">{groups.length > 0 && <span className="lsel-ungrouped-label">Sin grupo</span>}<div className="lsel-group-items">{ungrouped.map(row)}</div></div>}
         </div>
         <div className="modal-footer">
-          <span className="lsel-count">{sel.size} seleccionados</span>
+          <span className="lsel-count">{checked.size} seleccionados</span>
           <button className="modal-cancel" onClick={onClose}>Cancelar</button>
-          <button className="modal-submit" onClick={() => { onAdd(Array.from(sel)); onClose() }} disabled={sel.size === 0}>Agregar</button>
+          <button className="modal-submit" onClick={() => { onAdd(Array.from(checked).map(id => ({ articleId: id, subArticleId: sub[id] || undefined }))); onClose() }} disabled={checked.size === 0}>Agregar</button>
         </div>
       </div>
     </div>
@@ -444,14 +521,20 @@ function LaunchesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const flowOrg = organizers.find(o => o.id === store.flowOrganizerId) || null
 
   const articleById = (id?: string) => store.articles.find(a => a.id === id)
-  const itemTitle = (it: OrgItem) => it.articleId ? (articleById(it.articleId)?.title || 'Artículo eliminado') : (it.customTitle || 'Personalizado')
+  const itemTitle = (it: OrgItem) => {
+    if (!it.articleId) return it.customTitle || 'Personalizado'
+    const art = articleById(it.articleId)
+    if (!art) return 'Artículo eliminado'
+    if (it.subArticleId) { const s = art.subArticles.find(x => x.id === it.subArticleId); return `${art.title} › ${s?.title || 'Sin nombre'}` }
+    return art.title
+  }
   const itemIcon = (it: OrgItem) => it.articleId ? (articleById(it.articleId)?.icon || '📄') : '✏️'
 
   const addOrganizer = () => setOrganizers([...organizers, { id: 'org-' + Date.now(), name: 'Nuevo panel', items: [] }])
   const renameOrganizer = (id: string, name: string) => setOrganizers(organizers.map(o => o.id === id ? { ...o, name } : o))
   const removeOrganizer = async (id: string) => { const o = organizers.find(x => x.id === id); if (!await confirm({ title: 'Eliminar panel', message: `¿Eliminar el panel «${o?.name || ''}» y su orden?`, confirmLabel: 'Eliminar panel' })) return; onUpdate({ ...store, organizers: organizers.filter(o => o.id !== id), flowOrganizerId: store.flowOrganizerId === id ? null : store.flowOrganizerId }) }
 
-  const addOfficial = (orgId: string, ids: string[]) => setOrganizers(organizers.map(o => o.id === orgId ? { ...o, items: [...o.items, ...ids.map((aid, k) => ({ id: 'oi-' + Date.now() + '-' + k, articleId: aid }))] } : o))
+  const addOfficial = (orgId: string, items: { articleId: string; subArticleId?: string }[]) => setOrganizers(organizers.map(o => o.id === orgId ? { ...o, items: [...o.items, ...items.map((it, k) => ({ id: 'oi-' + Date.now() + '-' + k, articleId: it.articleId, subArticleId: it.subArticleId }))] } : o))
   const addCustom = (orgId: string) => { const t = (customTitle[orgId] || '').trim(); if (!t) return; setOrganizers(organizers.map(o => o.id === orgId ? { ...o, items: [...o.items, { id: 'oi-' + Date.now(), customTitle: t }] } : o)); setCustomTitle({ ...customTitle, [orgId]: '' }) }
   const removeItem = (orgId: string, itemId: string) => setOrganizers(organizers.map(o => o.id === orgId ? { ...o, items: o.items.filter(i => i.id !== itemId) } : o))
   const reorder = (orgId: string, from: string, to: string) => { if (from === to) return; setOrganizers(organizers.map(o => { if (o.id !== orgId) return o; const items = [...o.items]; const fi = items.findIndex(i => i.id === from); const ti = items.findIndex(i => i.id === to); if (fi < 0 || ti < 0) return o; items.splice(ti, 0, items.splice(fi, 1)[0]); return { ...o, items } })) }
@@ -523,7 +606,7 @@ function LaunchesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
               </div>
             </div>
           ))}
-          {pickerOrg && <OrganizerArticlePicker store={store} existing={new Set((organizers.find(o => o.id === pickerOrg)?.items || []).map(i => i.articleId).filter(Boolean) as string[])} onAdd={ids => addOfficial(pickerOrg, ids)} onClose={() => setPickerOrg(null)} />}
+          {pickerOrg && <OrganizerArticlePicker store={store} onAdd={items => addOfficial(pickerOrg, items)} onClose={() => setPickerOrg(null)} />}
         </>
       ) : (
         <>
@@ -1142,10 +1225,15 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const [filterRecurring, setFilterRecurring] = useState(false)
   const [dashOpen, setDashOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
+  const [subtab, setSubtab] = useState<'lista' | 'gestion'>('lista')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const confirm = useConfirm()
 
-  const add = () => {
+  const add = async () => {
     if (!name.trim()) return
+    // Warn if a client with the same name AND country already exists.
+    const dupe = clients.some(c => c.name.trim().toLowerCase() === name.trim().toLowerCase() && c.country === country)
+    if (dupe && !await confirm({ title: 'Cliente duplicado', message: `Ya existe un cliente llamado «${name.trim()}» en ${country}. ¿Crearlo de todos modos?`, confirmLabel: 'Crear igual' })) return
     const c: ClientInfo = { id: 'cli-' + Date.now(), name: name.trim(), gender, country, favGroupId: favGroupId || undefined, recurring: false }
     onUpdate({ ...store, clientList: [c, ...clients] }); setName('')
   }
@@ -1172,9 +1260,69 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   )
   const anyFilter = filterCountry !== 'all' || filterGender !== 'all' || filterGroup !== 'all' || filterRecurring || !!q
   const resetFilters = () => { setFilterCountry('all'); setFilterGender('all'); setFilterGroup('all'); setFilterRecurring(false); setSearch('') }
+  // Alphabetical order.
+  const sortedFiltered = [...filtered].sort((a, b) => byName(a.name, b.name))
+  // Duplicate detection: same name (case-insensitive) + same country.
+  const dupGroups = (() => {
+    const m = new Map<string, ClientInfo[]>()
+    for (const c of clients) { const k = `${c.name.trim().toLowerCase()}|${c.country}`; const arr = m.get(k); if (arr) arr.push(c); else m.set(k, [c]) }
+    return Array.from(m.values()).filter(g => g.length > 1)
+  })()
+  const toggleSel = (id: string) => setSelected(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const bulkUpdate = (u: Partial<ClientInfo>) => onUpdate({ ...store, clientList: clients.map(c => selected.has(c.id) ? { ...c, ...u } : c) })
+  const bulkDelete = async () => { if (!selected.size) return; if (!await confirm({ title: 'Eliminar clientes', message: `¿Eliminar ${selected.size} cliente(s) seleccionado(s)?`, confirmLabel: 'Eliminar' })) return; onUpdate({ ...store, clientList: clients.filter(c => !selected.has(c.id)) }); setSelected(new Set()) }
 
   return (
     <div className="clientes-tab">
+      <div className="clientes-subtabs">
+        <button className={subtab === 'lista' ? 'active' : ''} onClick={() => setSubtab('lista')}><Users size={13} /> Clientes</button>
+        <button className={subtab === 'gestion' ? 'active' : ''} onClick={() => setSubtab('gestion')}><Edit3 size={13} /> Gestión {dupGroups.length > 0 && <span className="clientes-dup-badge">{dupGroups.length}</span>}</button>
+      </div>
+      {subtab === 'gestion' ? (
+        <div className="clientes-gestion">
+          {/* Duplicados */}
+          <div className="card clientes-dup-card">
+            <div className="card-title"><Users size={15} /> Clientes repetidos ({dupGroups.length})</div>
+            {dupGroups.length === 0 && <p className="article-group-empty">No hay clientes con el mismo nombre y país.</p>}
+            {dupGroups.map((g, gi) => (
+              <div key={gi} className="clientes-dup-group">
+                <span className="clientes-dup-head">{flagOf(g[0].country)} {g[0].name} · {g[0].country} <b>×{g.length}</b></span>
+                {g.map(c => (
+                  <div key={c.id} className="clientes-dup-row">
+                    <span>{normGender(c.gender)} · {groupName(c.favGroupId)}{c.recurring ? ' · ★' : ''}</span>
+                    <button className="article-delete" onClick={() => remove(c.id)}><Trash2 size={13} /></button>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          {/* Ediciones masivas */}
+          <div className="card clientes-bulk-card">
+            <div className="card-title"><Edit3 size={15} /> Ediciones masivas</div>
+            <div className="clientes-bulk-bar">
+              <span>{selected.size} seleccionados</span>
+              <button onClick={() => setSelected(new Set(clients.map(c => c.id)))}>Todos</button>
+              <button onClick={() => setSelected(new Set())}>Ninguno</button>
+              <select disabled={!selected.size} defaultValue="" onChange={e => { if (e.target.value) { bulkUpdate({ country: e.target.value }); e.target.value = '' } }}><option value="">País…</option>{COUNTRIES.map(x => <option key={x.name} value={x.name}>{x.flag} {x.name}</option>)}</select>
+              <select disabled={!selected.size} defaultValue="" onChange={e => { if (e.target.value) { bulkUpdate({ gender: e.target.value }); e.target.value = '' } }}><option value="">Género…</option>{GENDERS.map(g => <option key={g}>{g}</option>)}</select>
+              <select disabled={!selected.size} defaultValue="" onChange={e => { if (e.target.value) { bulkUpdate({ favGroupId: e.target.value === '__none' ? undefined : e.target.value }); e.target.value = '' } }}><option value="">Grupo…</option><option value="__none">Sin grupo</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
+              <button className="clientes-bulk-recurring" disabled={!selected.size} onClick={() => bulkUpdate({ recurring: true })}><Star size={12} /> Recurrente</button>
+              <button className="clientes-bulk-del" disabled={!selected.size} onClick={bulkDelete}><Trash2 size={12} /> Eliminar</button>
+            </div>
+            <div className="clientes-bulk-list">
+              {sortedFiltered.map(c => (
+                <label key={c.id} className={`clientes-bulk-item ${selected.has(c.id) ? 'sel' : ''}`}>
+                  <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSel(c.id)} />
+                  <span className="clientes-bulk-name">{c.name}</span>
+                  <span className="clientes-bulk-meta">{flagOf(c.country)} {c.country} · {normGender(c.gender)}</span>
+                </label>
+              ))}
+              {clients.length === 0 && <p className="article-group-empty">Sin clientes.</p>}
+            </div>
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Collapsible dashboard that doubles as the filter panel. */}
       <div className="card clientes-dashboard">
         <button className="clientes-dash-toggle" onClick={() => setDashOpen(o => !o)}>
@@ -1223,7 +1371,7 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
       )}
 
       <div className="clientes-list">
-        {filtered.map(c => editId === c.id ? (
+        {sortedFiltered.map(c => editId === c.id ? (
           <div key={c.id} className="card cliente-item editing">
             <div className="cliente-edit-fields">
               <input value={c.name} onChange={e => update(c.id, { name: e.target.value })} placeholder="Nombre" />
@@ -1251,6 +1399,80 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
         ))}
         {filtered.length === 0 && <div className="articles-empty"><Users size={24} /><p>{search || filterCountry !== 'all' || filterGender !== 'all' || filterGroup !== 'all' ? 'Sin resultados' : 'Sin clientes todavía. Agregá el primero arriba.'}</p></div>}
       </div>
+      </>
+      )}
+    </div>
+  )
+}
+
+// ============ PREDETERMINADAS (mensajes) ============
+function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
+  const presets = store.presets || []
+  const pgroups = store.presetGroups || []
+  const [editId, setEditId] = useState<string | null>(null)
+  const [lang, setLang] = useState<Record<string, 'en' | 'es'>>({})
+  const [copied, setCopied] = useState<string | null>(null)
+  const confirm = useConfirm()
+
+  const save = (p: PresetMsg[]) => onUpdate({ ...store, presets: p })
+  const saveGroups = (g: PresetGroup[]) => onUpdate({ ...store, presetGroups: g })
+  const addMsg = (groupId?: string) => { const id = 'pm-' + Date.now(); save([{ id, groupId, titleEs: '', titleEn: '', descEs: '', descEn: '' }, ...presets]); setEditId(id) }
+  const updateMsg = (id: string, u: Partial<PresetMsg>) => save(presets.map(m => m.id === id ? { ...m, ...u } : m))
+  const removeMsg = async (id: string) => { const m = presets.find(x => x.id === id); if (!await confirm({ title: 'Eliminar mensaje', message: `¿Eliminar «${m?.titleEn || m?.titleEs || 'este mensaje'}»?` })) return; save(presets.filter(m => m.id !== id)) }
+  const dupMsg = (id: string) => { const m = presets.find(x => x.id === id); if (!m) return; const idx = presets.findIndex(x => x.id === id); const d: PresetMsg = { ...m, id: 'pm-' + Date.now(), titleEn: (m.titleEn || '') + ' (copy)', titleEs: (m.titleEs || '') + ' (copia)' }; const next = [...presets]; next.splice(idx + 1, 0, d); save(next) }
+  const addGroup = () => saveGroups([...pgroups, { id: 'pg-' + Date.now(), name: 'Nuevo grupo' }])
+  const renameGroup = (id: string, name: string) => saveGroups(pgroups.map(g => g.id === id ? { ...g, name } : g))
+  const removeGroup = async (id: string) => { if (!await confirm({ title: 'Eliminar grupo', message: 'Se elimina el grupo; sus mensajes quedan sin grupo.', confirmLabel: 'Eliminar' })) return; saveGroups(pgroups.filter(g => g.id !== id)); save(presets.map(m => m.groupId === id ? { ...m, groupId: undefined } : m)) }
+  const msgLang = (id: string) => lang[id] || 'en' // default: inglés
+  const copyMsg = (m: PresetMsg) => { const l = msgLang(m.id); const t = l === 'en' ? m.titleEn : m.titleEs; const d = l === 'en' ? m.descEn : m.descEs; navigator.clipboard.writeText(`${t}\n\n${d}`.trim()); setCopied(m.id); setTimeout(() => setCopied(null), 1500) }
+
+  const renderMsg = (m: PresetMsg) => {
+    const l = msgLang(m.id); const editing = editId === m.id
+    const title = l === 'en' ? m.titleEn : m.titleEs; const desc = l === 'en' ? m.descEn : m.descEs
+    return (
+      <div key={m.id} className="preset-msg card">
+        <div className="preset-msg-head">
+          {editing
+            ? <input className="preset-msg-title-edit" value={title} onChange={e => updateMsg(m.id, l === 'en' ? { titleEn: e.target.value } : { titleEs: e.target.value })} placeholder={l === 'en' ? 'Title' : 'Título'} />
+            : <span className="preset-msg-title">{title || <em>(sin título)</em>}</span>}
+          <span className="preset-lang-toggle">
+            <button className={l === 'en' ? 'active' : ''} onClick={() => setLang(s => ({ ...s, [m.id]: 'en' }))}>EN</button>
+            <button className={l === 'es' ? 'active' : ''} onClick={() => setLang(s => ({ ...s, [m.id]: 'es' }))}>ES</button>
+          </span>
+          <button className="preset-copy" onClick={() => copyMsg(m)} title="Copiar mensaje">{copied === m.id ? <Check size={14} /> : <Copy size={14} />}</button>
+          <button className="preset-icon-btn" onClick={() => setEditId(editing ? null : m.id)} title={editing ? 'Listo' : 'Editar'}>{editing ? <Check size={14} /> : <Edit3 size={14} />}</button>
+          <button className="preset-icon-btn" onClick={() => dupMsg(m.id)} title="Duplicar"><Copy size={13} /></button>
+          <select className="preset-move" value={m.groupId || ''} onChange={e => updateMsg(m.id, { groupId: e.target.value || undefined })} title="Mover a grupo"><option value="">Sin grupo</option>{pgroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
+          <button className="preset-icon-btn del" onClick={() => removeMsg(m.id)} title="Eliminar"><Trash2 size={13} /></button>
+        </div>
+        {editing
+          ? <textarea className="preset-msg-desc-edit" value={desc} onChange={e => updateMsg(m.id, l === 'en' ? { descEn: e.target.value } : { descEs: e.target.value })} placeholder={l === 'en' ? 'Description...' : 'Descripción...'} rows={4} />
+          : (desc && <p className="preset-msg-desc">{desc}</p>)}
+      </div>
+    )
+  }
+
+  const ungrouped = presets.filter(m => !m.groupId || !pgroups.some(g => g.id === m.groupId))
+  return (
+    <div className="predeterminadas-tab">
+      <div className="preset-toolbar">
+        <button className="articles-add-btn-big" onClick={() => addMsg()}><Plus size={15} /> Nuevo mensaje</button>
+        <button className="articles-add-btn-secondary" onClick={addGroup}><Layers size={15} /> Nuevo grupo</button>
+      </div>
+      {presets.length === 0 && pgroups.length === 0 && <div className="articles-empty"><FileText size={24} /><p>Sin mensajes predeterminados. Creá el primero con «Nuevo mensaje».</p></div>}
+      {pgroups.map(g => (
+        <div key={g.id} className="preset-group card">
+          <div className="preset-group-head">
+            <Layers size={14} />
+            <input className="preset-group-name" value={g.name} onChange={e => renameGroup(g.id, e.target.value)} />
+            <span className="preset-group-count">{presets.filter(m => m.groupId === g.id).length}</span>
+            <button className="articles-add-btn-secondary" onClick={() => addMsg(g.id)}><Plus size={12} /> Mensaje</button>
+            <button className="preset-icon-btn del" onClick={() => removeGroup(g.id)}><Trash2 size={13} /></button>
+          </div>
+          <div className="preset-group-msgs">{presets.filter(m => m.groupId === g.id).map(renderMsg)}{presets.filter(m => m.groupId === g.id).length === 0 && <p className="article-group-empty">Sin mensajes en este grupo.</p>}</div>
+        </div>
+      ))}
+      {ungrouped.length > 0 && <div className="preset-ungrouped">{pgroups.length > 0 && <span className="preset-ungrouped-label">Sin grupo</span>}{ungrouped.map(renderMsg)}</div>}
     </div>
   )
 }
@@ -1309,7 +1531,7 @@ function BannerParticles() {
 function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () => void; onUpdate: (store: StoreData) => void }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(store)
-  const [storeTab, setStoreTab] = useState<'informacion' | 'articles' | 'launches' | 'creaciones' | 'planificacion' | 'clientes'>('informacion')
+  const [storeTab, setStoreTab] = useState<'informacion' | 'articles' | 'launches' | 'creaciones' | 'planificacion' | 'predeterminadas' | 'clientes'>('informacion')
   const [showReviews, setShowReviews] = useState(false)
   const bannerInputRef = useRef<HTMLInputElement>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
@@ -1381,6 +1603,7 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
         <button className={storeTab === 'creaciones' ? 'active' : ''} onClick={() => setStoreTab('creaciones')}>Creaciones</button>
         <button className={storeTab === 'clientes' ? 'active' : ''} onClick={() => setStoreTab('clientes')}>Clientes ({(store.clientList || []).length})</button>
         <button className={storeTab === 'planificacion' ? 'active' : ''} onClick={() => setStoreTab('planificacion')}>Planificación</button>
+        <button className={storeTab === 'predeterminadas' ? 'active' : ''} onClick={() => setStoreTab('predeterminadas')}>Predeterminadas</button>
       </div>
 
       {storeTab === 'informacion' && (
@@ -1404,6 +1627,7 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
       {storeTab === 'creaciones' && <CreacionesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'clientes' && <ClientesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'planificacion' && <PlanificacionTab />}
+      {storeTab === 'predeterminadas' && <PredeterminadasTab store={store} onUpdate={onUpdate} />}
     </div>
   )
 }
