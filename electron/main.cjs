@@ -84,7 +84,16 @@ function createWindow() {
     if (menu.items.length) menu.popup();
   });
 
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    win.show();
+    // The renderer can lay out at an intermediate size on first paint (the
+    // "UI se arregla al cambiar de sección o esperar" glitch). A real 1px window
+    // resize fires a genuine resize event and forces Chromium to re-layout at the
+    // final size — far more reliable than a JS-dispatched resize.
+    const nudge = () => { try { const [w, h] = win.getSize(); win.setSize(w, h + 1); setTimeout(() => { try { win.setSize(w, h); } catch {} }, 40); } catch {} };
+    setTimeout(nudge, 120);
+    setTimeout(nudge, 500);
+  });
 
   // Minimize to tray instead of closing
   win.on('close', (e) => {
