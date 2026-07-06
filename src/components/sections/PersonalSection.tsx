@@ -109,6 +109,7 @@ function ExercisePanel() {
   const [weekPlan, setWeekPlan] = useState<Record<string, string>>(() => { try { const s = localStorage.getItem('nn-week-routine'); return s ? JSON.parse(s) : {} } catch { return {} } })
   const [activeWeek, setActiveWeek] = useState<number>(() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })
   const saveActiveWeek = (w: number) => { setActiveWeek(w); localStorage.setItem('nn-active-week', String(w)); notifyRoutines() }
+  const confirm = useConfirm()
 
   // Deep-link from Inicio's "Rutina de hoy" panel: open today's routine directly.
   useEffect(() => {
@@ -142,6 +143,7 @@ function ExercisePanel() {
   const addExercise = (rid: string) => { const r = list.find(x => x.id === rid); if (!r) return; setWeekExercises(rid, week, [...exercisesOf(r, week), { name: 'Nuevo ejercicio', sets: 3, reps: '12', rest: '60s', tip: '', mode: 'reps' }]) }
   const removeExercise = (rid: string, idx: number) => { const r = list.find(x => x.id === rid); if (!r) return; setWeekExercises(rid, week, exercisesOf(r, week).filter((_, i) => i !== idx)) }
   const removeRoutine = (id: string) => { saveList(list.filter(r => r.id !== id)); setActiveRoutine(null) }
+  const askRemoveRoutine = async (id: string) => { const r = list.find(x => x.id === id); if (!await confirm({ title: 'Eliminar panel', message: `¿Eliminar «${r?.name || 'este panel'}» y sus ejercicios?`, confirmLabel: 'Eliminar' })) return; removeRoutine(id) }
 
   const addPanel = () => {
     if (!newPanelName.trim()) return
@@ -215,7 +217,8 @@ function ExercisePanel() {
   const renderGrid = () => (
     <div className="exercise-grid-lg">
       {list.map(r => (
-        <button key={r.id} className="routine-card" onClick={() => setActiveRoutine(r.id)}>
+        <div key={r.id} className="routine-card" role="button" tabIndex={0} onClick={() => setActiveRoutine(r.id)}>
+          <button className="routine-card-del" title="Eliminar panel" onClick={e => { e.stopPropagation(); askRemoveRoutine(r.id) }}><Trash2 size={13} /></button>
           <div className="routine-banner" style={{ background: `linear-gradient(135deg, ${r.color}, ${r.color}aa)` }}>
             <span className="routine-emoji">{r.emoji}</span>
             <span className="routine-name">{r.name}</span>
@@ -227,7 +230,7 @@ function ExercisePanel() {
           {r.exercises.length > 0 && (
             <div className="routine-preview">{r.exercises.slice(0, 3).map(e => e.name).join(' · ')}{r.exercises.length > 3 ? '…' : ''}</div>
           )}
-        </button>
+        </div>
       ))}
     </div>
   )
@@ -1244,7 +1247,7 @@ function ContactosTab() {
   const confirm = useConfirm()
 
   const save = (c: Contact[]) => { setContacts(c); localStorage.setItem('nn-contacts', JSON.stringify(c)) }
-  const add = () => { if (!form.name.trim()) return; save([{ id: 'ct-' + Date.now(), ...form, name: form.name.trim() }, ...contacts]); setForm({ ...emptyContact }); setShowNew(false) }
+  const add = () => { if (!form.name.trim() || !form.phone.trim()) return; save([{ id: 'ct-' + Date.now(), ...form, name: form.name.trim() }, ...contacts]); setForm({ ...emptyContact }); setShowNew(false) }
   const update = (id: string, u: Partial<Contact>) => save(contacts.map(c => c.id === id ? { ...c, ...u } : c))
   const remove = async (id: string) => { const c = contacts.find(x => x.id === id); if (!await confirm({ title: 'Eliminar contacto', message: `¿Eliminar a «${c?.name || 'este contacto'}»?` })) return; save(contacts.filter(c => c.id !== id)) }
   const duplicate = (id: string) => { const c = contacts.find(x => x.id === id); if (!c) return; const idx = contacts.findIndex(x => x.id === id); const dup: Contact = { ...c, id: 'ct-' + Date.now(), name: c.name + ' (copia)' }; const next = [...contacts]; next.splice(idx + 1, 0, dup); save(next) }
@@ -1263,14 +1266,14 @@ function ContactosTab() {
         <div className="card contacto-form">
           <input className="contacto-name-input" placeholder="Nombre *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} onKeyDown={e => e.key === 'Enter' && add()} autoFocus />
           <div className="contacto-form-row">
-            <label className="contacto-field"><Phone size={13} /><input placeholder="Teléfono" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></label>
+            <label className="contacto-field"><Phone size={13} /><input placeholder="Teléfono *" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} onKeyDown={e => e.key === 'Enter' && add()} /></label>
             <label className="contacto-field"><Mail size={13} /><EmailField value={form.email} onChange={v => setForm({ ...form, email: v })} placeholder="Correo electrónico" /></label>
           </div>
           <label className="contacto-field contacto-field-full"><MapPin size={13} /><input placeholder="Dirección" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></label>
           <textarea className="contacto-notes-input" placeholder="Notas..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} />
           <div className="form-actions">
             <button className="form-cancel" onClick={() => { setShowNew(false); setForm({ ...emptyContact }) }}>Cancelar</button>
-            <button className="shopping-create-btn" onClick={add} disabled={!form.name.trim()}>Guardar</button>
+            <button className="shopping-create-btn" onClick={add} disabled={!form.name.trim() || !form.phone.trim()}>Guardar</button>
           </div>
         </div>
       )}

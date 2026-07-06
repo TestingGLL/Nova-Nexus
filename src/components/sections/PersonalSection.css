@@ -330,9 +330,9 @@
 .shopping-subtab.active { font-weight: 600; }
 .shopping-subtab-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .shopping-subtab-count { font-size: 10px; background: var(--bg-hover); padding: 1px 6px; border-radius: 8px; color: var(--text-secondary); }
-/* auto-fit (no auto-fill) so lists stretch to fill the full app width instead of
-   sitting narrow with empty tracks; wider min for bigger, easier-to-read lists. */
-.shopping-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 14px; align-items: start; }
+/* Una sola columna a ancho completo: cada lista ocupa todo el ancho y se apila
+   debajo de la anterior. */
+.shopping-groups { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
 .shopping-group { padding: 14px 14px 10px !important; transition: all 0.2s; }
 .shopping-group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .shopping-group-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; border: none; cursor: pointer; padding: 0; }
@@ -425,8 +425,11 @@
 /* ===== Editable routines (big banners) ===== */
 .exercise-grid-lg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 @media (max-width: 800px) { .exercise-grid-lg { grid-template-columns: 1fr; } }
-.routine-card { border: none; background: none; padding: 0; cursor: pointer; text-align: left; transition: transform 0.15s; display: flex; flex-direction: column; }
+.routine-card { position: relative; border: none; background: none; padding: 0; cursor: pointer; text-align: left; transition: transform 0.15s; display: flex; flex-direction: column; }
 .routine-card:hover { transform: translateY(-3px); }
+.routine-card-del { position: absolute; top: 6px; right: 6px; z-index: 2; display: flex; padding: 5px; border: none; background: rgba(0,0,0,0.35); color: #fff; border-radius: 7px; cursor: pointer; opacity: 0; transition: all 0.15s; }
+.routine-card:hover .routine-card-del { opacity: 1; }
+.routine-card-del:hover { background: #ef4444; }
 .routine-banner { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 20px 12px; border-radius: 12px 12px 0 0; color: white; }
 .routine-emoji { font-size: 34px; }
 .routine-name { font-size: 15px; font-weight: 700; }

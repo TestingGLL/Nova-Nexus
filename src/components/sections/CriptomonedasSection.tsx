@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { TrendingUp, TrendingDown, RefreshCw, Clock } from 'lucide-react'
+import { TrendingUp, TrendingDown, RefreshCw, Clock, Search } from 'lucide-react'
 import './CriptomonedasSection.css'
 
 interface CoinDef { id: string; symbol: string; name: string; color: string }
@@ -138,6 +138,11 @@ export default function CriptomonedasSection() {
   const [lastUpdate, setLastUpdate] = useState('')
   const [selectedCoin, setSelectedCoin] = useState<string | null>(null)
   const [period, setPeriod] = useState(7)
+  const [search, setSearch] = useState('')
+  const [fRiesgo, setFRiesgo] = useState('all')
+  const [fPlazo, setFPlazo] = useState('all')
+  const [fTipo, setFTipo] = useState('all')
+  const [fRinde, setFRinde] = useState('all')
   const [meta, setMeta] = useState<Record<string, CoinMeta>>(loadMeta)
   // Effective metadata: user edits override the seeded reference values.
   const metaOf = (id: string): CoinMeta => ({ ...DEFAULT_META, ...SEED_META[id], ...meta[id] })
@@ -179,6 +184,18 @@ export default function CriptomonedasSection() {
 
   const selected = selectedCoin ? COINS.find(c => c.id === selectedCoin) : null
 
+  const tipos = Array.from(new Set(COINS.map(c => metaOf(c.id).tipo).filter(Boolean))).sort()
+  const q = search.trim().toLowerCase()
+  const shownCoins = COINS.filter(coin => {
+    const m = metaOf(coin.id)
+    if (q && !coin.name.toLowerCase().includes(q) && !coin.symbol.toLowerCase().includes(q)) return false
+    if (fRiesgo !== 'all' && m.riesgo !== fRiesgo) return false
+    if (fPlazo !== 'all' && m.plazo !== fPlazo) return false
+    if (fTipo !== 'all' && m.tipo !== fTipo) return false
+    if (fRinde !== 'all' && (fRinde === 'si') !== m.rinde) return false
+    return true
+  })
+
   return (
     <div className="cripto-section">
       <div className="cripto-header">
@@ -191,10 +208,19 @@ export default function CriptomonedasSection() {
         </button>
       </div>
 
+      <div className="cripto-toolbar">
+        <div className="cripto-search"><Search size={14} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar moneda..." /></div>
+        <select value={fRiesgo} onChange={e => setFRiesgo(e.target.value)}><option value="all">Riesgo: todos</option>{RIESGO_OPTS.map(r => <option key={r} value={r}>{r}</option>)}</select>
+        <select value={fPlazo} onChange={e => setFPlazo(e.target.value)}><option value="all">Plazo: todos</option>{['Corto', 'Mediano', 'Largo'].map(p => <option key={p} value={p}>{p}</option>)}</select>
+        <select value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="all">Tipo: todos</option>{tipos.map(t => <option key={t} value={t}>{t}</option>)}</select>
+        <select value={fRinde} onChange={e => setFRinde(e.target.value)}><option value="all">Intereses: todos</option><option value="si">Con intereses</option><option value="no">Sin intereses</option></select>
+      </div>
+
       {error && <p className="cripto-error">Error al cargar precios. Reintentá más tarde.</p>}
 
       <div className="cripto-grid">
-        {COINS.map(coin => {
+        {shownCoins.length === 0 && <p className="cripto-empty">Sin monedas para ese filtro.</p>}
+        {shownCoins.map(coin => {
           const data = prices[coin.id]
           const up = data ? data.change24h >= 0 : true
           return (

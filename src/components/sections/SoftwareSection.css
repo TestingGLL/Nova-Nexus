@@ -112,8 +112,11 @@
 .transfer-hint { font-size: 11px; color: var(--text-secondary); text-align: center; line-height: 1.5; margin: 0; max-width: 200px; }
 
 .transfer-shared-card, .transfer-received-card { padding: 16px !important; }
-.transfer-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.transfer-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
 .transfer-card-head h4 { font-size: 13px; margin: 0; }
+.transfer-received-toggle { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; color: var(--text-primary); cursor: pointer; padding: 0; font-family: inherit; }
+.transfer-received-toggle:hover { color: var(--accent); }
+.transfer-received-toggle:hover h4 { color: var(--accent); }
 .transfer-empty { font-size: 12px; color: var(--text-secondary); opacity: 0.6; margin: 0; }
 .transfer-file-list { display: flex; flex-direction: column; gap: 5px; }
 .transfer-file { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }

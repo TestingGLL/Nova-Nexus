@@ -54,16 +54,16 @@ function SpinWheel({ options, onResult }: { options: WheelOption[]; onResult: (o
       ctx.arc(cx, cy, r, start, start + arc)
       ctx.fillStyle = opt.color; ctx.fill()
       ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 2; ctx.stroke()
-      // Label
+      // Label — larger and higher-contrast for legibility.
       ctx.save(); ctx.translate(cx, cy); ctx.rotate(start + arc / 2)
-      ctx.font = `bold ${Math.max(11, Math.min(16, r / options.length * 1.2))}px sans-serif`
+      ctx.font = `800 ${Math.max(15, Math.min(26, (r / Math.max(3, options.length)) * 2.2))}px system-ui, sans-serif`
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle'
-      const label = opt.label.length > 14 ? opt.label.slice(0, 13) + '…' : opt.label
-      // Strong dark outline + white fill keeps labels legible on every segment colour.
-      ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.lineJoin = 'round'
-      ctx.strokeText(label, r - 16, 0)
+      const label = opt.label.length > 16 ? opt.label.slice(0, 15) + '…' : opt.label
+      // Thick dark outline + white fill keeps labels legible on every segment colour.
+      ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(0,0,0,0.92)'; ctx.lineJoin = 'round'; ctx.miterLimit = 2
+      ctx.strokeText(label, r - 18, 0)
       ctx.fillStyle = '#fff'
-      ctx.fillText(label, r - 16, 0)
+      ctx.fillText(label, r - 18, 0)
       ctx.restore()
     })
     // Center circle

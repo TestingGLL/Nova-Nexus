@@ -248,6 +248,9 @@ function AlquilerView() {
               <span className="alq-config-label">Presupuesto total (todos los gastos)</span>
               <div className="alq-amount-input"><span>$</span><input type="number" value={data.totalBudget || ''} onChange={e => save({ ...data, totalBudget: Number(e.target.value) })} placeholder="0" /></div>
             </div>
+            {totalBudget > 0 && (
+              <div className="alq-food-split"><Users size={12} /> Dividido en 2: <strong>${Math.round(totalBudget / 2).toLocaleString('es-AR')}</strong> por persona{data.people > 2 ? <> · entre {data.people}: <strong>${Math.round(totalBudget / data.people).toLocaleString('es-AR')}</strong> c/u</> : null}</div>
+            )}
             {totalBudget > 0 ? (
               <>
                 <div className="alq-food-stats">
@@ -777,7 +780,9 @@ function IngresosView() {
   // not on every keystroke/render).
   const gastosTotal = useMemo(() => loadOwnExpenses().reduce((a, e) => a + (e.amount || 0), 0), [])
   const alquilerTotal = useMemo(() => { const d = loadRent(); return d.monthlyRent + d.categories.reduce((a, c) => a + c.amount, 0) + d.extras.reduce((a, e) => a + e.amount, 0) }, [])
-  const usdTotal = useMemo(() => loadUsdExpenses().reduce((a, e) => a + e.amountUsd, 0), [])
+  // USD deduction applies ONLY to the monthly USD expenses ("Gastos fijos"),
+  // not to pendientes ni proyectos futuros; normalized to a monthly cost.
+  const usdTotal = useMemo(() => loadUsdExpenses().filter(e => e.tab === 'fijos').reduce((a, e) => a + e.amountUsd * (usdPayTypes.find(p => p.v === e.payType)?.perMonth || 0), 0), [])
   const deductTotal = (key: string) => key === 'gastos' ? gastosTotal : key === 'alquiler' ? alquilerTotal : key === 'gastos-usd' ? usdTotal : 0
 
   // Deduction options depend on the currency (USD income → only "Gastos en USD").

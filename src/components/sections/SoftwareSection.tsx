@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send } from 'lucide-react'
+import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, ChevronDown, ChevronRight } from 'lucide-react'
 import { useToast } from '../Toast'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import './SoftwareSection.css'
@@ -281,6 +281,7 @@ function TransferenciasTab() {
   const [pcMessages, setPcMessages] = useState<{ id: string; text: string; ts: number }[]>([])
   const [pcText, setPcText] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  const [receivedOpen, setReceivedOpen] = useState(true)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const sendText = async () => {
@@ -476,15 +477,18 @@ function TransferenciasTab() {
 
       <div className="card transfer-received-card">
         <div className="transfer-card-head">
-          <h4>📥 Recibidos ({received.length})</h4>
+          <button className="transfer-received-toggle" onClick={() => setReceivedOpen(o => !o)}>
+            {receivedOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            <h4>📥 Recibidos ({received.length})</h4>
+          </button>
           <div className="transfer-received-actions">
             {received.some(f => f.type !== 'text') && <button className="system-btn-sm" onClick={downloadAll}><Download size={12} /> Descargar todos</button>}
             {dir && <button className="system-btn-sm" onClick={openFolder}><FolderOpen size={12} /> Abrir carpeta</button>}
-            {(received.length > 0 || pcMessages.length > 0) && <button className="system-btn-sm danger" onClick={clearHistory}><Trash2 size={12} /> Borrar historial</button>}
+            <button className="system-btn-sm danger" onClick={clearHistory}><Trash2 size={12} /> Borrar historial</button>
           </div>
         </div>
-        {received.length === 0 && <p className="transfer-empty">Los archivos del celular aparecen acá. Se limpian automáticamente a las 2 horas.</p>}
-        <div className="transfer-file-list transfer-chat-style">
+        {receivedOpen && received.length === 0 && <p className="transfer-empty">Los archivos del celular aparecen acá. Se limpian automáticamente a las 2 horas.</p>}
+        {receivedOpen && <div className="transfer-file-list transfer-chat-style">
           {received.map((f, i) => (
             <div key={i} className="transfer-msg received">
               {f.type === 'text' ? (
@@ -512,8 +516,8 @@ function TransferenciasTab() {
               )}
             </div>
           ))}
-        </div>
-        {dir && <p className="transfer-dir">Guardado en: <code>{dir}</code></p>}
+        </div>}
+        {receivedOpen && dir && <p className="transfer-dir">Guardado en: <code>{dir}</code></p>}
       </div>
     </div>
   )

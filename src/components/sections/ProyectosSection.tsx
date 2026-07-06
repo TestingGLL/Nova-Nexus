@@ -36,7 +36,7 @@ function ProjectCard({ p, labels, typeLabel, typeColor, onUpdate, onDelete, onSt
   const [showTypeMenu, setShowTypeMenu] = useState(false)
   const [editing, setEditing] = useState(false)
   return (
-    <div className="card proyecto-item" {...dragHandlers}>
+    <div className="card proyecto-item" {...dragHandlers} style={{ borderLeft: `4px solid ${typeColor}`, background: `linear-gradient(90deg, ${typeColor}14, transparent 55%)` }}>
       {dragHandlers && <GripVertical size={12} className="proyecto-grip" />}
       <div className="proyecto-header">
         {editing

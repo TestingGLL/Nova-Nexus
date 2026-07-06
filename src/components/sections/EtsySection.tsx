@@ -851,9 +851,16 @@ function PlanificacionTab() {
   const data = commercialDates[country]
   const now = new Date()
   const currentMMDD = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  const curMonth = now.getMonth() + 1
-  const months3 = [0, 1, 2].map(i => ((curMonth - 1 + i) % 12) + 1)
-  const inRange = (dt: string) => { const m = parseInt(dt.slice(0, 2)); return range === '3months' ? months3.includes(m) : m === curMonth }
+  // Días desde hoy (con vuelta de año) para mostrar SIEMPRE las próximas fechas,
+  // sin importar el mes calendario (antes quedaba vacío en meses sin fechas).
+  const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const daysFromToday = (mmdd: string) => {
+    const [mm, dd] = mmdd.split('-').map(Number)
+    let d = new Date(now.getFullYear(), mm - 1, dd)
+    if (d < today0) d = new Date(now.getFullYear() + 1, mm - 1, dd)
+    return Math.round((d.getTime() - today0.getTime()) / 86400000)
+  }
+  const inRange = (dt: string) => daysFromToday(dt) <= (range === '3months' ? 92 : 31)
   const fmtMMDD = (dt: string) => new Date(`2024-${dt}`).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 
   // Next upcoming dates per country (wrapping around the year), so each country
@@ -865,8 +872,11 @@ function PlanificacionTab() {
   }).sort((a, b) => a.next.date.localeCompare(b.next.date))
 
   const q = search.trim().toLowerCase()
-  // Search ignores the range; otherwise show only the current month (default) or the next 3 months.
-  const filteredDates = data.dates.filter(d => q ? (d.label.toLowerCase().includes(q) || d.desc.toLowerCase().includes(q)) : inRange(d.date))
+  // Search ignores the range; otherwise show the upcoming dates (this month by
+  // default, or the next 3 months) ordered by proximity.
+  const filteredDates = q
+    ? data.dates.filter(d => d.label.toLowerCase().includes(q) || d.desc.toLowerCase().includes(q))
+    : data.dates.filter(d => inRange(d.date)).sort((a, b) => daysFromToday(a.date) - daysFromToday(b.date))
 
   return (
     <div className="planificacion-tab">
@@ -927,7 +937,8 @@ function PlanificacionTab() {
 
       <div className="plan-dates-grid">
         {filteredDates.map(d => {
-          const isPast = d.date < currentMMDD
+          // In the upcoming view every date is future; only the free search may list past ones.
+          const isPast = q ? d.date < currentMMDD : false
           const key = d.date + d.label
           const sel = selectedDate === key
           return (

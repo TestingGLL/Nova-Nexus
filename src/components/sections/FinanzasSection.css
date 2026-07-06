@@ -217,6 +217,8 @@
 
 .alq-food { display: flex; flex-direction: column; gap: 12px; }
 .alq-food-input { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.alq-food-split { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); background: var(--bg-hover); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.alq-food-split strong { color: var(--text-primary); }
 .alq-food-stats { display: flex; gap: 10px; flex-wrap: wrap; }
 .alq-food-stat { flex: 1; min-width: 130px; display: flex; flex-direction: column; gap: 3px; padding: 12px; background: var(--bg-hover); border-radius: 10px; }
 .alq-food-stat span { font-size: 11px; color: var(--text-secondary); }
