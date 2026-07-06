@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical, Search, Archive, Edit3, TrendingUp as InflationIcon, ArrowDownCircle, Utensils } from 'lucide-react'
 import CriptomonedasSection from './CriptomonedasSection'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
@@ -773,10 +773,11 @@ function IngresosView() {
 
   const save = (e: IncomeItem[]) => { setIncomes(e); localStorage.setItem('nn-ingresos', JSON.stringify(e)) }
 
-  // Totals of each associable expense tab (recomputed from their own keys).
-  const gastosTotal = loadOwnExpenses().reduce((a, e) => a + (e.amount || 0), 0)
-  const alquilerTotal = (() => { const d = loadRent(); return d.monthlyRent + d.categories.reduce((a, c) => a + c.amount, 0) + d.extras.reduce((a, e) => a + e.amount, 0) })()
-  const usdTotal = loadUsdExpenses().reduce((a, e) => a + e.amountUsd, 0)
+  // Totals of each associable expense tab (read once from their keys on mount,
+  // not on every keystroke/render).
+  const gastosTotal = useMemo(() => loadOwnExpenses().reduce((a, e) => a + (e.amount || 0), 0), [])
+  const alquilerTotal = useMemo(() => { const d = loadRent(); return d.monthlyRent + d.categories.reduce((a, c) => a + c.amount, 0) + d.extras.reduce((a, e) => a + e.amount, 0) }, [])
+  const usdTotal = useMemo(() => loadUsdExpenses().reduce((a, e) => a + e.amountUsd, 0), [])
   const deductTotal = (key: string) => key === 'gastos' ? gastosTotal : key === 'alquiler' ? alquilerTotal : key === 'gastos-usd' ? usdTotal : 0
 
   // Deduction options depend on the currency (USD income → only "Gastos en USD").

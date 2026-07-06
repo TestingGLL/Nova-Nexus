@@ -176,7 +176,7 @@ export default function ConfiguracionSection() {
   const updateAlertConfig = (u: Partial<AlertConfig>) => { const c = { ...alertConfig, ...u }; setAlertConfig(c); saveAlertConfig(c) }
   const toggleWidget = (id: string) => {
     const next = new Set(hiddenWidgets)
-    next.has(id) ? next.delete(id) : next.add(id)
+    if (next.has(id)) next.delete(id); else next.add(id)
     setHiddenWidgets(next)
     localStorage.setItem('nn-hidden-widgets', JSON.stringify([...next]))
   }

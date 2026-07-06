@@ -204,7 +204,7 @@ export default function NotasSection() {
   }
 
   const toggleFolder = (id: string) => {
-    setExpandedFolders(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
+    setExpandedFolders(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
   }
 
   const allTags = Array.from(new Set([...DEFAULT_TAGS, ...notes.flatMap(n => n.tags)]))

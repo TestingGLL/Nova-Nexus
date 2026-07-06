@@ -19,7 +19,7 @@ export default function SoundFx() {
       const cls = (el.className && typeof el.className === 'string') ? el.className : ''
       if (/toggle|switch/.test(cls)) {
         const on = el.classList.contains('active') || el.classList.contains('toggled') || el.classList.contains('on')
-        on ? sfx.toggleOff() : sfx.toggleOn()
+        if (on) sfx.toggleOff(); else sfx.toggleOn()
       } else {
         sfx.click()
       }

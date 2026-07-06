@@ -106,7 +106,7 @@ function MiniChart({ coinId, days, color }: { coinId: string; days: number; colo
         vals.forEach((v, i) => {
           const x = (i / (vals.length - 1)) * w
           const y = h - ((v - min) / range) * (h * 0.85) - h * 0.05
-          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
         })
         ctx.strokeStyle = color
         ctx.lineWidth = 2

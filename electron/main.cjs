@@ -381,7 +381,7 @@ ipcMain.handle('get-crypto-prices', async (_e, ids) => {
             resolve({ success: false, message: (data.status && data.status.error_message) || `HTTP ${res.statusCode}` });
           } else { resolve({ success: true, data }); }
         }
-        catch (_e) { resolve({ success: false, message: 'Error al procesar datos' }); }
+        catch { resolve({ success: false, message: 'Error al procesar datos' }); }
       });
     });
     req.on('error', (e) => resolve({ success: false, message: e.message }));
@@ -398,7 +398,7 @@ ipcMain.handle('get-crypto-chart', async (_e, coinId, days) => {
       res.on('data', chunk => body += chunk);
       res.on('end', () => {
         try { resolve({ success: true, data: JSON.parse(body) }); }
-        catch (_e2) { resolve({ success: false, message: 'Error' }); }
+        catch { resolve({ success: false, message: 'Error' }); }
       });
     });
     req.on('error', (e) => resolve({ success: false, message: e.message }));
@@ -416,7 +416,7 @@ ipcMain.handle('get-dolar-blue', async () => {
       res.on('data', chunk => body += chunk);
       res.on('end', () => {
         try { const d = JSON.parse(body); resolve({ success: true, compra: d.compra, venta: d.venta }); }
-        catch (_e) { resolve({ success: false, message: 'Error al procesar datos' }); }
+        catch { resolve({ success: false, message: 'Error al procesar datos' }); }
       });
     });
     req.on('error', (e) => resolve({ success: false, message: e.message }));
