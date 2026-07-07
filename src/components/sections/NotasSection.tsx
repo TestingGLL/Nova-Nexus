@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
-import { Plus, Trash2, Bold, Italic, Underline, List, ListOrdered, Type, Palette, Search, Copy, FolderPlus, Folder, ChevronRight, ChevronDown, Tag, X, Check, Clock } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Plus, Trash2, Search, Copy, FolderPlus, Folder, ChevronRight, ChevronDown, Tag, X, Check, Clock } from 'lucide-react'
 import { useConfirm } from '../ConfirmDialog'
+import RichTextEditor from '../RichTextEditor'
 import './NotasSection.css'
 
 interface Note {
@@ -19,8 +20,6 @@ interface NoteFolder {
   id: string
   name: string
 }
-
-const TEXT_COLORS = ['#1d1d1f', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#ffffff']
 const DEFAULT_TAGS = ['recordar', 'curioso', 'revisar']
 
 const TAG_COLORS: Record<string, string> = { recordar: '#3b82f6', curioso: '#f59e0b', revisar: '#ef4444' }
@@ -59,7 +58,7 @@ export default function NotasSection() {
   const [notes, setNotes] = useState<Note[]>(loadNotes)
   const [folders, setFolders] = useState<NoteFolder[]>(loadFolders)
   const [activeNote, setActiveNote] = useState<string | null>(null)
-  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [seedVersion, setSeedVersion] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFolder, setActiveFolder] = useState<string | null>('__all')
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['__all']))
@@ -72,7 +71,6 @@ export default function NotasSection() {
   const [dragNoteId, setDragNoteId] = useState<string | null>(null)
   const [dropFolder, setDropFolder] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
-  const editorRef = useRef<HTMLDivElement>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
   const newFolderRef = useRef<HTMLInputElement>(null)
   // Snapshot of the note when it was opened, so "Cancelar" can revert unsaved edits.
@@ -86,21 +84,20 @@ export default function NotasSection() {
   // Set editor HTML only when the active note CHANGES (not on every keystroke).
   // This is the key fix: binding dangerouslySetInnerHTML to live content reset the
   // caret and discarded color/formatting on each render.
+  // Al cambiar de nota, guardar un snapshot para poder cancelar los cambios.
   useEffect(() => {
-    if (!editorRef.current) return
     const note = notes.find(n => n.id === activeNote)
-    editorRef.current.innerHTML = note ? note.content : ''
     snapshot.current = note ? { title: note.title, content: note.content } : null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNote])
 
   const flashSaved = () => { setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1200) }
-  const saveCurrent = () => { if (activeNote && editorRef.current) { const html = editorRef.current.innerHTML; setNotes(prev => prev.map(n => n.id === activeNote ? { ...n, content: html } : n)); snapshot.current = { title: notes.find(n => n.id === activeNote)?.title || '', content: html }; flashSaved() } }
+  const saveCurrent = () => { if (activeNote) { const cur = notes.find(n => n.id === activeNote); snapshot.current = { title: cur?.title || '', content: cur?.content || '' }; flashSaved() } }
   const cancelEdits = () => {
     if (!activeNote || !snapshot.current) return
     const snap = snapshot.current
     setNotes(prev => prev.map(n => n.id === activeNote ? { ...n, title: snap.title, content: snap.content } : n))
-    if (editorRef.current) editorRef.current.innerHTML = snap.content
+    setSeedVersion(v => v + 1) // fuerza al editor a re-sembrar el contenido revertido
   }
   const toggleEphemeral = (id: string) => {
     setNotes(prev => prev.map(n => n.id === id ? (n.ephemeral ? { ...n, ephemeral: false } : { ...n, ephemeral: true, createdTs: n.createdTs || Date.now(), expiresInDays: n.expiresInDays || defaultAutoDeleteDays() }) : n))
@@ -143,12 +140,11 @@ export default function NotasSection() {
     setNotes(prev => prev.map(n => n.id === id ? { ...n, title } : n))
   }
 
-  // Persist whatever is currently in the contentEditable div for the active note.
-  const persistContent = useCallback(() => {
-    if (!editorRef.current || !activeNote) return
-    const html = editorRef.current.innerHTML
+  // Persiste el contenido del Editor de Textos en la nota activa.
+  const setContent = (html: string) => {
+    if (!activeNote) return
     setNotes(prev => prev.map(n => n.id === activeNote ? { ...n, content: html } : n))
-  }, [activeNote])
+  }
 
   const addTag = (noteId: string, tag: string) => {
     const t = tag.trim().toLowerCase()
@@ -181,26 +177,6 @@ export default function NotasSection() {
   const moveToFolder = (noteId: string, folderId: string | null) => {
     setNotes(prev => prev.map(n => n.id === noteId ? { ...n, folderId } : n))
     flashSaved()
-  }
-
-  // execCommand needs styleWithCSS so foreColor produces a span style that survives save.
-  const exec = (cmd: string, value?: string) => {
-    editorRef.current?.focus()
-    try { document.execCommand('styleWithCSS', false, 'true') } catch {}
-    document.execCommand(cmd, false, value)
-    persistContent()
-  }
-
-  const changeCase = (mode: 'upper' | 'lower' | 'capitalize') => {
-    const sel = window.getSelection()
-    if (!sel || sel.isCollapsed) return
-    const text = sel.toString()
-    let result = text
-    if (mode === 'upper') result = text.toUpperCase()
-    else if (mode === 'lower') result = text.toLowerCase()
-    else result = text.replace(/\b\w/g, c => c.toUpperCase())
-    document.execCommand('insertText', false, result)
-    persistContent()
   }
 
   const toggleFolder = (id: string) => {
@@ -361,36 +337,13 @@ export default function NotasSection() {
               </datalist>
             </div>
 
-            <div className="editor-toolbar">
-              <button className="tb-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('bold')} title="Negrita (Ctrl+B)"><Bold size={15} /></button>
-              <button className="tb-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('italic')} title="Cursiva (Ctrl+I)"><Italic size={15} /></button>
-              <button className="tb-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('underline')} title="Subrayado (Ctrl+U)"><Underline size={15} /></button>
-              <span className="tb-sep" />
-              <button className="tb-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('insertUnorderedList')} title="Lista"><List size={15} /></button>
-              <button className="tb-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('insertOrderedList')} title="Lista numerada"><ListOrdered size={15} /></button>
-              <span className="tb-sep" />
-              <div className="tb-dropdown">
-                <button className="tb-btn" onMouseDown={e => e.preventDefault()} onClick={() => setShowColorPicker(!showColorPicker)} title="Color de texto"><Palette size={15} /></button>
-                {showColorPicker && (
-                  <div className="color-dropdown">
-                    {TEXT_COLORS.map(c => (
-                      <button key={c} className="color-dot" style={{ background: c }} onMouseDown={e => e.preventDefault()} onClick={() => { exec('foreColor', c); setShowColorPicker(false) }} />
-                    ))}
-                  </div>
-                )}
-              </div>
-              <span className="tb-sep" />
-              <button className="tb-btn tb-text" onMouseDown={e => e.preventDefault()} onClick={() => changeCase('upper')} title="Mayúsculas"><Type size={13} /> A</button>
-              <button className="tb-btn tb-text" onMouseDown={e => e.preventDefault()} onClick={() => changeCase('lower')} title="Minúsculas"><Type size={13} /> a</button>
-              <button className="tb-btn tb-text" onMouseDown={e => e.preventDefault()} onClick={() => changeCase('capitalize')} title="Oración"><Type size={13} /> Aa</button>
-            </div>
-
-            <div
-              ref={editorRef}
-              className="editor-content"
-              contentEditable
-              suppressContentEditableWarning
-              onInput={persistContent}
+            <RichTextEditor
+              docKey={`${activeNote}-${seedVersion}`}
+              html={current.content}
+              onChange={setContent}
+              placeholder="Escribí tu nota..."
+              minHeight={280}
+              className="notas-rte"
             />
 
             <div className="notas-save-bar">

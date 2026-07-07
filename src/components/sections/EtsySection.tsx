@@ -3,6 +3,7 @@ import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, T
 import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
 import ColorInput from '../ColorInput'
+import RichTextEditor from '../RichTextEditor'
 import './EtsySection.css'
 
 // ============ TYPES ============
@@ -171,28 +172,6 @@ function AddArticleModal({ onAdd, onClose, groups, defaultGroupId }: { onAdd: (a
 
 // ============ BRAND PANEL ============
 
-// Compact rich text editor (contentEditable). innerHTML is set once on mount to
-// keep the caret stable while typing.
-function RichEditor({ html, onChange, placeholder }: { html: string; onChange: (h: string) => void; placeholder?: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => { if (ref.current && ref.current.innerHTML !== html) ref.current.innerHTML = html }, [])
-  const exec = (cmd: string, val?: string) => { try { document.execCommand('styleWithCSS', false, 'true') } catch {}; document.execCommand(cmd, false, val); ref.current?.focus(); onChange(ref.current?.innerHTML || '') }
-  return (
-    <div className="brand-rich">
-      <div className="brand-rich-toolbar">
-        <button type="button" className="brand-rich-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h2')}>H1</button>
-        <button type="button" className="brand-rich-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h3')}>H2</button>
-        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'p')}><Type size={13} /></button>
-        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => exec('bold')} style={{ fontWeight: 800 }}>B</button>
-        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => exec('italic')} style={{ fontStyle: 'italic' }}>I</button>
-        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => exec('underline')} style={{ textDecoration: 'underline' }}>U</button>
-        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => exec('insertUnorderedList')}>•</button>
-      </div>
-      <div ref={ref} className="brand-rich-content" contentEditable suppressContentEditableWarning data-ph={placeholder || 'Escribí...'} onInput={() => onChange(ref.current?.innerHTML || '')} />
-    </div>
-  )
-}
-
 function BrandPanel({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
   const brand = store.brand || { slogan: '', sloganEn: '', brandColors: [store.bannerColor, store.accentColor], notes: '', fonts: [] }
   const [sloganLang, setSloganLang] = useState<'es' | 'en'>('es')
@@ -308,7 +287,7 @@ function BrandPanel({ store, onUpdate }: { store: StoreData; onUpdate: (s: Store
                     <input className="brand-info-title" value={f.title} onChange={e => updateField(f.id, { title: e.target.value })} placeholder="Título del campo" />
                     <button className="brand-info-del" onClick={() => removeField(f.id)} title="Eliminar campo"><Trash2 size={12} /></button>
                   </div>
-                  {isFieldOpen(f.id) && <RichEditor html={f.body} onChange={h => updateField(f.id, { body: h })} placeholder="Descripción..." />}
+                  {isFieldOpen(f.id) && <RichTextEditor html={f.body} onChange={h => updateField(f.id, { body: h })} docKey={f.id} placeholder="Descripción..." />}
                 </div>
               ))}
               <button className="brand-info-add" onClick={addField}><Plus size={12} /> Agregar campo</button>

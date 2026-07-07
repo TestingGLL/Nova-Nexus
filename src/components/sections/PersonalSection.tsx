@@ -3,6 +3,7 @@ import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy
 import { addNotification } from '../../lib/notifications'
 import { useWater, WATER_GOAL } from '../../lib/water'
 import ColorInput from '../ColorInput'
+import RichTextEditor from '../RichTextEditor'
 import { useConfirm } from '../ConfirmDialog'
 import { useSecurity, SecurityGate } from '../../lib/security'
 import './PersonalSection.css'
@@ -1009,36 +1010,8 @@ function WishlistTab() {
   )
 }
 
-// ============ RICH TEXT EDITOR (reusable) ============
-const RICH_COLORS = ['#1d1d1f', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899']
-
-function RichTextEditor({ entryId, html, onChange, placeholder }: { entryId: string; html: string; onChange: (html: string) => void; placeholder?: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [showColors, setShowColors] = useState(false)
-  // Set innerHTML only when switching entries, to preserve caret while typing.
-  useEffect(() => { if (ref.current && ref.current.innerHTML !== html) ref.current.innerHTML = html }, [entryId])
-  const exec = (cmd: string, val?: string) => { try { document.execCommand('styleWithCSS', false, 'true') } catch {}; document.execCommand(cmd, false, val); ref.current?.focus(); onChange(ref.current?.innerHTML || '') }
-  return (
-    <div className="rich-editor">
-      <div className="rich-toolbar">
-        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h1')} className="rich-h" title="Encabezado 1">H1</button>
-        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h2')} className="rich-h" title="Encabezado 2">H2</button>
-        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h3')} className="rich-h" title="Encabezado 3">H3</button>
-        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'p')} title="Texto normal"><Type size={14} /></button>
-        <span className="rich-sep" />
-        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('bold')} title="Negrita"><Bold size={14} /></button>
-        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('italic')} title="Cursiva"><Italic size={14} /></button>
-        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('underline')} title="Subrayado"><Underline size={14} /></button>
-        <button onMouseDown={e => e.preventDefault()} onClick={() => exec('insertUnorderedList')} title="Lista"><List size={14} /></button>
-        <div className="rich-color-wrap">
-          <button onMouseDown={e => e.preventDefault()} onClick={() => setShowColors(!showColors)} title="Color"><Palette size={14} /></button>
-          {showColors && <div className="rich-color-pop">{RICH_COLORS.map(c => <button key={c} style={{ background: c }} onMouseDown={e => e.preventDefault()} onClick={() => { exec('foreColor', c); setShowColors(false) }} />)}</div>}
-        </div>
-      </div>
-      <div ref={ref} className="rich-content" contentEditable suppressContentEditableWarning data-ph={placeholder || 'Escribí...'} onInput={() => onChange(ref.current?.innerHTML || '')} />
-    </div>
-  )
-}
+// ============ RICH TEXT EDITOR ============
+// El Editor de Textos unificado vive en src/components/RichTextEditor.tsx.
 
 // ============ DIARIO ============
 interface DiaryEntry { id: string; title: string; content: string; date: string; chapter: string }
@@ -1118,7 +1091,7 @@ function DiarioTab() {
               <button className="nota-action-btn danger" onClick={() => remove(current.id)}><Trash2 size={14} /></button>
             </div>
             <span className="diary-date-label">{new Date(current.date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-            <RichTextEditor entryId={current.id} html={current.content} onChange={c => update(current.id, { content: c })} placeholder="Escribí tus pensamientos..." />
+            <RichTextEditor docKey={current.id} html={current.content} onChange={c => update(current.id, { content: c })} placeholder="Escribí tus pensamientos..." />
             <div className="diary-save-actions">
               <button className="diary-save-btn" onClick={saveCurrent}><Save size={13} /> Guardar</button>
               <button className="diary-cancel-btn" onClick={cancelEdit}>Cancelar</button>

@@ -53,7 +53,10 @@ robocopy "dist" "build-output/win-unpacked/resources/app/dist" /MIR
   `electron/preload.cjs`). Cada método mapea a un `ipcMain.handle('<canal>')` en `main.cjs`.
   Para agregar una capacidad nativa: handler en `main.cjs` + método en `preload.cjs` + tipo en `src/electron.d.ts`.
 - **Reutilizables:** hooks/utilidades en `src/lib/` (sonidos, sync, escala de UI, tabs reordenables).
-  `RichTextEditor` y `BlockEditor` viven en `PersonalSection.tsx` (reutilizados ahí).
+  El **Editor de Textos** unificado (rich text) vive en `src/components/RichTextEditor.tsx`
+  (contentEditable no controlado: siembra HTML por `docKey`, reporta por `onChange`). Se usa
+  en toda edición rica (descripciones, notas, diarios, etc.). El `BlockEditor` (Anotaciones
+  estilo Notion) sigue en `PersonalSection.tsx`.
 - **Canvas:** los widgets con canvas (reloj, ruleta, gráficos) usan `ResizeObserver` y
   guardas de tamaño `> 0` para no romper cuando están ocultos (no quitar esas guardas).
 
