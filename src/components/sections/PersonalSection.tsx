@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Bold, Italic, Underline, List, Palette, Type, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle } from 'lucide-react'
+import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle } from 'lucide-react'
 import { addNotification } from '../../lib/notifications'
 import { useWater, WATER_GOAL } from '../../lib/water'
 import ColorInput from '../ColorInput'
@@ -524,52 +524,38 @@ function TarjetasTab() {
   )
 }
 
-// ============ RECORDATORIOS / BLOQUES ============
+// ============ RECORDATORIOS / ANOTACIONES ============
 interface Reminder { id: string; text: string; type: 'rapido' | 'planificado'; date?: string; done: boolean; createdAt: string }
-interface TextBlock { id: string; html: string }
 
-// One rich contentEditable block. innerHTML is set only on mount to avoid caret resets.
-function BlockEditor({ block, onChange, onEnter, onBackspaceEmpty }: { block: TextBlock; onChange: (html: string) => void; onEnter: () => void; onBackspaceEmpty: () => void }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => { if (ref.current && ref.current.innerHTML !== block.html) ref.current.innerHTML = block.html }, [block.id])
-  return (
-    <div
-      ref={ref}
-      data-block={block.id}
-      className="bloque-rich"
-      contentEditable
-      suppressContentEditableWarning
-      onInput={() => onChange(ref.current?.innerHTML || '')}
-      onKeyDown={e => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onEnter() }
-        else if (e.key === 'Backspace' && (ref.current?.textContent || '') === '') { e.preventDefault(); onBackspaceEmpty() }
-      }}
-    />
-  )
-}
-
-const BLOCK_COLORS = ['#1d1d1f', '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899']
-
-// Anotaciones estilo Notion: cada "página" tiene subpestañas, y cada subpestaña
-// guarda su propio set de bloques.
-interface NoteSub { id: string; name: string; blocks: TextBlock[] }
+// Anotaciones: cada "página" tiene subpestañas, y cada subpestaña guarda su
+// contenido como un único HTML editado con el Editor de Textos unificado.
+interface NoteSub { id: string; name: string; content: string }
 interface NotePage { id: string; name: string; subs: NoteSub[] }
-const wrapSub = (blocks: TextBlock[]): NoteSub[] => [{ id: 'sub-0', name: 'Principal', blocks: blocks.length ? blocks : [{ id: 'blk-0', html: '' }] }]
+
+// Convierte el formato viejo de bloques (blocks[]) a un solo HTML, preservando
+// cada bloque como una línea/párrafo.
+const blocksToHtml = (blocks: any[]): string => (blocks || []).map(b => {
+  const h = String(b?.html ?? b?.text ?? '').trim()
+  if (!h) return ''
+  return /^\s*<(h[1-6]|ul|ol|p|div|blockquote|hr|details)/i.test(h) ? h : `<div>${h}</div>`
+}).join('')
+const normSub = (s: any, i: number): NoteSub => ({ id: s?.id || 'sub-' + i, name: s?.name || 'Principal', content: typeof s?.content === 'string' ? s.content : blocksToHtml(s?.blocks) })
+
 function loadPages(): NotePage[] {
   try {
     const s = localStorage.getItem('nn-reminder-blocks')
     if (s) {
       const parsed = JSON.parse(s)
       if (Array.isArray(parsed) && parsed.length > 0) {
-        if (Array.isArray(parsed[0]?.subs)) return parsed as NotePage[]
-        // Pages-with-blocks (previous format) → wrap each page's blocks into a sub.
-        if (Array.isArray(parsed[0]?.blocks)) return (parsed as any[]).map(p => ({ id: p.id, name: p.name, subs: wrapSub(p.blocks) }))
-        // Legacy: a flat array of blocks → one page, one sub.
-        return [{ id: 'page-0', name: 'Página 1', subs: wrapSub(parsed.map((b: any) => ({ id: b.id, html: b.html ?? (b.text || '') }))) }]
+        if (Array.isArray(parsed[0]?.subs)) return (parsed as any[]).map(p => ({ id: p.id, name: p.name, subs: (p.subs.length ? p.subs : [{}]).map(normSub) }))
+        // Pages-with-blocks (formato previo) → un sub con el HTML combinado.
+        if (Array.isArray(parsed[0]?.blocks)) return (parsed as any[]).map(p => ({ id: p.id, name: p.name, subs: [{ id: 'sub-' + (p.id || '0'), name: 'Principal', content: blocksToHtml(p.blocks) }] }))
+        // Legacy: array plano de bloques → una página, un sub.
+        return [{ id: 'page-0', name: 'Página 1', subs: [{ id: 'sub-0', name: 'Principal', content: blocksToHtml(parsed) }] }]
       }
     }
   } catch {}
-  return [{ id: 'page-0', name: 'Página 1', subs: [{ id: 'sub-0', name: 'Principal', blocks: [{ id: 'blk-0', html: '' }] }] }]
+  return [{ id: 'page-0', name: 'Página 1', subs: [{ id: 'sub-0', name: 'Principal', content: '' }] }]
 }
 
 function RecordatoriosTab() {
@@ -585,30 +571,25 @@ function RecordatoriosTab() {
   const [newText, setNewText] = useState('')
   const [newType, setNewType] = useState<'rapido' | 'planificado'>('rapido')
   const [newDate, setNewDate] = useState('')
-  const [showColors, setShowColors] = useState(false)
-  const dragBlock = useRef<number | null>(null)
-  const [dragOverBlk, setDragOverBlk] = useState<number | null>(null)
-  const [fmtMenu, setFmtMenu] = useState<string | null>(null)
 
   const save = (r: Reminder[]) => { setReminders(r); localStorage.setItem('nn-reminders', JSON.stringify(r)) }
   const savePages = (p: NotePage[]) => { setPages(p); localStorage.setItem('nn-reminder-blocks', JSON.stringify(p)) }
   const page = pages.find(p => p.id === activePage) || pages[0]
   const sub = page?.subs.find(s => s.id === activeSub) || page?.subs[0]
-  const blocks = sub?.blocks || []
-  const saveBlocks = (b: TextBlock[]) => savePages(pages.map(p => p.id === page.id ? { ...p, subs: p.subs.map(s => s.id === sub.id ? { ...s, blocks: b } : s) } : p))
+  const saveContent = (html: string) => savePages(pages.map(p => p.id === page.id ? { ...p, subs: p.subs.map(s => s.id === sub.id ? { ...s, content: html } : s) } : p))
   const selectPage = (id: string) => { setActivePage(id); const p = pages.find(x => x.id === id); setActiveSub(p?.subs[0]?.id || '') }
-  const addPage = () => { const id = 'page-' + Date.now(); const sid = 'sub-' + Date.now(); savePages([...pages, { id, name: 'Nueva página', subs: [{ id: sid, name: 'Principal', blocks: [{ id: 'blk-' + Date.now(), html: '' }] }] }]); setActivePage(id); setActiveSub(sid); setEditingPage(id) }
+  const addPage = () => { const id = 'page-' + Date.now(); const sid = 'sub-' + Date.now(); savePages([...pages, { id, name: 'Nueva página', subs: [{ id: sid, name: 'Principal', content: '' }] }]); setActivePage(id); setActiveSub(sid); setEditingPage(id) }
   const renamePage = (id: string, name: string) => savePages(pages.map(p => p.id === id ? { ...p, name } : p))
   const removePage = async (id: string) => {
     const p = pages.find(x => x.id === id)
     if (!await confirm({ title: 'Eliminar página', message: `¿Eliminar la página «${p?.name || ''}» y todas sus anotaciones?`, confirmLabel: 'Eliminar' })) return
     const next = pages.filter(p => p.id !== id)
-    const safe = next.length ? next : [{ id: 'page-0', name: 'Página 1', subs: [{ id: 'sub-0', name: 'Principal', blocks: [{ id: 'blk-0', html: '' }] }] }]
+    const safe = next.length ? next : [{ id: 'page-0', name: 'Página 1', subs: [{ id: 'sub-0', name: 'Principal', content: '' }] }]
     savePages(safe)
     if (activePage === id) { setActivePage(safe[0].id); setActiveSub(safe[0].subs[0].id) }
   }
   // Subpestañas de la página activa
-  const addSub = () => { const sid = 'sub-' + Date.now(); savePages(pages.map(p => p.id === page.id ? { ...p, subs: [...p.subs, { id: sid, name: 'Nueva', blocks: [{ id: 'blk-' + Date.now(), html: '' }] }] } : p)); setActiveSub(sid); setEditingSub(sid) }
+  const addSub = () => { const sid = 'sub-' + Date.now(); savePages(pages.map(p => p.id === page.id ? { ...p, subs: [...p.subs, { id: sid, name: 'Nueva', content: '' }] } : p)); setActiveSub(sid); setEditingSub(sid) }
   const renameSub = (id: string, name: string) => savePages(pages.map(p => p.id === page.id ? { ...p, subs: p.subs.map(s => s.id === id ? { ...s, name } : s) } : p))
   const removeSub = async (id: string) => {
     if (page.subs.length <= 1) return
@@ -626,40 +607,6 @@ function RecordatoriosTab() {
   }
   const toggle = (id: string) => save(reminders.map(r => r.id === id ? { ...r, done: !r.done } : r))
   const remove = (id: string) => save(reminders.filter(r => r.id !== id))
-
-  const updateBlock = (id: string, html: string) => saveBlocks(blocks.map(b => b.id === id ? { ...b, html } : b))
-  const addBlockAfter = (id: string) => {
-    const idx = blocks.findIndex(b => b.id === id)
-    const nb: TextBlock = { id: 'blk-' + Date.now(), html: '' }
-    const next = [...blocks]; next.splice(idx + 1, 0, nb); saveBlocks(next)
-    setTimeout(() => { const el = document.querySelector(`[data-block="${nb.id}"]`) as HTMLElement; el?.focus() }, 0)
-  }
-  const removeBlock = (id: string) => {
-    if (blocks.length <= 1) { saveBlocks([{ id: 'blk-0', html: '' }]); return }
-    const idx = blocks.findIndex(b => b.id === id)
-    saveBlocks(blocks.filter(b => b.id !== id))
-    const prev = blocks[idx - 1]
-    if (prev) setTimeout(() => { const el = document.querySelector(`[data-block="${prev.id}"]`) as HTMLElement; el?.focus() }, 0)
-  }
-  const reorderBlock = (to: number) => { if (dragBlock.current === null || dragBlock.current === to) { setDragOverBlk(null); return } const o = [...blocks]; const [m] = o.splice(dragBlock.current, 1); o.splice(to, 0, m); saveBlocks(o); dragBlock.current = null; setDragOverBlk(null) }
-
-  // Toolbar commands act on whichever block currently holds the selection.
-  const exec = (cmd: string, val?: string) => { try { document.execCommand('styleWithCSS', false, 'true') } catch {}; document.execCommand(cmd, false, val) }
-
-  // Per-block format menu: select the whole block, then apply a command to it.
-  const applyFmt = (id: string, cmd: string, val?: string) => {
-    const el = document.querySelector(`[data-block="${id}"]`) as HTMLElement | null
-    if (!el) { setFmtMenu(null); return }
-    el.focus()
-    const range = document.createRange(); range.selectNodeContents(el)
-    const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range)
-    try { document.execCommand('styleWithCSS', false, 'true') } catch {}
-    document.execCommand(cmd, false, val)
-    sel?.removeAllRanges()
-    updateBlock(id, el.innerHTML)
-    setFmtMenu(null)
-  }
-  const editBlock = (id: string) => { (document.querySelector(`[data-block="${id}"]`) as HTMLElement | null)?.focus(); setFmtMenu(null) }
 
   return (
     <div className="anotaciones-content">
@@ -694,53 +641,11 @@ function RecordatoriosTab() {
           <button className="anotaciones-sub-add" onClick={addSub} title="Nueva subpestaña"><Plus size={12} /></button>
         </div>
       )}
-      <div className="bloques-toolbar">
-        <button className="bloques-btn bloques-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h1')} title="Encabezado 1">H1</button>
-        <button className="bloques-btn bloques-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h2')} title="Encabezado 2">H2</button>
-        <button className="bloques-btn bloques-h" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'h3')} title="Encabezado 3">H3</button>
-        <button className="bloques-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('formatBlock', 'p')} title="Texto normal"><Type size={15} /></button>
-        <button className="bloques-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('bold')} title="Negrita"><Bold size={15} /></button>
-        <button className="bloques-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('italic')} title="Cursiva"><Italic size={15} /></button>
-        <button className="bloques-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('underline')} title="Subrayado"><Underline size={15} /></button>
-        <button className="bloques-btn" onMouseDown={e => e.preventDefault()} onClick={() => exec('insertUnorderedList')} title="Lista"><List size={15} /></button>
-        <div className="bloques-color-wrap">
-          <button className="bloques-btn" onMouseDown={e => e.preventDefault()} onClick={() => setShowColors(!showColors)} title="Color"><Palette size={15} /></button>
-          {showColors && <div className="bloques-color-pop">{BLOCK_COLORS.map(c => <button key={c} style={{ background: c }} onMouseDown={e => e.preventDefault()} onClick={() => { exec('foreColor', c); setShowColors(false) }} />)}</div>}
-        </div>
-        <div className="bloques-spacer" />
+      <div className="anotaciones-toolbar-row">
         <button className="anotaciones-new-btn" onClick={() => setShowReminders(true)}><CalendarClock size={14} /> Recordatorios{reminders.filter(r => !r.done).length > 0 ? ` (${reminders.filter(r => !r.done).length})` : ''}</button>
       </div>
 
-      <div className="bloques-libres card">
-        {blocks.map((b, i) => (
-          <div
-            key={b.id}
-            className={`bloque-row-rich ${dragOverBlk === i ? 'drag-over' : ''}`}
-            onDragOver={e => { e.preventDefault(); if (dragOverBlk !== i) setDragOverBlk(i) }}
-            onDrop={() => reorderBlock(i)}
-          >
-            <span className="bloque-grip" draggable onDragStart={() => { dragBlock.current = i }} onDragEnd={() => { dragBlock.current = null; setDragOverBlk(null) }}><GripVertical size={13} /></span>
-            <BlockEditor block={b} onChange={html => updateBlock(b.id, html)} onEnter={() => addBlockAfter(b.id)} onBackspaceEmpty={() => removeBlock(b.id)} />
-            <div className="bloque-fmt-wrap">
-              <button className="bloque-fmt-btn" onClick={() => setFmtMenu(fmtMenu === b.id ? null : b.id)} title="Formato del bloque"><Type size={13} /></button>
-              {fmtMenu === b.id && (
-                <div className="bloque-fmt-menu">
-                  <button onClick={() => editBlock(b.id)}><Edit3 size={12} /> Editar</button>
-                  <button onClick={() => applyFmt(b.id, 'bold')}><Bold size={12} /> Negrita</button>
-                  <button onClick={() => applyFmt(b.id, 'formatBlock', 'p')}><Type size={12} /> Convertir a texto</button>
-                  <div className="bloque-fmt-sep" />
-                  <button onClick={() => applyFmt(b.id, 'formatBlock', 'h1')}>Encabezado 1</button>
-                  <button onClick={() => applyFmt(b.id, 'formatBlock', 'h2')}>Encabezado 2</button>
-                  <button onClick={() => applyFmt(b.id, 'formatBlock', 'h3')}>Encabezado 3</button>
-                </div>
-              )}
-            </div>
-            <button className="bloque-del" onClick={() => removeBlock(b.id)}><X size={12} /></button>
-          </div>
-        ))}
-        {fmtMenu && <div className="bloque-fmt-backdrop" onClick={() => setFmtMenu(null)} />}
-        <button className="bloque-add" onClick={() => addBlockAfter(blocks[blocks.length - 1]?.id || '')}><Plus size={12} /> Agregar bloque</button>
-      </div>
+      {sub && <RichTextEditor docKey={`${activePage}-${sub.id}`} html={sub.content} onChange={saveContent} placeholder="Escribí tus anotaciones..." minHeight={340} className="anotaciones-rte" />}
 
       {showReminders && (
         <div className="modal-backdrop" onClick={() => setShowReminders(false)}>

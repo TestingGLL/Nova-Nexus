@@ -261,6 +261,9 @@
 .recordatorios-panel-head button:hover { color: var(--text-primary); }
 .anotaciones-new-btn { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 16px; transition: all 0.2s; }
 .anotaciones-new-btn:hover { background: var(--accent); color: white; }
+.anotaciones-toolbar-row { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.anotaciones-toolbar-row .anotaciones-new-btn { margin-bottom: 0; }
+.anotaciones-rte { min-height: 340px; }
 
 .anotaciones-form { padding: 16px !important; margin-bottom: 16px; display: flex; flex-direction: column; gap: 12px; }
 .anotaciones-input { padding: 10px 12px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 14px; color: var(--text-primary); font-family: inherit; }
