@@ -38,6 +38,19 @@ function htmlToBlocks(html: string): Block[] {
   return out
 }
 
+// Extrae el contenido interno de un bloque (desenvuelve h1-6/p/div, o toma el
+// summary si es un encabezado desplegable) para poder reconvertirlo.
+function unwrap(html: string): string {
+  const d = document.createElement('div'); d.innerHTML = html || ''
+  const c = d.childNodes.length === 1 ? d.firstChild : null
+  if (c && c.nodeType === Node.ELEMENT_NODE) {
+    const el = c as HTMLElement; const tag = el.tagName.toLowerCase()
+    if (tag === 'details') { const s = el.querySelector('summary'); return s ? s.innerHTML : (el.textContent || '') }
+    if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'div'].includes(tag)) return el.innerHTML
+  }
+  return html
+}
+
 // Lista de bloques → HTML combinado (cada bloque queda como un elemento separado).
 function blocksToHtml(blocks: Block[]): string {
   return blocks.map(b => {
@@ -58,7 +71,7 @@ interface Props {
 
 // Un bloque: contentEditable que siembra su innerHTML solo al montar (por id) para
 // no perder el cursor; reporta cambios por onInput.
-function BlockRow({ block, placeholder, onInput, onEnter, onBackspaceEmpty, onDuplicate, onFocus, onDragStart, onDragEnd, onDragOver, onDrop, onRemove, dragOver }: {
+function BlockRow({ block, placeholder, onInput, onEnter, onBackspaceEmpty, onDuplicate, onFocus, onDragStart, onDragEnd, onDragOver, onDrop, onRemove, onGripMenu, dragOver }: {
   block: Block; placeholder?: string
   onInput: (html: string) => void
   onEnter: () => void
@@ -67,6 +80,7 @@ function BlockRow({ block, placeholder, onInput, onEnter, onBackspaceEmpty, onDu
   onFocus: () => void
   onDragStart: () => void; onDragEnd: () => void; onDragOver: () => void; onDrop: () => void
   onRemove: () => void
+  onGripMenu: (e: React.MouseEvent) => void
   dragOver: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -105,7 +119,7 @@ function BlockRow({ block, placeholder, onInput, onEnter, onBackspaceEmpty, onDu
 
   return (
     <div className={`rte-block-row ${dragOver ? 'drag-over' : ''}`} onDragOver={e => { e.preventDefault(); onDragOver() }} onDrop={onDrop}>
-      <span className="rte-block-grip" draggable onDragStart={onDragStart} onDragEnd={onDragEnd} title="Arrastrar para reordenar"><GripVertical size={13} /></span>
+      <span className="rte-block-grip" draggable onDragStart={onDragStart} onDragEnd={onDragEnd} onContextMenu={onGripMenu} title="Arrastrar para reordenar · clic derecho para convertir a encabezado"><GripVertical size={13} /></span>
       <div
         ref={ref}
         data-rte-block={block.id}
@@ -128,6 +142,7 @@ function BlockRow({ block, placeholder, onInput, onEnter, onBackspaceEmpty, onDu
 export default function RichTextEditor({ html, onChange, docKey, placeholder, minHeight, className }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(() => htmlToBlocks(html))
   const [menu, setMenu] = useState<null | 'color' | 'highlight' | 'emoji' | 'heading' | 'case'>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const activeId = useRef<string | null>(null)
   const dragId = useRef<string | null>(null)
@@ -155,6 +170,20 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
     const next = blocks.filter(b => b.id !== id); commit(next)
     const prev = blocks[idx - 1] || next[0]
     if (prev) setTimeout(() => { const el = blockEl(prev.id); el?.focus() }, 0)
+  }
+  // Convierte un bloque a encabezado (h1/h2/h3), encabezado desplegable (d1/d2/d3)
+  // o texto normal (p), preservando el contenido interno.
+  const convertBlock = (id: string, kind: 'h1' | 'h2' | 'h3' | 'p' | 'd1' | 'd2' | 'd3') => {
+    const el = blockEl(id)
+    const cur = el ? el.innerHTML : (blocks.find(b => b.id === id)?.html || '')
+    const inner = unwrap(cur)
+    let html: string
+    if (kind === 'p') html = inner || '<br>'
+    else if (kind[0] === 'h') html = `<${kind}>${inner || '<br>'}</${kind}>`
+    else html = `<details class="rte-det-${kind[1]}" open><summary>${inner || 'Encabezado'}</summary><div><br></div></details>`
+    if (el) el.innerHTML = html
+    updateBlock(id, html)
+    setCtxMenu(null)
   }
   const duplicateBlock = (id: string) => {
     const idx = blocks.findIndex(b => b.id === id); if (idx < 0) return
@@ -284,6 +313,7 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
             onDuplicate={() => duplicateBlock(b.id)}
             onFocus={() => { activeId.current = b.id }}
             onRemove={() => removeBlock(b.id)}
+            onGripMenu={e => { e.preventDefault(); setMenu(null); setCtxMenu({ id: b.id, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 300) }) }}
             onDragStart={() => { dragId.current = b.id }}
             onDragEnd={() => { dragId.current = null; setDragOverId(null) }}
             onDragOver={() => setDragOverId(b.id)}
@@ -292,6 +322,24 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
         ))}
         <button type="button" className="rte-add-block" onClick={() => addAfter(blocks[blocks.length - 1]?.id || '')}><Plus size={12} /> Agregar bloque</button>
       </div>
+
+      {ctxMenu && (
+        <>
+          <div className="rte-ctx-backdrop" onClick={() => setCtxMenu(null)} onContextMenu={e => { e.preventDefault(); setCtxMenu(null) }} />
+          <div className="rte-ctx-menu" style={{ top: ctxMenu.y, left: ctxMenu.x }}>
+            <span className="rte-ctx-title">Convertir bloque</span>
+            <button onClick={() => convertBlock(ctxMenu.id, 'h1')} className="rte-h1">Encabezado 1</button>
+            <button onClick={() => convertBlock(ctxMenu.id, 'h2')} className="rte-h2">Encabezado 2</button>
+            <button onClick={() => convertBlock(ctxMenu.id, 'h3')} className="rte-h3">Encabezado 3</button>
+            <div className="rte-ctx-sep" />
+            <button onClick={() => convertBlock(ctxMenu.id, 'd1')} className="rte-h1">▸ Encabezado desplegable 1</button>
+            <button onClick={() => convertBlock(ctxMenu.id, 'd2')} className="rte-h2">▸ Encabezado desplegable 2</button>
+            <button onClick={() => convertBlock(ctxMenu.id, 'd3')} className="rte-h3">▸ Encabezado desplegable 3</button>
+            <div className="rte-ctx-sep" />
+            <button onClick={() => convertBlock(ctxMenu.id, 'p')}>Texto normal</button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
