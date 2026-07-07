@@ -64,7 +64,7 @@ function WaterCounter() {
 }
 
 interface ExerciseData { name: string; sets: number; reps: string; rest: string; tip: string; mode?: 'reps' | 'time'; time?: string; youtube?: string }
-interface Routine { id: string; name: string; description: string; exercises: ExerciseData[]; color: string; emoji: string; weeks?: ExerciseData[][] }
+interface Routine { id: string; name: string; description: string; exercises: ExerciseData[]; color: string; emoji: string; weeks?: ExerciseData[][]; banner?: string }
 
 // Notify HoyPanel (and Inicio) so it re-reads routines/week in real time.
 function notifyRoutines() { try { window.dispatchEvent(new CustomEvent('nn-routines-updated')) } catch {} }
@@ -98,6 +98,15 @@ function loadRoutines(key: string, fallback: Routine[]): Routine[] {
   try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback } catch { return fallback }
 }
 
+// A day-plan entry in nn-week-routine: either a legacy routineId string, or { rid, week }.
+type PlanEntry = { rid: string; week: number }
+function parsePlanEntry(v: unknown, fallbackWeek = 0): PlanEntry | null {
+  if (!v) return null
+  if (typeof v === 'string') return { rid: v, week: fallbackWeek }
+  if (typeof v === 'object' && typeof (v as any).rid === 'string') return { rid: (v as any).rid, week: Number((v as any).week) || 0 }
+  return null
+}
+
 function ExercisePanel() {
   const [activeRoutine, setActiveRoutine] = useState<string | null>(null)
   const [week, setWeek] = useState(0)
@@ -106,9 +115,9 @@ function ExercisePanel() {
   const [showSection, setShowSection] = useState<'ejercicios' | 'estiramientos' | 'semana'>('ejercicios')
   const [showNewPanel, setShowNewPanel] = useState(false)
   const [newPanelName, setNewPanelName] = useState('')
-  const [weekPlan, setWeekPlan] = useState<Record<string, string>>(() => { try { const s = localStorage.getItem('nn-week-routine'); return s ? JSON.parse(s) : {} } catch { return {} } })
-  const [activeWeek, setActiveWeek] = useState<number>(() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })
-  const saveActiveWeek = (w: number) => { setActiveWeek(w); localStorage.setItem('nn-active-week', String(w)); notifyRoutines() }
+  const [weekPlan, setWeekPlan] = useState<Record<string, string | PlanEntry>>(() => { try { const s = localStorage.getItem('nn-week-routine'); return s ? JSON.parse(s) : {} } catch { return {} } })
+  const [activeWeek] = useState<number>(() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })
+  const bannerInputRef = useRef<HTMLInputElement>(null)
   const confirm = useConfirm()
 
   // Deep-link from Inicio's "Rutina de hoy" panel: open today's routine directly.
@@ -126,7 +135,7 @@ function ExercisePanel() {
   const isStretch = showSection === 'estiramientos'
   const list = isStretch ? stretches : routines
   const saveList = (l: Routine[]) => { if (isStretch) { setStretches(l); localStorage.setItem('nn-stretches', JSON.stringify(l)) } else { setRoutines(l); localStorage.setItem('nn-exercise-routines', JSON.stringify(l)) } notifyRoutines() }
-  const saveWeek = (w: Record<string, string>) => { setWeekPlan(w); localStorage.setItem('nn-week-routine', JSON.stringify(w)); notifyRoutines() }
+  const saveWeek = (w: Record<string, string | PlanEntry>) => { setWeekPlan(w); localStorage.setItem('nn-week-routine', JSON.stringify(w)); notifyRoutines() }
 
   // Week-aware exercise storage. Week 0 stays in `exercises` for backwards-compat;
   // all 4 weeks live in `weeks` once edited.
@@ -139,6 +148,12 @@ function ExercisePanel() {
   }))
 
   const updateRoutine = (id: string, u: Partial<Routine>) => saveList(list.map(r => r.id === id ? { ...r, ...u } : r))
+  const onBannerFile = (rid: string, file?: File | null) => {
+    if (!file) { return }
+    const reader = new FileReader()
+    reader.onload = () => updateRoutine(rid, { banner: String(reader.result) })
+    reader.readAsDataURL(file)
+  }
   const updateExercise = (rid: string, idx: number, u: Partial<ExerciseData>) => { const r = list.find(x => x.id === rid); if (!r) return; setWeekExercises(rid, week, exercisesOf(r, week).map((e, i) => i === idx ? { ...e, ...u } : e)) }
   const addExercise = (rid: string) => { const r = list.find(x => x.id === rid); if (!r) return; setWeekExercises(rid, week, [...exercisesOf(r, week), { name: 'Nuevo ejercicio', sets: 3, reps: '12', rest: '60s', tip: '', mode: 'reps' }]) }
   const removeExercise = (rid: string, idx: number) => { const r = list.find(x => x.id === rid); if (!r) return; setWeekExercises(rid, week, exercisesOf(r, week).filter((_, i) => i !== idx)) }
@@ -159,7 +174,14 @@ function ExercisePanel() {
     return (
       <div className="card exercise-card exercise-detail">
         <button className="exercise-back" onClick={() => setActiveRoutine(null)}><ArrowLeft size={16} /> Volver</button>
-        <div className="exercise-banner-lg" style={{ background: `linear-gradient(135deg, ${routine.color}, ${routine.color}99)` }}>
+        <div className={`exercise-banner-lg ${routine.banner ? 'has-img' : ''}`} style={routine.banner
+          ? { backgroundImage: `linear-gradient(135deg, ${routine.color}55, ${routine.color}aa), url(${routine.banner})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          : { background: `linear-gradient(135deg, ${routine.color}, ${routine.color}99)` }}>
+          <div className="exercise-banner-actions">
+            <input ref={bannerInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { onBannerFile(routine.id, e.target.files?.[0]); e.target.value = '' }} />
+            <button className="exercise-banner-btn" onClick={() => bannerInputRef.current?.click()} title="Subir un banner personalizado"><Plus size={13} /> {routine.banner ? 'Cambiar banner' : 'Banner'}</button>
+            {routine.banner && <button className="exercise-banner-btn" onClick={() => updateRoutine(routine.id, { banner: undefined })} title="Quitar banner"><X size={13} /> Quitar</button>}
+          </div>
           <div className="exercise-banner-emoji-pick">
             <span className="exercise-banner-emoji">{routine.emoji}</span>
             <div className="emoji-picker-pop">
@@ -219,7 +241,9 @@ function ExercisePanel() {
       {list.map(r => (
         <div key={r.id} className="routine-card" role="button" tabIndex={0} onClick={() => setActiveRoutine(r.id)}>
           <button className="routine-card-del" title="Eliminar panel" onClick={e => { e.stopPropagation(); askRemoveRoutine(r.id) }}><Trash2 size={13} /></button>
-          <div className="routine-banner" style={{ background: `linear-gradient(135deg, ${r.color}, ${r.color}aa)` }}>
+          <div className={`routine-banner ${r.banner ? 'has-img' : ''}`} style={r.banner
+            ? { backgroundImage: `linear-gradient(135deg, ${r.color}55, ${r.color}aa), url(${r.banner})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            : { background: `linear-gradient(135deg, ${r.color}, ${r.color}aa)` }}>
             <span className="routine-emoji">{r.emoji}</span>
             <span className="routine-name">{r.name}</span>
           </div>
@@ -247,27 +271,30 @@ function ExercisePanel() {
         <div className="creador-rutinas">
           <div className="creador-banner">
             <CalendarClock size={22} />
-            <div><span className="creador-banner-title">Creador de Rutinas</span><span className="creador-banner-sub">Asigná rutinas y semana — se sincroniza con Inicio</span></div>
+            <div><span className="creador-banner-title">Creador de Rutinas</span><span className="creador-banner-sub">Asigná una rutina y su semana a cada día — se sincroniza con Inicio</span></div>
           </div>
-          <div className="creador-week-selector">
-            <span className="creador-label">Semana activa (se sincroniza con Inicio)</span>
-            <div className="creador-week-btns">
-              {[0, 1, 2, 3].map(w => (
-                <button key={w} className={`creador-week-btn ${activeWeek === w ? 'active' : ''}`} onClick={() => saveActiveWeek(w)}>Semana {w + 1}</button>
-              ))}
-            </div>
-          </div>
-          <span className="creador-label">Asigná una rutina a cada día</span>
+          <span className="creador-label">Asigná una rutina y semana a cada día</span>
           <div className="week-routine">
-            {WEEKDAYS.map(d => (
-              <div key={d} className="week-day">
-                <span className="week-day-name">{d}</span>
-                <select value={weekPlan[d] || ''} onChange={e => saveWeek({ ...weekPlan, [d]: e.target.value })} style={weekPlan[d] ? { borderColor: routines.find(r => r.id === weekPlan[d])?.color } : undefined}>
-                  <option value="">Descanso</option>
-                  {routines.map(r => <option key={r.id} value={r.id}>{r.emoji} {r.name}</option>)}
-                </select>
-              </div>
-            ))}
+            {WEEKDAYS.map(d => {
+              const entry = parsePlanEntry(weekPlan[d], activeWeek)
+              const rid = entry?.rid || ''
+              const wk = entry?.week ?? 0
+              const rt = routines.find(r => r.id === rid)
+              return (
+                <div key={d} className="week-day">
+                  <span className="week-day-name">{d}</span>
+                  <select value={rid} onChange={e => saveWeek({ ...weekPlan, [d]: e.target.value ? { rid: e.target.value, week: 0 } : '' })} style={rid ? { borderColor: rt?.color } : undefined}>
+                    <option value="">Descanso</option>
+                    {routines.map(r => <option key={r.id} value={r.id}>{r.emoji} {r.name}</option>)}
+                  </select>
+                  {rid && (
+                    <select className="week-day-week" value={wk} onChange={e => saveWeek({ ...weekPlan, [d]: { rid, week: Number(e.target.value) } })} style={{ borderColor: rt?.color }} title="Semana del panel">
+                      {[0, 1, 2, 3].map(w => <option key={w} value={w}>Semana {w + 1}</option>)}
+                    </select>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       ) : (
@@ -1328,15 +1355,16 @@ function HoyPanel() {
   }, [])
   const now = new Date()
   const dow = now.getDay()
-  const activeWeek = (() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })()
+  const fallbackWeek = (() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })()
   let routine: Routine | null = null
+  let week = fallbackWeek
   try {
     const plan = JSON.parse(localStorage.getItem('nn-week-routine') || '{}')
     const routines: Routine[] = JSON.parse(localStorage.getItem('nn-exercise-routines') || 'null') || []
-    const rid = plan[WEEK_KEYS_ES[dow]]
-    if (rid) routine = routines.find(r => r.id === rid) || null
+    const entry = parsePlanEntry(plan[WEEK_KEYS_ES[dow]], fallbackWeek)
+    if (entry) { routine = routines.find(r => r.id === entry.rid) || null; week = entry.week }
   } catch {}
-  const weekEx = routine ? (routine.weeks && routine.weeks.length === 4 ? routine.weeks[activeWeek] : routine.exercises) || [] : []
+  const weekEx = routine ? (routine.weeks && routine.weeks.length === 4 ? routine.weeks[week] : routine.exercises) || [] : []
 
   return (
     <div className="card hoy-panel">
@@ -1346,7 +1374,7 @@ function HoyPanel() {
       {routine ? (
         <div className="hoy-routine" style={{ background: `linear-gradient(135deg, ${routine.color}, ${routine.color}aa)` }}>
           <span className="hoy-routine-emoji">{routine.emoji}</span>
-          <div><span className="hoy-routine-name">{routine.name} — Semana {activeWeek + 1}</span><span className="hoy-routine-week">{weekEx.length} ejercicios</span></div>
+          <div><span className="hoy-routine-name">{routine.name} — Semana {week + 1}</span><span className="hoy-routine-week">{weekEx.length} ejercicios</span></div>
         </div>
       ) : (
         <div className="hoy-rest">Día de descanso · asigná una rutina en el Creador</div>

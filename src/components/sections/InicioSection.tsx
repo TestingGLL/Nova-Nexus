@@ -480,13 +480,17 @@ function DayRoutineWidget() {
   const dayName = FULL_WEEKDAYS[dow]
   let routine: any = null
   let weekEx: any[] = []
-  const activeWeek = (() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })()
+  const fallbackWeek = (() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })()
+  let week = fallbackWeek
   try {
     const plan = JSON.parse(localStorage.getItem('nn-week-routine') || '{}')
     const routines = JSON.parse(localStorage.getItem('nn-exercise-routines') || 'null')
-    const rid = plan[WEEK_KEYS[dow]]
+    const raw = plan[WEEK_KEYS[dow]]
+    let rid = ''
+    if (typeof raw === 'string') rid = raw
+    else if (raw && typeof raw === 'object') { rid = raw.rid; week = Number(raw.week) || 0 }
     if (rid && Array.isArray(routines)) routine = routines.find((r: any) => r.id === rid)
-    if (routine) weekEx = (routine.weeks && routine.weeks.length === 4 ? routine.weeks[activeWeek] : routine.exercises) || []
+    if (routine) weekEx = (routine.weeks && routine.weeks.length === 4 ? routine.weeks[week] : routine.exercises) || []
   } catch {}
   const openRoutine = () => {
     // Signal Salud to open today's routine (transient, non-synced key).
@@ -506,7 +510,7 @@ function DayRoutineWidget() {
         <>
           <div className="day-routine-info" style={{ background: `linear-gradient(135deg, ${routine.color}, ${routine.color}aa)` }}>
             <span className="day-routine-emoji">{routine.emoji}</span>
-            <div><span className="day-routine-name">{routine.name}</span><span className="day-routine-count">{weekEx.length} ejercicios · Semana {activeWeek + 1}</span></div>
+            <div><span className="day-routine-name">{routine.name}</span><span className="day-routine-count">{weekEx.length} ejercicios · Semana {week + 1}</span></div>
           </div>
           {weekEx.length > 0 && (
             <div className="day-routine-exs">
