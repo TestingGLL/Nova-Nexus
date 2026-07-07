@@ -1047,3 +1047,60 @@
 .preset-msg-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 8px 0 0; white-space: pre-wrap; }
 .preset-msg-desc-edit { width: 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); font-family: inherit; line-height: 1.5; outline: none; resize: vertical; }
 .preset-msg-desc-edit:focus { border-color: var(--accent); }
+
+/* ===== Dashboard: inline-editable stats + Países ===== */
+.stat-box.editing { background: var(--accent-soft); }
+.stat-edit-input { width: 90%; text-align: center; font-size: 22px; font-weight: 400; border: 1px solid var(--accent); background: var(--bg-primary); color: var(--text-primary); border-radius: 8px; padding: 2px 4px; outline: none; font-family: inherit; }
+.store-countries-list { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); border-radius: 10px; padding: 8px; background: var(--bg-hover); max-height: 260px; overflow-y: auto; }
+.store-country-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 7px; font-size: 13px; color: var(--text-primary); }
+.store-country-row:hover { background: var(--bg-active); }
+.store-country-count { font-weight: 700; color: var(--accent); background: var(--bg-active); border-radius: 10px; padding: 1px 9px; font-size: 12px; }
+.store-countries-empty { font-size: 12px; color: var(--text-secondary); text-align: center; padding: 10px; }
+
+/* ===== Brand panel: collapsible sections, minimize, palette, fonts, info fields ===== */
+.brand-identity.minimized .brand-header { border-radius: 14px; }
+.brand-header { position: relative; }
+.brand-minimize { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.5); background: rgba(0,0,0,0.22); color: #fff; border-radius: 7px; cursor: pointer; }
+.brand-minimize:hover { background: rgba(0,0,0,0.4); }
+.brand-field-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer; user-select: none; padding: 2px 0; }
+.brand-field-head:hover { color: var(--accent); }
+.brand-field-title { margin-right: auto; }
+.brand-color-copy, .brand-color-remove { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-secondary); border-radius: 6px; cursor: pointer; }
+.brand-color-copy:hover { border-color: var(--accent); color: var(--accent); }
+.brand-color-add { width: auto; gap: 4px; padding: 4px 10px; font-size: 11px; font-weight: 600; }
+.brand-font-row { display: flex; align-items: center; gap: 6px; }
+.brand-font-row .brand-font-input { flex: 1; }
+.brand-font-remove { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-secondary); border-radius: 7px; cursor: pointer; }
+.brand-font-remove:hover { border-color: #ef4444; color: #ef4444; }
+.brand-font-add { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; padding: 5px 12px; border: 2px dashed var(--border); background: none; color: var(--text-secondary); border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.brand-font-add:hover { border-color: var(--accent); color: var(--accent); }
+.brand-empty-hint { font-size: 11px; color: var(--text-secondary); opacity: 0.7; }
+.brand-info-fields { display: flex; flex-direction: column; gap: 10px; }
+.brand-info-field { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--bg-primary); }
+.brand-info-field-head { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--bg-hover); }
+.brand-info-toggle { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-radius: 6px; }
+.brand-info-toggle:hover { color: var(--accent); }
+.brand-info-title { flex: 1; padding: 5px 8px !important; border: 1px solid transparent !important; background: transparent !important; font-size: 13px; font-weight: 600; }
+.brand-info-title:hover { border-color: var(--border) !important; }
+.brand-info-del { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-secondary); border-radius: 6px; cursor: pointer; }
+.brand-info-del:hover { border-color: #ef4444; color: #ef4444; }
+.brand-info-add { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; padding: 6px 12px; border: 2px dashed var(--border); background: none; color: var(--text-secondary); border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.brand-info-add:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ===== Predeterminadas: group color banner + collapse ===== */
+.preset-group-head { padding: 8px 10px; border-radius: 10px; color: #fff; }
+.preset-group-head .preset-group-name { color: #fff; }
+.preset-group-head .preset-group-name:hover { border-color: rgba(255,255,255,0.5); }
+.preset-group-head .preset-group-name:focus { border-color: #fff; background: rgba(0,0,0,0.2); color: #fff; }
+.preset-group-head .preset-group-count { background: rgba(0,0,0,0.28); color: #fff; }
+.preset-group-toggle, .preset-msg-toggle { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: none; background: none; color: inherit; cursor: pointer; border-radius: 6px; }
+.preset-group-toggle { color: #fff; }
+.preset-group-toggle:hover { background: rgba(0,0,0,0.2); }
+.preset-msg-toggle { color: var(--text-secondary); }
+.preset-msg-toggle:hover { color: var(--accent); }
+.preset-msg-title { cursor: pointer; }
+.preset-group-color { display: inline-flex; align-items: center; cursor: pointer; }
+.preset-group-color input[type="color"] { width: 26px; height: 26px; border: 1px solid rgba(255,255,255,0.5); border-radius: 6px; padding: 0; background: none; cursor: pointer; }
+.preset-group-addmsg { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border: 1px solid rgba(255,255,255,0.5); background: rgba(0,0,0,0.18); color: #fff; border-radius: 7px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.preset-group-addmsg:hover { background: rgba(0,0,0,0.32); }
+.preset-msg.collapsed { opacity: 0.92; }

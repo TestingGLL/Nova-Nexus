@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, RotateCcw, Copy } from 'lucide-react'
+import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, RotateCcw, Copy, Minus } from 'lucide-react'
 import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
 import './EtsySection.css'
@@ -36,9 +36,30 @@ const DEFAULT_GROUP_COLOR = '#312e81'
 // Alphabetical comparator (Spanish, case/accent-insensitive) for articles/groups/subs.
 const byName = (a: string, b: string) => (a || '').localeCompare(b || '', 'es', { sensitivity: 'base' })
 
-interface BrandInfo { slogan: string; sloganEn?: string; brandColors: string[]; notes: string; fonts?: string[] }
+// Robust price parser: handles US (1,234.56) and ES (1.234,56 / 3,50) formats.
+function parsePrice(p?: string | number | null): number {
+  if (p === undefined || p === null || p === '') return 0
+  if (typeof p === 'number') return isNaN(p) ? 0 : p
+  let s = String(p).replace(/[^0-9.,]/g, '')
+  if (s.includes('.') && s.includes(',')) {
+    // The last separator is the decimal one; the other groups thousands.
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.')
+    else s = s.replace(/,/g, '')
+  } else if (s.includes(',')) {
+    s = s.replace(',', '.')
+  }
+  const n = parseFloat(s)
+  return isNaN(n) ? 0 : n
+}
+// Sum of an article's own price plus all of its subarticles' prices.
+function articleTotal(art: Article): number {
+  return parsePrice(art.price) + (art.subArticles || []).reduce((s, sub) => s + parsePrice(sub.price), 0)
+}
+
+interface BrandInfoField { id: string; title: string; body: string }
+interface BrandInfo { slogan: string; sloganEn?: string; brandColors: string[]; notes: string; fonts?: string[]; infoFields?: BrandInfoField[] }
 interface PresetMsg { id: string; groupId?: string; titleEs: string; titleEn: string; descEs: string; descEn: string }
-interface PresetGroup { id: string; name: string }
+interface PresetGroup { id: string; name: string; color?: string }
 interface PromptPanel { id: string; title: string; description: string; group?: string; mainPrompt?: string; prompts: { id: string; text: string; variables: string[] }[] }
 interface WordGroup { name: string; words: string[] }
 function loadWordGroups(): WordGroup[] { try { const s = localStorage.getItem('nn-prompt-groups'); return s ? JSON.parse(s) : [] } catch { return [] } }
@@ -154,19 +175,45 @@ function RichEditor({ html, onChange, placeholder }: { html: string; onChange: (
 function BrandPanel({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
   const brand = store.brand || { slogan: '', sloganEn: '', brandColors: [store.bannerColor, store.accentColor], notes: '', fonts: [] }
   const [sloganLang, setSloganLang] = useState<'es' | 'en'>('es')
+  const [minimized, setMinimized] = useState(false)
+  const [openSec, setOpenSec] = useState<Record<string, boolean>>({ slogan: true, palette: true, fonts: true, info: true })
+  const [hexDraft, setHexDraft] = useState<Record<number, string>>({})
+  const [copiedHex, setCopiedHex] = useState<number | null>(null)
+  const [openFields, setOpenFields] = useState<Record<string, boolean>>({})
+  const toggleSec = (k: string) => setOpenSec(s => ({ ...s, [k]: !s[k] }))
+
   const update = (u: Partial<BrandInfo>) => onUpdate({ ...store, brand: { ...brand, ...u } })
   const addColor = () => update({ brandColors: [...brand.brandColors, '#888888'] })
   const removeColor = (i: number) => update({ brandColors: brand.brandColors.filter((_, idx) => idx !== i) })
   const setColor = (i: number, c: string) => { const nc = [...brand.brandColors]; nc[i] = c; update({ brandColors: nc }) }
-  // Accept HEX typed by the user; only commit when it's a valid #RGB/#RRGGBB.
-  const setHex = (i: number, v: string) => { let h = v.trim(); if (h && !h.startsWith('#')) h = '#' + h; if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(h)) setColor(i, h) }
+  // Accept HEX typed by the user; keep a local draft so partial input is editable,
+  // and only commit to the color once it's a valid #RGB/#RRGGBB.
+  const onHexChange = (i: number, v: string) => {
+    setHexDraft(d => ({ ...d, [i]: v }))
+    let h = v.trim(); if (h && !h.startsWith('#')) h = '#' + h
+    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(h)) setColor(i, h)
+  }
+  const onHexBlur = (i: number) => setHexDraft(d => { const n = { ...d }; delete n[i]; return n })
+  const copyHex = (i: number, c: string) => { try { navigator.clipboard.writeText(c) } catch {}; setCopiedHex(i); setTimeout(() => setCopiedHex(null), 1200) }
+
   const fonts = brand.fonts || []
-  const setFont = (i: number, v: string) => { const f = [fonts[0] || '', fonts[1] || '', fonts[2] || '']; f[i] = v; update({ fonts: f }) }
+  const addFont = () => { if (fonts.length < 3) update({ fonts: [...fonts, ''] }) }
+  const removeFont = (i: number) => update({ fonts: fonts.filter((_, idx) => idx !== i) })
+  const setFont = (i: number, v: string) => { const f = [...fonts]; f[i] = v; update({ fonts: f }) }
+
+  // Multiple brand-info fields (title + description). Seeded once from the legacy `notes`.
+  const infoFields: BrandInfoField[] = brand.infoFields || (brand.notes ? [{ id: 'bf-legacy', title: 'General', body: brand.notes }] : [])
+  const addField = () => { const id = 'bf-' + Date.now(); update({ infoFields: [...infoFields, { id, title: '', body: '' }] }); setOpenFields(s => ({ ...s, [id]: true })) }
+  const updateField = (id: string, u: Partial<BrandInfoField>) => update({ infoFields: infoFields.map(f => f.id === id ? { ...f, ...u } : f) })
+  const removeField = (id: string) => update({ infoFields: infoFields.filter(f => f.id !== id) })
+  const toggleField = (id: string) => setOpenFields(s => ({ ...s, [id]: s[id] === undefined ? false : !s[id] }))
+  const isFieldOpen = (id: string) => openFields[id] === undefined ? true : openFields[id]
+
   const sloganVal = sloganLang === 'es' ? brand.slogan : (brand.sloganEn || '')
 
   return (
     <div className="brand-panel">
-      <div className="card brand-identity">
+      <div className={`card brand-identity ${minimized ? 'minimized' : ''}`}>
         <div className="brand-header" style={{ background: `linear-gradient(135deg, ${store.bannerColor}, ${store.accentColor})` }}>
           {store.logoImage ? <img src={store.logoImage} alt="" className="brand-logo-img" /> : <span className="brand-logo">{store.logo}</span>}
           <div className="brand-header-info">
@@ -174,43 +221,81 @@ function BrandPanel({ store, onUpdate }: { store: StoreData; onUpdate: (s: Store
             {store.starSeller && <span className="star-seller-badge"><Award size={12} /> Star Seller</span>}
             {sloganVal && <p className="brand-slogan">"{sloganVal}"</p>}
           </div>
+          <button className="brand-minimize" onClick={() => setMinimized(m => !m)} title={minimized ? 'Expandir información de marca' : 'Minimizar información de marca'}>{minimized ? <Plus size={16} /> : <Minus size={16} />}</button>
         </div>
+        {!minimized && (
         <div className="brand-body">
           <div className="brand-field">
-            <span><Tag size={12} /> Slogan
-              <span className="brand-lang-toggle">
+            <div className="brand-field-head" onClick={() => toggleSec('slogan')}>
+              {openSec.slogan ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              <Tag size={12} /> <span className="brand-field-title">Slogan</span>
+              <span className="brand-lang-toggle" onClick={e => e.stopPropagation()}>
                 <button className={sloganLang === 'es' ? 'active' : ''} onClick={() => setSloganLang('es')}>ES</button>
                 <button className={sloganLang === 'en' ? 'active' : ''} onClick={() => setSloganLang('en')}>EN</button>
               </span>
-            </span>
-            <input value={sloganVal} onChange={e => update(sloganLang === 'es' ? { slogan: e.target.value } : { sloganEn: e.target.value })} placeholder={sloganLang === 'es' ? 'Tu slogan en español...' : 'Your slogan in English...'} />
+            </div>
+            {openSec.slogan && <input value={sloganVal} onChange={e => update(sloganLang === 'es' ? { slogan: e.target.value } : { sloganEn: e.target.value })} placeholder={sloganLang === 'es' ? 'Tu slogan en español...' : 'Your slogan in English...'} />}
           </div>
           <div className="brand-field">
-            <span><Palette size={12} /> Paleta de marca</span>
+            <div className="brand-field-head" onClick={() => toggleSec('palette')}>
+              {openSec.palette ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              <Palette size={12} /> <span className="brand-field-title">Paleta de marca</span>
+            </div>
+            {openSec.palette && (
             <div className="brand-colors">
               {brand.brandColors.map((c, i) => (
                 <div key={i} className="brand-color-item">
                   <input type="color" value={/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c) ? c : '#888888'} onChange={e => setColor(i, e.target.value)} />
-                  <input className="brand-color-hex-input" value={c.toUpperCase()} onChange={e => setHex(i, e.target.value)} placeholder="#000000" spellCheck={false} />
+                  <input className="brand-color-hex-input" value={hexDraft[i] !== undefined ? hexDraft[i] : c.toUpperCase()} onChange={e => onHexChange(i, e.target.value)} onBlur={() => onHexBlur(i)} placeholder="#C21807" spellCheck={false} />
+                  <button className="brand-color-copy" onClick={() => copyHex(i, c.toUpperCase())} title="Copiar HEX">{copiedHex === i ? <Check size={11} /> : <Copy size={11} />}</button>
                   {brand.brandColors.length > 1 && <button className="brand-color-remove" onClick={() => removeColor(i)}><X size={10} /></button>}
                 </div>
               ))}
-              <button className="brand-color-add" onClick={addColor}><Plus size={12} /></button>
+              <button className="brand-color-add" onClick={addColor}><Plus size={12} /> Color</button>
             </div>
+            )}
           </div>
           <div className="brand-field">
-            <span><Type size={12} /> Tipografía (hasta 3)</span>
+            <div className="brand-field-head" onClick={() => toggleSec('fonts')}>
+              {openSec.fonts ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              <Type size={12} /> <span className="brand-field-title">Tipografía (hasta 3)</span>
+            </div>
+            {openSec.fonts && (
             <div className="brand-fonts">
-              {[0, 1, 2].map(i => (
-                <input key={i} className="brand-font-input" value={fonts[i] || ''} onChange={e => setFont(i, e.target.value)} placeholder={`Tipografía ${i + 1}`} style={fonts[i] ? { fontFamily: `"${fonts[i]}", inherit` } : undefined} />
+              {fonts.map((f, i) => (
+                <div key={i} className="brand-font-row">
+                  <input className="brand-font-input" value={f} onChange={e => setFont(i, e.target.value)} placeholder={`Tipografía ${i + 1}`} style={f ? { fontFamily: `"${f}", inherit` } : undefined} />
+                  <button className="brand-font-remove" onClick={() => removeFont(i)} title="Eliminar tipografía"><X size={11} /></button>
+                </div>
               ))}
+              {fonts.length < 3 && <button className="brand-font-add" onClick={addFont}><Plus size={12} /> Agregar tipografía</button>}
+              {fonts.length === 0 && <span className="brand-empty-hint">Sin tipografías. Agregá hasta 3.</span>}
             </div>
+            )}
           </div>
           <div className="brand-field">
-            <span><FileText size={12} /> Información de Marca</span>
-            <RichEditor html={brand.notes} onChange={h => update({ notes: h })} placeholder="Filosofía, público objetivo, diferenciadores, tono de voz..." />
+            <div className="brand-field-head" onClick={() => toggleSec('info')}>
+              {openSec.info ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              <FileText size={12} /> <span className="brand-field-title">Información de la marca</span>
+            </div>
+            {openSec.info && (
+            <div className="brand-info-fields">
+              {infoFields.map(f => (
+                <div key={f.id} className="brand-info-field">
+                  <div className="brand-info-field-head">
+                    <button className="brand-info-toggle" onClick={() => toggleField(f.id)} title={isFieldOpen(f.id) ? 'Minimizar' : 'Expandir'}>{isFieldOpen(f.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</button>
+                    <input className="brand-info-title" value={f.title} onChange={e => updateField(f.id, { title: e.target.value })} placeholder="Título del campo" />
+                    <button className="brand-info-del" onClick={() => removeField(f.id)} title="Eliminar campo"><Trash2 size={12} /></button>
+                  </div>
+                  {isFieldOpen(f.id) && <RichEditor html={f.body} onChange={h => updateField(f.id, { body: h })} placeholder="Descripción..." />}
+                </div>
+              ))}
+              <button className="brand-info-add" onClick={addField}><Plus size={12} /> Agregar campo</button>
+            </div>
+            )}
           </div>
         </div>
+        )}
       </div>
     </div>
   )
@@ -314,8 +399,8 @@ function GroupPanel({ group, store, groups, groupArticles, rate, readOnly, updat
     ? { background: 'linear-gradient(135deg, #475569, #64748b)' }
     : { background: `linear-gradient(135deg, ${color}, ${color}cc)` }
   const priceLabel = fmtUsdArs(group.defaultPrice, rate)
-  // Auto-computed sum of every article price in the group.
-  const groupSum = groupArticles.reduce((a, art) => a + (parseFloat(String(art.price || '').replace(/[^0-9.,]/g, '').replace(',', '.')) || 0), 0)
+  // Auto-computed sum of every article price in the group, including subarticles.
+  const groupSum = groupArticles.reduce((a, art) => a + articleTotal(art), 0)
   const sumLabel = groupSum > 0 ? fmtUsdArs(String(groupSum), rate) : ''
   const subCount = groupArticles.reduce((a, art) => a + art.subArticles.length, 0)
   return (
@@ -328,7 +413,7 @@ function GroupPanel({ group, store, groups, groupArticles, rate, readOnly, updat
           {subCount > 0 && <span className="article-group-subcount">{subCount} sub</span>}
         </button>
         <div className="article-group-actions">
-          {sumLabel && <span className="article-group-sum" title="Suma de los precios de los artículos">Σ {sumLabel}</span>}
+          {sumLabel && <span className="article-group-sum" title="Suma de artículos y subartículos">Σ {sumLabel}</span>}
           {priceLabel && <span className="article-group-price"><DollarSign size={12} /> {priceLabel}</span>}
           {!readOnly && <button ref={editBtnRef} type="button" className="article-group-edit" onClick={() => setEditing(e => !e)} title="Editar grupo"><Edit3 size={14} /></button>}
           {!readOnly && <button type="button" className="article-group-delete" onClick={onRemoveGroup} title="Eliminar grupo"><Trash2 size={14} /></button>}
@@ -399,10 +484,9 @@ function ArticlesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const ungrouped = store.articles.filter(a => !a.groupId || !groups.some(g => g.id === a.groupId))
   const ungroupedShown = ungrouped.filter(matches).sort((a, b) => byName(a.title, b.title))
 
-  const parsePrice = (p?: string) => parseFloat(String(p || '').replace(/[^0-9.,]/g, '').replace(',', '.')) || 0
-  const totalSubs = store.articles.reduce((a, art) => a + art.subArticles.length, 0)
+  const totalSubs = store.articles.reduce((a, art) => a + (art.subArticles || []).length, 0)
   const priceArticles = store.articles.reduce((a, art) => a + parsePrice(art.price), 0)
-  const priceSubs = store.articles.reduce((a, art) => a + art.subArticles.reduce((s, sub) => s + parsePrice(sub.price), 0), 0)
+  const priceSubs = store.articles.reduce((a, art) => a + (art.subArticles || []).reduce((s, sub) => s + parsePrice(sub.price), 0), 0)
 
   return (
     <div className="articles-tab">
@@ -1412,6 +1496,8 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
   const [editId, setEditId] = useState<string | null>(null)
   const [lang, setLang] = useState<Record<string, 'en' | 'es'>>({})
   const [copied, setCopied] = useState<string | null>(null)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [collapsedMsgs, setCollapsedMsgs] = useState<Set<string>>(new Set())
   const confirm = useConfirm()
 
   const save = (p: PresetMsg[]) => onUpdate({ ...store, presets: p })
@@ -1420,34 +1506,39 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
   const updateMsg = (id: string, u: Partial<PresetMsg>) => save(presets.map(m => m.id === id ? { ...m, ...u } : m))
   const removeMsg = async (id: string) => { const m = presets.find(x => x.id === id); if (!await confirm({ title: 'Eliminar mensaje', message: `¿Eliminar «${m?.titleEn || m?.titleEs || 'este mensaje'}»?` })) return; save(presets.filter(m => m.id !== id)) }
   const dupMsg = (id: string) => { const m = presets.find(x => x.id === id); if (!m) return; const idx = presets.findIndex(x => x.id === id); const d: PresetMsg = { ...m, id: 'pm-' + Date.now(), titleEn: (m.titleEn || '') + ' (copy)', titleEs: (m.titleEs || '') + ' (copia)' }; const next = [...presets]; next.splice(idx + 1, 0, d); save(next) }
-  const addGroup = () => saveGroups([...pgroups, { id: 'pg-' + Date.now(), name: 'Nuevo grupo' }])
+  const addGroup = () => saveGroups([...pgroups, { id: 'pg-' + Date.now(), name: 'Nuevo grupo', color: DEFAULT_GROUP_COLOR }])
   const renameGroup = (id: string, name: string) => saveGroups(pgroups.map(g => g.id === id ? { ...g, name } : g))
+  const setGroupColor = (id: string, color: string) => saveGroups(pgroups.map(g => g.id === id ? { ...g, color } : g))
   const removeGroup = async (id: string) => { if (!await confirm({ title: 'Eliminar grupo', message: 'Se elimina el grupo; sus mensajes quedan sin grupo.', confirmLabel: 'Eliminar' })) return; saveGroups(pgroups.filter(g => g.id !== id)); save(presets.map(m => m.groupId === id ? { ...m, groupId: undefined } : m)) }
+  const toggleGroup = (id: string) => setCollapsedGroups(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggleMsg = (id: string) => setCollapsedMsgs(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const msgLang = (id: string) => lang[id] || 'en' // default: inglés
   const copyMsg = (m: PresetMsg) => { const l = msgLang(m.id); const t = l === 'en' ? m.titleEn : m.titleEs; const d = l === 'en' ? m.descEn : m.descEs; navigator.clipboard.writeText(`${t}\n\n${d}`.trim()); setCopied(m.id); setTimeout(() => setCopied(null), 1500) }
 
   const renderMsg = (m: PresetMsg) => {
     const l = msgLang(m.id); const editing = editId === m.id
+    const collapsed = collapsedMsgs.has(m.id)
     const title = l === 'en' ? m.titleEn : m.titleEs; const desc = l === 'en' ? m.descEn : m.descEs
     return (
-      <div key={m.id} className="preset-msg card">
+      <div key={m.id} className={`preset-msg card ${collapsed ? 'collapsed' : ''}`}>
         <div className="preset-msg-head">
+          <button className="preset-msg-toggle" onClick={() => toggleMsg(m.id)} title={collapsed ? 'Expandir' : 'Minimizar'}>{collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}</button>
           {editing
             ? <input className="preset-msg-title-edit" value={title} onChange={e => updateMsg(m.id, l === 'en' ? { titleEn: e.target.value } : { titleEs: e.target.value })} placeholder={l === 'en' ? 'Title' : 'Título'} />
-            : <span className="preset-msg-title">{title || <em>(sin título)</em>}</span>}
+            : <span className="preset-msg-title" onClick={() => toggleMsg(m.id)}>{title || <em>(sin título)</em>}</span>}
           <span className="preset-lang-toggle">
             <button className={l === 'en' ? 'active' : ''} onClick={() => setLang(s => ({ ...s, [m.id]: 'en' }))}>EN</button>
             <button className={l === 'es' ? 'active' : ''} onClick={() => setLang(s => ({ ...s, [m.id]: 'es' }))}>ES</button>
           </span>
           <button className="preset-copy" onClick={() => copyMsg(m)} title="Copiar mensaje">{copied === m.id ? <Check size={14} /> : <Copy size={14} />}</button>
-          <button className="preset-icon-btn" onClick={() => setEditId(editing ? null : m.id)} title={editing ? 'Listo' : 'Editar'}>{editing ? <Check size={14} /> : <Edit3 size={14} />}</button>
+          <button className="preset-icon-btn" onClick={() => { setEditId(editing ? null : m.id); if (!editing) setCollapsedMsgs(s => { const n = new Set(s); n.delete(m.id); return n }) }} title={editing ? 'Listo' : 'Editar'}>{editing ? <Check size={14} /> : <Edit3 size={14} />}</button>
           <button className="preset-icon-btn" onClick={() => dupMsg(m.id)} title="Duplicar"><Copy size={13} /></button>
           <select className="preset-move" value={m.groupId || ''} onChange={e => updateMsg(m.id, { groupId: e.target.value || undefined })} title="Mover a grupo"><option value="">Sin grupo</option>{pgroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
           <button className="preset-icon-btn del" onClick={() => removeMsg(m.id)} title="Eliminar"><Trash2 size={13} /></button>
         </div>
-        {editing
+        {!collapsed && (editing
           ? <textarea className="preset-msg-desc-edit" value={desc} onChange={e => updateMsg(m.id, l === 'en' ? { descEn: e.target.value } : { descEs: e.target.value })} placeholder={l === 'en' ? 'Description...' : 'Descripción...'} rows={4} />
-          : (desc && <p className="preset-msg-desc">{desc}</p>)}
+          : (desc && <p className="preset-msg-desc">{desc}</p>))}
       </div>
     )
   }
@@ -1460,18 +1551,24 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
         <button className="articles-add-btn-secondary" onClick={addGroup}><Layers size={15} /> Nuevo grupo</button>
       </div>
       {presets.length === 0 && pgroups.length === 0 && <div className="articles-empty"><FileText size={24} /><p>Sin mensajes predeterminados. Creá el primero con «Nuevo mensaje».</p></div>}
-      {pgroups.map(g => (
+      {pgroups.map(g => {
+        const gColor = g.color || DEFAULT_GROUP_COLOR
+        const gCollapsed = collapsedGroups.has(g.id)
+        const gMsgs = presets.filter(m => m.groupId === g.id)
+        return (
         <div key={g.id} className="preset-group card">
-          <div className="preset-group-head">
-            <Layers size={14} />
+          <div className="preset-group-head" style={{ background: `linear-gradient(135deg, ${gColor}, ${gColor}cc)` }}>
+            <button className="preset-group-toggle" onClick={() => toggleGroup(g.id)} title={gCollapsed ? 'Expandir' : 'Minimizar'}>{gCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}</button>
             <input className="preset-group-name" value={g.name} onChange={e => renameGroup(g.id, e.target.value)} />
-            <span className="preset-group-count">{presets.filter(m => m.groupId === g.id).length}</span>
-            <button className="articles-add-btn-secondary" onClick={() => addMsg(g.id)}><Plus size={12} /> Mensaje</button>
+            <span className="preset-group-count">{gMsgs.length}</span>
+            <label className="preset-group-color" title="Color del grupo"><input type="color" value={/^#([0-9a-fA-F]{6})$/.test(gColor) ? gColor : DEFAULT_GROUP_COLOR} onChange={e => setGroupColor(g.id, e.target.value)} /></label>
+            <button className="preset-group-addmsg" onClick={() => addMsg(g.id)}><Plus size={12} /> Mensaje</button>
             <button className="preset-icon-btn del" onClick={() => removeGroup(g.id)}><Trash2 size={13} /></button>
           </div>
-          <div className="preset-group-msgs">{presets.filter(m => m.groupId === g.id).map(renderMsg)}{presets.filter(m => m.groupId === g.id).length === 0 && <p className="article-group-empty">Sin mensajes en este grupo.</p>}</div>
+          {!gCollapsed && <div className="preset-group-msgs">{gMsgs.map(renderMsg)}{gMsgs.length === 0 && <p className="article-group-empty">Sin mensajes en este grupo.</p>}</div>}
         </div>
-      ))}
+        )
+      })}
       {ungrouped.length > 0 && <div className="preset-ungrouped">{pgroups.length > 0 && <span className="preset-ungrouped-label">Sin grupo</span>}{ungrouped.map(renderMsg)}</div>}
     </div>
   )
@@ -1533,6 +1630,8 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
   const [draft, setDraft] = useState(store)
   const [storeTab, setStoreTab] = useState<'informacion' | 'articles' | 'launches' | 'creaciones' | 'planificacion' | 'predeterminadas' | 'clientes'>('informacion')
   const [showReviews, setShowReviews] = useState(false)
+  const [showCountries, setShowCountries] = useState(false)
+  const [editStat, setEditStat] = useState<null | 'sales' | 'products'>(null)
   const bannerInputRef = useRef<HTMLInputElement>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
 
@@ -1541,6 +1640,11 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
   const handleLogoImage = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setDraft({ ...draft, logoImage: reader.result as string }); reader.readAsDataURL(file); e.target.value = '' }
 
   const rating = storeRating(store)
+  const clientCount = (store.clientList || []).length
+  // Clientes por país (orden alfabético) para el dato "Países" del dashboard.
+  const countryCounts = Array.from((store.clientList || []).reduce((m, c) => {
+    const k = (c.country || '').trim() || 'Sin país'; return m.set(k, (m.get(k) || 0) + 1)
+  }, new Map<string, number>())).sort((a, b) => byName(a[0], b[0]))
 
   return (
     <div className="store-view">
@@ -1584,10 +1688,10 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
               {draft.bannerImage && <img src={draft.bannerImage} alt="" className="banner-preview" />}
             </div>
             <label className="customize-field"><span><Palette size={13} /> Color acento</span><div className="color-row"><input type="color" value={draft.accentColor} onChange={e => setDraft({ ...draft, accentColor: e.target.value })} /><span className="color-hex">{draft.accentColor}</span></div></label>
-            <label className="customize-field"><span><Package size={13} /> Productos</span><input type="number" min={0} value={draft.products} onChange={e => setDraft({ ...draft, products: Number(e.target.value) })} /></label>
+            <label className="customize-field"><span><Package size={13} /> Artículos</span><input type="number" min={0} value={draft.products} onChange={e => setDraft({ ...draft, products: Number(e.target.value) })} /></label>
             <div className="customize-field"><span><Star size={13} /> Reseñas</span><span className="customize-hint">Gestioná las reseñas (1-5★) desde la pestaña «Información».</span></div>
             <label className="customize-field"><span><ShoppingCart size={13} /> Ventas</span><input type="number" min={0} value={draft.sales} onChange={e => setDraft({ ...draft, sales: Number(e.target.value) })} /></label>
-            <label className="customize-field"><span><Users size={13} /> Clientes</span><input type="number" min={0} value={draft.clients} onChange={e => setDraft({ ...draft, clients: Number(e.target.value) })} /></label>
+            <div className="customize-field"><span><Users size={13} /> Clientes</span><span className="customize-hint">Se calcula automáticamente desde la pestaña «Clientes».</span></div>
             <label className="customize-field"><span>Estado</span><select value={draft.status} onChange={e => setDraft({ ...draft, status: e.target.value })}><option>Activa</option><option>Pausada</option><option>En desarrollo</option></select></label>
             <label className="customize-field"><span><Award size={13} /> Star Seller</span><button className={`star-toggle ${draft.starSeller ? 'active' : ''}`} onClick={() => setDraft({ ...draft, starSeller: !draft.starSeller })}>{draft.starSeller ? 'Sí' : 'No'}</button></label>
             <label className="customize-field"><span><Sparkles size={13} /> Partículas en el banner</span><button className={`star-toggle ${draft.bannerParticles ? 'active' : ''}`} onClick={() => setDraft({ ...draft, bannerParticles: !draft.bannerParticles })}>{draft.bannerParticles ? 'Sí' : 'No'}</button></label>
@@ -1611,12 +1715,24 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
           <div className="card">
             <p className="store-view-desc">{store.description}</p>
             <div className="store-view-stats">
-              <div className="stat-box" style={{ borderColor: store.accentColor }}><Package size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.products}</span><span className="stat-label">Productos</span></div>
+              {editStat === 'products'
+                ? <div className="stat-box editing" style={{ borderColor: store.accentColor }}><Package size={18} style={{ color: store.accentColor }} /><input className="stat-edit-input" type="number" min={0} autoFocus value={store.products} onChange={e => onUpdate({ ...store, products: Number(e.target.value) })} onBlur={() => setEditStat(null)} onKeyDown={e => e.key === 'Enter' && setEditStat(null)} /><span className="stat-label">Artículos</span></div>
+                : <button type="button" className="stat-box stat-box-btn" style={{ borderColor: store.accentColor }} onClick={() => setEditStat('products')} title="Clic para editar"><Package size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.products}</span><span className="stat-label">Artículos ✎</span></button>}
               <button type="button" className={`stat-box stat-box-btn ${showReviews ? 'active' : ''}`} style={{ borderColor: store.accentColor }} onClick={() => setShowReviews(v => !v)} title="Ver / ocultar reseñas"><Star size={18} style={{ color: store.accentColor }} /><span className="stat-number">{reviewTotal(store)}</span><span className="stat-label">Reseñas {showReviews ? '▲' : '▼'}</span></button>
-              <div className="stat-box" style={{ borderColor: store.accentColor }}><ShoppingCart size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.sales}</span><span className="stat-label">Ventas</span></div>
-              <div className="stat-box" style={{ borderColor: store.accentColor }}><Users size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.clients}</span><span className="stat-label">Clientes</span></div>
-              <div className="stat-box" style={{ borderColor: store.accentColor }}><TrendingUp size={18} style={{ color: store.accentColor }} /><span className="stat-number">{rating}★</span><span className="stat-label">Rating</span></div>
+              {editStat === 'sales'
+                ? <div className="stat-box editing" style={{ borderColor: store.accentColor }}><ShoppingCart size={18} style={{ color: store.accentColor }} /><input className="stat-edit-input" type="number" min={0} autoFocus value={store.sales} onChange={e => onUpdate({ ...store, sales: Number(e.target.value) })} onBlur={() => setEditStat(null)} onKeyDown={e => e.key === 'Enter' && setEditStat(null)} /><span className="stat-label">Ventas</span></div>
+                : <button type="button" className="stat-box stat-box-btn" style={{ borderColor: store.accentColor }} onClick={() => setEditStat('sales')} title="Clic para editar"><ShoppingCart size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.sales}</span><span className="stat-label">Ventas ✎</span></button>}
+              <div className="stat-box" style={{ borderColor: store.accentColor }} title="Se calcula desde la pestaña Clientes"><Users size={18} style={{ color: store.accentColor }} /><span className="stat-number">{clientCount}</span><span className="stat-label">Clientes</span></div>
+              <button type="button" className={`stat-box stat-box-btn ${showCountries ? 'active' : ''}`} style={{ borderColor: store.accentColor }} onClick={() => setShowCountries(v => !v)} title="Ver países de los clientes"><Globe size={18} style={{ color: store.accentColor }} /><span className="stat-number">{countryCounts.length}</span><span className="stat-label">Países {showCountries ? '▲' : '▼'}</span></button>
+              <div className="stat-box" style={{ borderColor: store.accentColor }} title="Promedio de puntuación de las reseñas"><TrendingUp size={18} style={{ color: store.accentColor }} /><span className="stat-number">{rating}★</span><span className="stat-label">Rating</span></div>
             </div>
+            {showCountries && (
+              <div className="store-countries-list">
+                {countryCounts.length === 0
+                  ? <p className="store-countries-empty">Sin clientes cargados. Agregalos en la pestaña «Clientes».</p>
+                  : countryCounts.map(([c, n]) => <div key={c} className="store-country-row"><span className="store-country-name">{flagOf(c)} {c}</span><span className="store-country-count">{n}</span></div>)}
+              </div>
+            )}
           </div>
           {showReviews && <ReviewsManager store={store} onUpdate={onUpdate} />}
           <BrandPanel store={store} onUpdate={onUpdate} />
