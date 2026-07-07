@@ -61,7 +61,26 @@ interface BrandInfoField { id: string; title: string; body: string }
 interface BrandInfo { slogan: string; sloganEn?: string; brandColors: string[]; notes: string; fonts?: string[]; infoFields?: BrandInfoField[] }
 interface PresetMsg { id: string; groupId?: string; titleEs: string; titleEn: string; descEs: string; descEn: string }
 interface PresetGroup { id: string; name: string; color?: string }
-interface PromptPanel { id: string; title: string; description: string; group?: string; mainPrompt?: string; prompts: { id: string; text: string; variables: string[] }[] }
+interface PromptPanel { id: string; title: string; description: string; group?: string; groupId?: string; mainPrompt?: string; prompts: { id: string; text: string; variables: string[] }[] }
+// Grupo de Creaciones: entidad con título, descripción, ícono cuadrado de color y tag.
+interface CreacionGroup { id: string; name: string; description?: string; color?: string; icon?: string; tag?: string }
+const CREACION_GROUP_COLORS = ['#8b5cf6', '#3b82f6', '#ec4899', '#f97316', '#22c55e', '#06b6d4', '#eab308', '#ef4444']
+// Migra los grupos-string legacy (panel.group) a entidades CreacionGroup con id.
+function migrateCreaciones(s: any): { creaciones: PromptPanel[]; creacionGroups: CreacionGroup[]; creacionTags: string[] } {
+  const panels: PromptPanel[] = s.creaciones || []
+  const groups: CreacionGroup[] = s.creacionGroups || []
+  const tags: string[] = s.creacionTags || []
+  const byName = new Map(groups.map(g => [g.name, g]))
+  const creaciones = panels.map(p => {
+    if (!p.groupId && p.group) {
+      let g = byName.get(p.group)
+      if (!g) { g = { id: 'cg-' + Math.random().toString(36).slice(2, 8), name: p.group, color: CREACION_GROUP_COLORS[groups.length % CREACION_GROUP_COLORS.length] }; byName.set(p.group, g); groups.push(g) }
+      return { ...p, groupId: g.id }
+    }
+    return p
+  })
+  return { creaciones, creacionGroups: groups, creacionTags: tags }
+}
 interface WordGroup { name: string; words: string[] }
 function loadWordGroups(): WordGroup[] { try { const s = localStorage.getItem('nn-prompt-groups'); return s ? JSON.parse(s) : [] } catch { return [] } }
 interface IncomeEntry { id: string; amount: number; date: string; note: string }
@@ -76,6 +95,7 @@ interface StoreData {
   articleGroups?: ArticleGroup[]; clientList?: ClientInfo[]
   organizers?: Organizer[]; flowOrganizerId?: string | null
   presets?: PresetMsg[]; presetGroups?: PresetGroup[]
+  creacionGroups?: CreacionGroup[]; creacionTags?: string[]
 }
 
 const defaultStores: StoreData[] = [
@@ -89,7 +109,7 @@ function loadStores(): StoreData[] {
     const saved = localStorage.getItem('nn-etsy-stores')
     if (saved) {
       const parsed = JSON.parse(saved)
-      const stores = parsed.map((s: any) => ({ ...s, articles: s.articles || [], reviews: s.reviews ?? 0, sales: s.sales ?? 0, clients: s.clients ?? 0, creaciones: s.creaciones || [], income: s.income || [], articleGroups: s.articleGroups || [], clientList: s.clientList || [], reviewItems: Array.isArray(s.reviewItems) ? s.reviewItems : seedReviewItems(s), organizers: s.organizers || [], flowOrganizerId: s.flowOrganizerId ?? null }))
+      const stores = parsed.map((s: any) => ({ ...s, articles: s.articles || [], reviews: s.reviews ?? 0, sales: s.sales ?? 0, clients: s.clients ?? 0, income: s.income || [], articleGroups: s.articleGroups || [], clientList: s.clientList || [], reviewItems: Array.isArray(s.reviewItems) ? s.reviewItems : seedReviewItems(s), organizers: s.organizers || [], flowOrganizerId: s.flowOrganizerId ?? null, ...migrateCreaciones(s) }))
       const migrated = localStorage.getItem('nn-etsy-migrated-v2')
       if (!migrated) {
         for (const store of stores) {
@@ -746,7 +766,7 @@ function LaunchesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
 
 // ============ CREACIONES TAB ============
 
-function CreacionesPanel({ panel, save, panels }: { panel: PromptPanel; save: (p: PromptPanel[]) => void; panels: PromptPanel[] }) {
+function CreacionesPanel({ panel, save, panels, groups }: { panel: PromptPanel; save: (p: PromptPanel[]) => void; panels: PromptPanel[]; groups: CreacionGroup[] }) {
   const [expanded, setExpanded] = useState(false)
   const [activeSub, setActiveSub] = useState<string>('__main')
   const [replaceFrom, setReplaceFrom] = useState('')
@@ -775,13 +795,17 @@ function CreacionesPanel({ panel, save, panels }: { panel: PromptPanel; save: (p
       <div className="creacion-header" onClick={() => setExpanded(!expanded)}>
         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <span className="creacion-title">{panel.title}</span>
-        {panel.group && <span className="creacion-group-tag">{panel.group}</span>}
         <span className="creacion-count">{panel.prompts.length + 1} prompts</span>
         <button className="article-delete" onClick={e => { e.stopPropagation(); removePanel() }}><Trash2 size={12} /></button>
       </div>
       {expanded && (
         <div className="creacion-body">
-          <input className="creacion-group-input" value={panel.group || ''} onChange={e => updatePanel({ group: e.target.value })} placeholder="Grupo / categoría (opcional)..." />
+          <label className="creacion-group-select"><Layers size={12} /> Grupo
+            <select value={panel.groupId || ''} onChange={e => updatePanel({ groupId: e.target.value || undefined })}>
+              <option value="">Sin grupo</option>
+              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </label>
 
           <div className="creacion-subtabs">
             <button className={activeSub === '__main' ? 'active' : ''} onClick={() => setActiveSub('__main')}>Principal</button>
@@ -857,30 +881,139 @@ function CreacionesPanel({ panel, save, panels }: { panel: PromptPanel; save: (p
   )
 }
 
+// Tarjeta de un grupo de Creaciones: ícono cuadrado de color, título, descripción,
+// tag, edición completa y los paneles que contiene.
+function CreacionGroupCard({ group, tags, groups, groupPanels, save, panels, onUpdateGroup, onRemoveGroup, onAddTag }: {
+  group: CreacionGroup; tags: string[]; groups: CreacionGroup[]; groupPanels: PromptPanel[]
+  save: (p: PromptPanel[]) => void; panels: PromptPanel[]
+  onUpdateGroup: (u: Partial<CreacionGroup>) => void; onRemoveGroup: () => void; onAddTag: (t: string) => void
+}) {
+  const [open, setOpen] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [newTag, setNewTag] = useState('')
+  const color = group.color || CREACION_GROUP_COLORS[0]
+  const addPanel = () => save([...panels, { id: 'cp-' + Date.now(), title: 'Nuevo panel', description: '', mainPrompt: '', prompts: [], groupId: group.id }])
+  const commitNewTag = () => { const t = newTag.trim(); if (!t) return; onAddTag(t); onUpdateGroup({ tag: t }); setNewTag('') }
+  return (
+    <div className="creacion-group card">
+      <div className="creacion-group-head">
+        <button className="creacion-group-toggle" onClick={() => setOpen(o => !o)} title={open ? 'Minimizar' : 'Expandir'}>{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
+        <span className="creacion-group-icon" style={{ background: color }}>{group.icon || ''}</span>
+        <span className="creacion-group-name">{group.name}</span>
+        {group.tag && <span className="creacion-group-tag"><Tag size={10} /> {group.tag}</span>}
+        <span className="creacion-group-count">{groupPanels.length}</span>
+        <button className="preset-icon-btn" onClick={() => setEditing(e => !e)} title="Editar grupo">{editing ? <Check size={13} /> : <Edit3 size={13} />}</button>
+        <button className="preset-icon-btn del" onClick={onRemoveGroup} title="Eliminar grupo"><Trash2 size={13} /></button>
+      </div>
+      {group.description && !editing && <p className="creacion-group-desc">{group.description}</p>}
+      {editing && (
+        <div className="creacion-group-edit">
+          <label className="modal-field"><span><Type size={12} /> Título</span><input value={group.name} onChange={e => onUpdateGroup({ name: e.target.value })} placeholder="Título del grupo" /></label>
+          <label className="modal-field"><span><FileText size={12} /> Descripción</span><textarea value={group.description || ''} onChange={e => onUpdateGroup({ description: e.target.value })} placeholder="Descripción del grupo..." rows={2} /></label>
+          <div className="modal-field"><span><Palette size={12} /> Ícono y color</span>
+            <div className="creacion-group-icon-row">
+              <span className="creacion-group-icon lg" style={{ background: color }}>{group.icon || ''}</span>
+              <input className="creacion-group-emoji" value={group.icon || ''} onChange={e => onUpdateGroup({ icon: e.target.value })} placeholder="Emoji" maxLength={2} />
+              <ColorInput value={color} onChange={c => onUpdateGroup({ color: c })} />
+            </div>
+          </div>
+          <div className="modal-field"><span><Tag size={12} /> Etiqueta</span>
+            <div className="creacion-group-tag-row">
+              <select value={group.tag || ''} onChange={e => onUpdateGroup({ tag: e.target.value || undefined })}>
+                <option value="">Sin etiqueta</option>
+                {tags.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <input value={newTag} onChange={e => setNewTag(e.target.value)} placeholder="Nueva etiqueta..." onKeyDown={e => e.key === 'Enter' && commitNewTag()} />
+              <button className="articles-add-btn-secondary" onClick={commitNewTag} disabled={!newTag.trim()}><Plus size={12} /> Tag</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {open && (
+        <div className="creacion-group-panels">
+          {groupPanels.map(panel => <CreacionesPanel key={panel.id} panel={panel} save={save} panels={panels} groups={groups} />)}
+          <button className="articles-add-btn-secondary creacion-add-in-group" onClick={addPanel}><Plus size={13} /> Nuevo panel en este grupo</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CreacionesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
   const panels = store.creaciones || []
+  const groups = store.creacionGroups || []
+  const tags = store.creacionTags || []
   const [newPanelTitle, setNewPanelTitle] = useState('')
   const [showNew, setShowNew] = useState(false)
+  const [showNewGroup, setShowNewGroup] = useState(false)
+  const [ngName, setNgName] = useState('')
+  const [ngDesc, setNgDesc] = useState('')
+  const [ngColor, setNgColor] = useState(CREACION_GROUP_COLORS[0])
+  const [ngIcon, setNgIcon] = useState('')
+  const [ngTag, setNgTag] = useState('')       // etiqueta existente elegida
+  const [ngNewTag, setNgNewTag] = useState('')  // etiqueta nueva escrita
+  const confirm = useConfirm()
 
   const save = (p: PromptPanel[]) => onUpdate({ ...store, creaciones: p })
+  const saveGroups = (g: CreacionGroup[]) => onUpdate({ ...store, creacionGroups: g })
+  const addTagToPool = (t: string) => { const tag = t.trim(); if (tag && !tags.includes(tag)) onUpdate({ ...store, creacionTags: [...tags, tag] }) }
   const addPanel = () => { if (!newPanelTitle.trim()) return; save([...panels, { id: 'cp-' + Date.now(), title: newPanelTitle.trim(), description: '', mainPrompt: '', prompts: [] }]); setNewPanelTitle(''); setShowNew(false) }
 
-  // Group panels by their group field for display.
-  const groups = Array.from(new Set(panels.map(p => p.group || 'Sin grupo')))
+  const addGroup = () => {
+    if (!ngName.trim()) return
+    const typed = ngNewTag.trim()
+    const tag = typed || ngTag || undefined
+    const newTags = typed && !tags.includes(typed) ? [...tags, typed] : tags
+    const g: CreacionGroup = { id: 'cg-' + Date.now(), name: ngName.trim(), description: ngDesc.trim() || undefined, color: ngColor, icon: ngIcon.trim() || undefined, tag }
+    onUpdate({ ...store, creacionGroups: [...groups, g], creacionTags: newTags })
+    setNgName(''); setNgDesc(''); setNgColor(CREACION_GROUP_COLORS[0]); setNgIcon(''); setNgTag(''); setNgNewTag(''); setShowNewGroup(false)
+  }
+  const updateGroup = (id: string, u: Partial<CreacionGroup>) => saveGroups(groups.map(g => g.id === id ? { ...g, ...u } : g))
+  const removeGroup = async (id: string) => {
+    const g = groups.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar grupo', message: `¿Eliminar el grupo «${g?.name || ''}»? Sus paneles no se borran: quedan en «Sin grupo».`, confirmLabel: 'Eliminar grupo' })) return
+    saveGroups(groups.filter(g => g.id !== id)); save(panels.map(p => p.groupId === id ? { ...p, groupId: undefined } : p))
+  }
+
+  const groupsAlpha = [...groups].sort((a, b) => byName(a.name, b.name))
+  const ungrouped = panels.filter(p => !p.groupId || !groups.some(g => g.id === p.groupId))
 
   return (
     <div className="creaciones-tab">
-      <button className="articles-add-btn-big" onClick={() => setShowNew(!showNew)}><Plus size={14} /> Nuevo panel</button>
+      <div className="creaciones-toolbar">
+        <button className="articles-add-btn-big" onClick={() => setShowNew(s => !s)}><Plus size={14} /> Nuevo panel</button>
+        <button className="articles-add-btn-secondary" onClick={() => setShowNewGroup(s => !s)}><Layers size={14} /> Nuevo grupo</button>
+      </div>
       {showNew && (<div className="card creaciones-new"><input value={newPanelTitle} onChange={e => setNewPanelTitle(e.target.value)} placeholder="Título del panel..." onKeyDown={e => e.key === 'Enter' && addPanel()} autoFocus /><button className="modal-submit" onClick={addPanel} disabled={!newPanelTitle.trim()}>Crear</button></div>)}
-      {panels.length === 0 && !showNew && <div className="articles-empty"><Sparkles size={24} /><p>Registrá tus prompts de creación</p></div>}
-      {groups.map(grp => (
-        <div key={grp} className="creacion-group-section">
-          {groups.length > 1 && <h4 className="creacion-group-heading">{grp}</h4>}
-          {panels.filter(p => (p.group || 'Sin grupo') === grp).map(panel => (
-            <CreacionesPanel key={panel.id} panel={panel} save={save} panels={panels} />
-          ))}
+      {showNewGroup && (
+        <div className="card creaciones-new-group">
+          <input value={ngName} onChange={e => setNgName(e.target.value)} placeholder="Título del grupo..." autoFocus />
+          <textarea value={ngDesc} onChange={e => setNgDesc(e.target.value)} placeholder="Descripción (opcional)..." rows={2} />
+          <div className="creacion-group-icon-row">
+            <span className="creacion-group-icon lg" style={{ background: ngColor }}>{ngIcon}</span>
+            <input className="creacion-group-emoji" value={ngIcon} onChange={e => setNgIcon(e.target.value)} placeholder="Emoji" maxLength={2} />
+            <ColorInput value={ngColor} onChange={setNgColor} />
+          </div>
+          <div className="creacion-group-tag-row">
+            <select value={ngTag} onChange={e => { setNgTag(e.target.value); if (e.target.value) setNgNewTag('') }}>
+              <option value="">Etiqueta (opcional)…</option>
+              {tags.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input value={ngNewTag} onChange={e => { setNgNewTag(e.target.value); if (e.target.value) setNgTag('') }} placeholder="…o nueva etiqueta" onKeyDown={e => e.key === 'Enter' && addGroup()} />
+          </div>
+          <button className="modal-submit" onClick={addGroup} disabled={!ngName.trim()}>Crear grupo</button>
         </div>
+      )}
+      {panels.length === 0 && groups.length === 0 && !showNew && !showNewGroup && <div className="articles-empty"><Sparkles size={24} /><p>Registrá tus prompts de creación</p></div>}
+      {groupsAlpha.map(g => (
+        <CreacionGroupCard key={g.id} group={g} tags={tags} groups={groups} groupPanels={panels.filter(p => p.groupId === g.id)} save={save} panels={panels} onUpdateGroup={u => updateGroup(g.id, u)} onRemoveGroup={() => removeGroup(g.id)} onAddTag={addTagToPool} />
       ))}
+      {ungrouped.length > 0 && (
+        <div className="creacion-group-section">
+          {groups.length > 0 && <h4 className="creacion-group-heading">Sin grupo</h4>}
+          {ungrouped.map(panel => <CreacionesPanel key={panel.id} panel={panel} save={save} panels={panels} groups={groups} />)}
+        </div>
+      )}
     </div>
   )
 }
