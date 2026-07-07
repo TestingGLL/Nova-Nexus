@@ -267,3 +267,17 @@
 .assistant-msg { font-size: 13px; line-height: 1.45; padding: 8px 11px; border-radius: 12px; max-width: 92%; white-space: pre-wrap; }
 .assistant-msg.bot { align-self: flex-start; background: var(--bg-hover); color: var(--text-primary); border-bottom-left-radius: 4px; }
 .assistant-msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+
+/* ===== Feriados nacionales de Argentina ===== */
+.holidays-card { display: flex; flex-direction: column; }
+.holidays-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+.holidays-tabs button { flex: 1; padding: 5px 6px; border: 1px solid var(--border); background: none; border-radius: 7px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-family: inherit; transition: all 0.15s; }
+.holidays-tabs button:hover { border-color: var(--accent); }
+.holidays-tabs button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.holidays-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.holiday-item { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-hover); }
+.holiday-item.soon { border-color: #38bdf8; background: rgba(56,189,248,0.08); }
+.holiday-date { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: capitalize; white-space: nowrap; }
+.holiday-name { font-size: 12px; color: var(--text-primary); line-height: 1.3; }
+.holiday-rel { font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
+.holidays-empty { font-size: 12px; color: var(--text-secondary); text-align: center; padding: 16px 8px; }

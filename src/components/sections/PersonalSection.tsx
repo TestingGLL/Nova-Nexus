@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Bold, Italic, Underline, List, Palette, Type, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle } from 'lucide-react'
 import { addNotification } from '../../lib/notifications'
+import { useWater, WATER_GOAL } from '../../lib/water'
+import ColorInput from '../ColorInput'
 import { useConfirm } from '../ConfirmDialog'
 import { useSecurity, SecurityGate } from '../../lib/security'
 import './PersonalSection.css'
@@ -23,16 +25,9 @@ function playWaterSound() {
 }
 
 function WaterCounter() {
-  const goal = 8
-  const [glasses, setGlasses] = useState<number>(() => {
-    try {
-      const s = JSON.parse(localStorage.getItem('nn-water') || '{}')
-      if (s.date === new Date().toDateString()) return s.glasses || 0
-    } catch {}
-    return 0
-  })
+  const goal = WATER_GOAL
+  const [glasses, save] = useWater()
   const [soundOn, setSoundOn] = useState<boolean>(() => { try { return localStorage.getItem('nn-water-sound') !== '0' } catch { return true } })
-  const save = (g: number) => { setGlasses(g); localStorage.setItem('nn-water', JSON.stringify({ date: new Date().toDateString(), glasses: g })) }
   const handleAdd = () => {
     const next = glasses >= goal ? 0 : glasses + 1
     save(next)
@@ -895,7 +890,7 @@ function ListaComprasTab() {
           <input placeholder="Nombre de la lista..." value={newGroupName} onChange={e => setNewGroupName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addGroup()} autoFocus />
           <div className="shopping-color-picker">
             {defaultGroupColors.map(c => (<button key={c} className={`shopping-color-opt ${newGroupColor === c ? 'active' : ''}`} style={{ background: c }} onClick={() => setNewGroupColor(c)} />))}
-            <input type="color" value={newGroupColor} onChange={e => setNewGroupColor(e.target.value)} className="shopping-color-custom" />
+            <ColorInput value={newGroupColor} onChange={setNewGroupColor} />
           </div>
           <div className="shopping-new-actions">
             <button onClick={() => setShowNewGroup(false)}>Cancelar</button>
@@ -917,7 +912,7 @@ function ListaComprasTab() {
                   {editingColor === g.id && (
                     <div className="shopping-color-popover">
                       {defaultGroupColors.map(c => (<button key={c} className={`shopping-color-opt ${g.color === c ? 'active' : ''}`} style={{ background: c }} onClick={() => { updateGroup(g.id, { color: c }); setEditingColor(null) }} />))}
-                      <input type="color" value={g.color} onChange={e => updateGroup(g.id, { color: e.target.value })} className="shopping-color-custom" />
+                      <ColorInput value={g.color} onChange={c => updateGroup(g.id, { color: c })} />
                     </div>
                   )}
                 </div>

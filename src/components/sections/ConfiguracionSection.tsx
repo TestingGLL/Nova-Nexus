@@ -8,6 +8,7 @@ import { supabase, supabaseEnabled } from '../../lib/supabase'
 import { hasPendingSync } from '../../lib/cloudSync'
 import { loadSecurity, saveSecurity, DEFAULT_SECURITY_PASSWORD, type SecurityConfig } from '../../lib/security'
 import { BUILTIN_PROJECT_LABELS, loadCustomProjectLabels, saveCustomProjectLabels, type ProjectLabel } from '../../lib/projectLabels'
+import ColorInput from '../ColorInput'
 import { APP_VERSION } from '../../App'
 import './ConfiguracionSection.css'
 
@@ -104,8 +105,8 @@ function saveCategories(c: CustomCategories) { localStorage.setItem('nn-custom-c
 function loadNoteTags(): string[] { try { const s = localStorage.getItem('nn-note-tags'); return s ? JSON.parse(s) : ['recordar', 'curioso', 'revisar'] } catch { return ['recordar', 'curioso', 'revisar'] } }
 function saveNoteTags(t: string[]) { localStorage.setItem('nn-note-tags', JSON.stringify(t)) }
 
-type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'assistant' | 'routine' | 'alerts' | 'mundial'
-const widgetNames: Record<WidgetId, string> = { timer: 'Temporizador', weather: 'Clima', calendar: 'Calendario', quote: 'Frase del día', chat: 'Chat rápido', assistant: 'Asistente de la app', routine: 'Rutina de hoy', alerts: 'Próximas alertas', mundial: 'Mundial 2026' }
+type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'assistant' | 'routine' | 'alerts' | 'holidays' | 'mundial'
+const widgetNames: Record<WidgetId, string> = { timer: 'Temporizador', weather: 'Clima', calendar: 'Calendario', quote: 'Frase del día', chat: 'Chat rápido', assistant: 'Asistente de la app', routine: 'Rutina de hoy', alerts: 'Próximas alertas', holidays: 'Feriados de Argentina', mundial: 'Mundial 2026' }
 
 type ConfigTab = 'personalizacion' | 'paneles' | 'adicionales' | 'prompts' | 'usuario' | 'alertas' | 'sistema'
 
@@ -220,8 +221,7 @@ export default function ConfiguracionSection() {
             <div className="color-section">
               <label className="color-label">Color personalizado</label>
               <div className="custom-color-row">
-                <input type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)} className="color-input" />
-                <span className="color-hex">{accentColor.toUpperCase()}</span>
+                <ColorInput value={accentColor} onChange={setAccentColor} />
                 <button className="reset-btn" onClick={() => setAccentColor(DEFAULT_COLOR)}><RotateCcw size={14} /> Restablecer</button>
               </div>
             </div>
@@ -416,7 +416,7 @@ export default function ConfiguracionSection() {
               ))}
             </div>
             <div className="cfg-add-row">
-              <input type="color" className="proj-label-color" value={newProjColor} onChange={e => setNewProjColor(e.target.value)} title="Color de la etiqueta" />
+              <ColorInput value={newProjColor} onChange={setNewProjColor} title="Color de la etiqueta" />
               <input value={newProjLabel} onChange={e => setNewProjLabel(e.target.value)} placeholder="Nueva etiqueta de proyecto..." onKeyDown={e => e.key === 'Enter' && addProjectLabel()} />
               <button onClick={addProjectLabel}><Plus size={14} /></button>
             </div>

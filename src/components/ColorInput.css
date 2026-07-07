@@ -1,0 +1,17 @@
+.color-picker { display: inline-flex; align-items: center; gap: 6px; }
+.color-picker-wheel { width: 30px; height: 30px; min-width: 30px; border: 1px solid var(--border); border-radius: 7px; padding: 0; cursor: pointer; background: none; flex-shrink: 0; }
+.color-picker-wheel::-webkit-color-swatch-wrapper { padding: 2px; }
+.color-picker-wheel::-webkit-color-swatch { border: none; border-radius: 5px; }
+.color-picker-hex {
+  width: 84px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  border-radius: 7px;
+  font-size: 12px;
+  font-family: 'Consolas', 'Menlo', monospace;
+  color: var(--text-primary);
+  outline: none;
+  text-transform: uppercase;
+}
+.color-picker-hex:focus { border-color: var(--accent); }

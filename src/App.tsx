@@ -5,7 +5,7 @@ import { ConfirmProvider } from './components/ConfirmDialog'
 import Login from './components/Login'
 import Sidebar from './components/Sidebar'
 import MainContent from './components/MainContent'
-import ControllerStatus from './components/ControllerStatus'
+import TopBar from './components/TopBar'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
 import SoundFx from './components/SoundFx'
 import BackgroundServices from './components/BackgroundServices'
@@ -16,7 +16,7 @@ import './App.css'
 
 export type Section = 'inicio' | 'personal' | 'finanzas' | 'etsy' | 'proyectos' | 'software' | 'edicion' | 'notas' | 'extras' | 'alertas' | 'configuracion'
 
-export const APP_VERSION = '1.01.02'
+export const APP_VERSION = '1.01.03'
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -66,7 +66,7 @@ function App() {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
       <MainContent section={activeSection} sidebarOpen={sidebarOpen} />
-      <ControllerStatus />
+      <TopBar />
       <KeyboardShortcuts />
       <SoundFx />
       <BackgroundServices />

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, RotateCcw, Copy, Minus } from 'lucide-react'
 import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
+import ColorInput from '../ColorInput'
 import './EtsySection.css'
 
 // ============ TYPES ============
@@ -1333,6 +1334,10 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const byCountry = Array.from(clients.reduce((m, c) => m.set(c.country, (m.get(c.country) || 0) + 1), new Map<string, number>())).sort((a, b) => b[1] - a[1])
   const byGender = GENDERS.map(g => [g, clients.filter(c => normGender(c.gender) === g).length] as [string, number]).filter(x => x[1] > 0)
   const recurringCount = clients.filter(c => c.recurring).length
+  // Filtros ordenados alfabéticamente (los países/grupos que se ofrecen para filtrar).
+  const countriesAlpha = Array.from(new Set(clients.map(c => c.country))).sort((a, b) => byName(a, b))
+  const groupsAlpha = [...groups].sort((a, b) => byName(a.name, b.name))
+  const gendersAlpha = [...GENDERS].sort((a, b) => byName(a, b))
 
   const q = search.trim().toLowerCase()
   const filtered = clients.filter(c =>
@@ -1446,9 +1451,9 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
       {clients.length > 0 && (
         <div className="clientes-filters">
           <div className="articles-search clientes-search"><Search size={14} /><input placeholder="Buscar por nombre o país..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-          <select value={filterCountry} onChange={e => setFilterCountry(e.target.value)}><option value="all">Todos los países</option>{byCountry.map(([c]) => <option key={c} value={c}>{flagOf(c)} {c}</option>)}</select>
-          <select value={filterGender} onChange={e => setFilterGender(e.target.value)}><option value="all">Todos los géneros</option>{GENDERS.map(g => <option key={g}>{g}</option>)}</select>
-          <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)}><option value="all">Todos los grupos</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}<option value="__none">Sin favorito</option></select>
+          <select value={filterCountry} onChange={e => setFilterCountry(e.target.value)}><option value="all">Todos los países</option>{countriesAlpha.map(c => <option key={c} value={c}>{flagOf(c)} {c}</option>)}</select>
+          <select value={filterGender} onChange={e => setFilterGender(e.target.value)}><option value="all">Todos los géneros</option>{gendersAlpha.map(g => <option key={g}>{g}</option>)}</select>
+          <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)}><option value="all">Todos los grupos</option>{groupsAlpha.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}<option value="__none">Sin favorito</option></select>
           <button className={`clientes-recurring-toggle ${filterRecurring ? 'on' : ''}`} onClick={() => setFilterRecurring(v => !v)} title="Solo recurrentes"><Star size={13} /> Recurrentes</button>
           {anyFilter && <button className="clientes-reset-btn" onClick={resetFilters}><RotateCcw size={13} /> Limpiar</button>}
         </div>
@@ -1561,7 +1566,7 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
             <button className="preset-group-toggle" onClick={() => toggleGroup(g.id)} title={gCollapsed ? 'Expandir' : 'Minimizar'}>{gCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}</button>
             <input className="preset-group-name" value={g.name} onChange={e => renameGroup(g.id, e.target.value)} />
             <span className="preset-group-count">{gMsgs.length}</span>
-            <label className="preset-group-color" title="Color del grupo"><input type="color" value={/^#([0-9a-fA-F]{6})$/.test(gColor) ? gColor : DEFAULT_GROUP_COLOR} onChange={e => setGroupColor(g.id, e.target.value)} /></label>
+            <ColorInput className="preset-group-color" value={gColor} onChange={c => setGroupColor(g.id, c)} title="Color del grupo" />
             <button className="preset-group-addmsg" onClick={() => addMsg(g.id)}><Plus size={12} /> Mensaje</button>
             <button className="preset-icon-btn del" onClick={() => removeGroup(g.id)}><Trash2 size={13} /></button>
           </div>
@@ -1681,13 +1686,13 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
               </div>
               {draft.logoImage && <img src={draft.logoImage} alt="" className="logo-preview" />}
             </div>
-            <label className="customize-field"><span><Image size={13} /> Color del banner</span><div className="color-row"><input type="color" value={draft.bannerColor} onChange={e => setDraft({ ...draft, bannerColor: e.target.value })} /><span className="color-hex">{draft.bannerColor}</span></div></label>
+            <label className="customize-field"><span><Image size={13} /> Color del banner</span><div className="color-row"><ColorInput value={draft.bannerColor} onChange={c => setDraft({ ...draft, bannerColor: c })} /></div></label>
             <div className="customize-field">
               <span><Image size={13} /> Imagen de banner</span>
               <div className="banner-image-controls"><button className="banner-upload-btn" onClick={() => bannerInputRef.current?.click()}><Upload size={13} /> {draft.bannerImage ? 'Cambiar' : 'Subir imagen'}</button>{draft.bannerImage && <button className="banner-remove-btn" onClick={() => setDraft({ ...draft, bannerImage: undefined })}><Trash2 size={13} /> Quitar</button>}<input ref={bannerInputRef} type="file" accept="image/*" onChange={handleBannerImage} hidden /></div>
               {draft.bannerImage && <img src={draft.bannerImage} alt="" className="banner-preview" />}
             </div>
-            <label className="customize-field"><span><Palette size={13} /> Color acento</span><div className="color-row"><input type="color" value={draft.accentColor} onChange={e => setDraft({ ...draft, accentColor: e.target.value })} /><span className="color-hex">{draft.accentColor}</span></div></label>
+            <label className="customize-field"><span><Palette size={13} /> Color acento</span><div className="color-row"><ColorInput value={draft.accentColor} onChange={c => setDraft({ ...draft, accentColor: c })} /></div></label>
             <label className="customize-field"><span><Package size={13} /> Artículos</span><input type="number" min={0} value={draft.products} onChange={e => setDraft({ ...draft, products: Number(e.target.value) })} /></label>
             <div className="customize-field"><span><Star size={13} /> Reseñas</span><span className="customize-hint">Gestioná las reseñas (1-5★) desde la pestaña «Información».</span></div>
             <label className="customize-field"><span><ShoppingCart size={13} /> Ventas</span><input type="number" min={0} value={draft.sales} onChange={e => setDraft({ ...draft, sales: Number(e.target.value) })} /></label>

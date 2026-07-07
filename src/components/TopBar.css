@@ -1,0 +1,42 @@
+.top-bar {
+  position: fixed;
+  top: 14px;
+  right: 68px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 50;
+}
+
+.water-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  overflow: hidden;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+.water-chip:hover { border-color: #38bdf8; }
+.water-chip.complete { border-color: #22c55e; }
+
+.water-chip-fill {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  background: linear-gradient(180deg, rgba(56,189,248,0.28), rgba(56,189,248,0.5));
+  transition: height 0.3s ease;
+  pointer-events: none;
+}
+.water-chip.complete .water-chip-fill { background: linear-gradient(180deg, rgba(34,197,94,0.28), rgba(34,197,94,0.5)); }
+
+.water-chip-icon { position: relative; color: #38bdf8; display: flex; }
+.water-chip.complete .water-chip-icon { color: #22c55e; }
+.water-chip-count { position: relative; font-size: 13px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.water-chip-goal { font-size: 11px; font-weight: 500; color: var(--text-secondary); }

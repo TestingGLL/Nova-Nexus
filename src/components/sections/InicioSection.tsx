@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
-import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy, Bot } from 'lucide-react'
+import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy, Bot, Flag } from 'lucide-react'
 import { APP_VERSION } from '../../App'
 import { loadNotifications } from '../../lib/notifications'
 import { subscribeMundial, getMundialSnapshot } from '../../lib/mundialStore'
 import { subscribeTimer, getTimerSnapshot, toggleTimer, resetTimer, setTimerTotal } from '../../lib/timerStore'
+import ColorInput from '../ColorInput'
+import { upcomingHolidays } from '../../lib/holidays'
 import './InicioSection.css'
 
 // ============ ANIMATED CLOCK ============
@@ -109,9 +111,9 @@ function AnimatedClock() {
       <button className="clock-settings-btn" onClick={() => setShowSettings(!showSettings)}><Settings size={14} /></button>
       {showSettings && (
         <div className="clock-settings" onClick={e => e.stopPropagation()}>
-          <label><span>Fondo 1</span><input type="color" value={colors.bg1} onChange={e => saveColors({ ...colors, bg1: e.target.value })} /></label>
-          <label><span>Fondo 2</span><input type="color" value={colors.bg2} onChange={e => saveColors({ ...colors, bg2: e.target.value })} /></label>
-          <label><span>Texto</span><input type="color" value={colors.text} onChange={e => saveColors({ ...colors, text: e.target.value })} /></label>
+          <label><span>Fondo 1</span><ColorInput value={colors.bg1} onChange={c => saveColors({ ...colors, bg1: c })} /></label>
+          <label><span>Fondo 2</span><ColorInput value={colors.bg2} onChange={c => saveColors({ ...colors, bg2: c })} /></label>
+          <label><span>Texto</span><ColorInput value={colors.text} onChange={c => saveColors({ ...colors, text: c })} /></label>
           <label className="clock-font-label"><span>Fuente</span><select value={font} onChange={e => saveFont(e.target.value)}>{fonts.map(f => <option key={f} value={f}>{f}</option>)}</select></label>
           <label className="clock-weather-toggle"><span>Clima</span><button onClick={toggleWeather} className={showWeather ? 'on' : ''}>{showWeather ? 'Mostrar' : 'Oculto'}</button></label>
         </div>
@@ -563,6 +565,43 @@ function NextAlertsWidget() {
   )
 }
 
+// ============ FERIADOS ARGENTINA WIDGET ============
+
+const HOLIDAY_WINDOWS = [
+  { key: 7, label: 'Semana', empty: 'la próxima semana' },
+  { key: 30, label: 'Mes', empty: 'el próximo mes' },
+  { key: 60, label: '2 meses', empty: 'los próximos 2 meses' },
+] as const
+
+function HolidaysWidget() {
+  const [win, setWin] = useState<number>(30)
+  const list = upcomingHolidays(win)
+  const cur = HOLIDAY_WINDOWS.find(w => w.key === win) || HOLIDAY_WINDOWS[1]
+  const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })
+  const rel = (n: number) => n === 0 ? 'Hoy' : n === 1 ? 'Mañana' : `en ${n} días`
+  return (
+    <div className="card holidays-card">
+      <div className="card-title"><Flag size={16} /> Feriados nacionales 🇦🇷</div>
+      <div className="holidays-tabs">
+        {HOLIDAY_WINDOWS.map(w => (
+          <button key={w.key} className={win === w.key ? 'active' : ''} onClick={() => setWin(w.key)}>{w.label}</button>
+        ))}
+      </div>
+      {list.length === 0
+        ? <p className="holidays-empty">Sin feriados en {cur.empty}.</p>
+        : <div className="holidays-list">
+            {list.map(h => (
+              <div key={h.date + h.name} className={`holiday-item ${h.daysUntil <= 7 ? 'soon' : ''}`}>
+                <span className="holiday-date">{fmt(h.date)}</span>
+                <span className="holiday-name">{h.name}</span>
+                <span className="holiday-rel">{rel(h.daysUntil)}</span>
+              </div>
+            ))}
+          </div>}
+    </div>
+  )
+}
+
 // ============ MUNDIAL 2026 ============
 
 // Goal detection + adaptive polling live in the global mundialStore so they run
@@ -680,7 +719,7 @@ function loadReminders(): ReminderItem[] { try { const s = localStorage.getItem(
 
 // ============ MAIN SECTION ============
 
-type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'assistant' | 'routine' | 'alerts' | 'mundial'
+type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'assistant' | 'routine' | 'alerts' | 'holidays' | 'mundial'
 const widgetRegistry: Record<WidgetId, { name: string; component: React.FC; icon: React.ReactNode; defaultSpan: number }> = {
   timer: { name: 'Temporizador', component: TimerWidget, icon: <Timer size={14} />, defaultSpan: 1 },
   weather: { name: 'Clima', component: WeatherWidget, icon: <CloudSun size={14} />, defaultSpan: 1 },
@@ -690,6 +729,7 @@ const widgetRegistry: Record<WidgetId, { name: string; component: React.FC; icon
   assistant: { name: 'Asistente de la app', component: AppAssistant, icon: <Bot size={14} />, defaultSpan: 2 },
   routine: { name: 'Rutina de hoy', component: DayRoutineWidget, icon: <Dumbbell size={14} />, defaultSpan: 1 },
   alerts: { name: 'Próximas alertas', component: NextAlertsWidget, icon: <Bell size={14} />, defaultSpan: 1 },
+  holidays: { name: 'Feriados de Argentina', component: HolidaysWidget, icon: <Flag size={14} />, defaultSpan: 1 },
   mundial: { name: 'Mundial 2026', component: MundialWidget, icon: <Trophy size={14} />, defaultSpan: 3 },
 }
 
@@ -706,6 +746,7 @@ const spanCols = (s: number) => Math.max(2, Math.round(s * 2))
 const defaultBlocks: LayoutBlock[] = [
   { key: newKey(), span: 1, widgets: ['routine'] }, { key: newKey(), span: 1, widgets: ['alerts'] }, { key: newKey(), span: 1, widgets: ['quote'] },
   { key: newKey(), span: 1, widgets: ['chat'] }, { key: newKey(), span: 2, widgets: ['assistant'] }, { key: newKey(), span: 1, widgets: ['timer'] }, { key: newKey(), span: 1, widgets: ['weather'] }, { key: newKey(), span: 1, widgets: ['calendar'] },
+  { key: newKey(), span: 1, widgets: ['holidays'] },
   { key: newKey(), span: 3, widgets: ['mundial'] },
 ]
 

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Plus, Trash2, Edit3, X, RotateCcw, Save, Settings, Eye, EyeOff } from 'lucide-react'
+import ColorInput from '../ColorInput'
 import './ExtrasSection.css'
 
 // High-contrast saturated tones — white labels read clearly on all of them.
@@ -323,7 +324,7 @@ export default function ExtrasSection() {
         <div className="extras-options-list">
           {options.map((opt, i) => (
             <div key={opt.id} className="extras-option-row">
-              <input type="color" value={opt.color} onChange={e => update(options.map(o => o.id === opt.id ? { ...o, color: e.target.value } : o))} className="extras-option-color" />
+              <ColorInput value={opt.color} onChange={c => update(options.map(o => o.id === opt.id ? { ...o, color: c } : o))} />
               {editingId === opt.id ? (
                 <input className="extras-option-edit" value={editLabel} onChange={e => setEditLabel(e.target.value)} onBlur={saveEdit} onKeyDown={e => e.key === 'Enter' && saveEdit()} autoFocus />
               ) : (
