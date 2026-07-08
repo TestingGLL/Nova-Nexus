@@ -781,7 +781,6 @@ function CreacionesPanel({ panel, save, panels, groups }: { panel: PromptPanel; 
       {expanded && (
         <div className="creacion-body">
           <input className="creacion-title-input" value={panel.title} onChange={e => updatePanel({ title: e.target.value })} placeholder="Nombre del panel..." />
-          <input className="creacion-desc-input" value={panel.description || ''} onChange={e => updatePanel({ description: e.target.value })} placeholder="Descripción (opcional)..." />
           <label className="creacion-group-select"><Layers size={12} /> Grupo
             <select value={panel.groupId || ''} onChange={e => updatePanel({ groupId: e.target.value || undefined })}>
               <option value="">Sin grupo</option>
@@ -888,11 +887,9 @@ function CreacionGroupCard({ group, tags, groups, groupPanels, save, panels, onU
         <button className="preset-icon-btn" onClick={onDuplicateGroup} title="Duplicar grupo"><Copy size={13} /></button>
         <button className="preset-icon-btn del" onClick={onRemoveGroup} title="Eliminar grupo"><Trash2 size={13} /></button>
       </div>
-      {group.description && !editing && <p className="creacion-group-desc">{group.description}</p>}
       {editing && (
         <div className="creacion-group-edit">
           <label className="modal-field"><span><Type size={12} /> Título</span><input value={group.name} onChange={e => onUpdateGroup({ name: e.target.value })} placeholder="Título del grupo" /></label>
-          <label className="modal-field"><span><FileText size={12} /> Descripción</span><textarea value={group.description || ''} onChange={e => onUpdateGroup({ description: e.target.value })} placeholder="Descripción del grupo..." rows={2} /></label>
           <div className="modal-field"><span><Palette size={12} /> Ícono y color</span>
             <div className="creacion-group-icon-row">
               <span className="creacion-group-icon lg" style={{ background: color }}>{group.icon || ''}</span>
@@ -936,7 +933,6 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
   const [showNew, setShowNew] = useState(false)
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [ngName, setNgName] = useState('')
-  const [ngDesc, setNgDesc] = useState('')
   const [ngColor, setNgColor] = useState(CREACION_GROUP_COLORS[0])
   const [ngIcon, setNgIcon] = useState('')
   const [ngTag, setNgTag] = useState('')       // etiqueta existente elegida
@@ -953,9 +949,9 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
     const typed = ngNewTag.trim()
     const tag = typed || ngTag || undefined
     const newTags = typed && !tags.includes(typed) ? [...tags, typed] : tags
-    const g: CreacionGroup = { id: 'cg-' + Date.now(), name: ngName.trim(), description: ngDesc.trim() || undefined, color: ngColor, icon: ngIcon.trim() || undefined, tag }
+    const g: CreacionGroup = { id: 'cg-' + Date.now(), name: ngName.trim(), color: ngColor, icon: ngIcon.trim() || undefined, tag }
     onUpdate({ ...store, [fields.groups]: [...groups, g], [fields.tags]: newTags })
-    setNgName(''); setNgDesc(''); setNgColor(CREACION_GROUP_COLORS[0]); setNgIcon(''); setNgTag(''); setNgNewTag(''); setShowNewGroup(false)
+    setNgName(''); setNgColor(CREACION_GROUP_COLORS[0]); setNgIcon(''); setNgTag(''); setNgNewTag(''); setShowNewGroup(false)
   }
   const updateGroup = (id: string, u: Partial<CreacionGroup>) => saveGroups(groups.map(g => g.id === id ? { ...g, ...u } : g))
   const removeGroup = async (id: string) => {
@@ -988,7 +984,6 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
       {showNewGroup && (
         <div className="card creaciones-new-group">
           <input value={ngName} onChange={e => setNgName(e.target.value)} placeholder="Título del grupo..." autoFocus />
-          <textarea value={ngDesc} onChange={e => setNgDesc(e.target.value)} placeholder="Descripción (opcional)..." rows={2} />
           <div className="creacion-group-icon-row">
             <span className="creacion-group-icon lg" style={{ background: ngColor }}>{ngIcon}</span>
             <input className="creacion-group-emoji" value={ngIcon} onChange={e => setNgIcon(e.target.value)} placeholder="Emoji" maxLength={2} />
