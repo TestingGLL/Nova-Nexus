@@ -957,7 +957,8 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
   const removeGroup = async (id: string) => {
     const g = groups.find(x => x.id === id)
     if (!await confirm({ title: 'Eliminar grupo', message: `¿Eliminar el grupo «${g?.name || ''}»? Sus paneles no se borran: quedan en «Sin grupo».`, confirmLabel: 'Eliminar grupo' })) return
-    saveGroups(groups.filter(g => g.id !== id)); save(panels.map(p => p.groupId === id ? { ...p, groupId: undefined } : p))
+    // Un solo onUpdate: dos llamadas separadas se pisaban entre sí (el grupo revivía).
+    onUpdate({ ...store, [fields.groups]: groups.filter(x => x.id !== id), [fields.panels]: panels.map(p => p.groupId === id ? { ...p, groupId: undefined } : p) })
   }
   const duplicateGroup = (id: string) => {
     const g = groups.find(x => x.id === id); if (!g) return
@@ -1649,7 +1650,7 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
   const addGroup = () => saveGroups([...pgroups, { id: 'pg-' + Date.now(), name: 'Nuevo grupo', color: DEFAULT_GROUP_COLOR }])
   const renameGroup = (id: string, name: string) => saveGroups(pgroups.map(g => g.id === id ? { ...g, name } : g))
   const setGroupColor = (id: string, color: string) => saveGroups(pgroups.map(g => g.id === id ? { ...g, color } : g))
-  const removeGroup = async (id: string) => { if (!await confirm({ title: 'Eliminar grupo', message: 'Se elimina el grupo; sus mensajes quedan sin grupo.', confirmLabel: 'Eliminar' })) return; saveGroups(pgroups.filter(g => g.id !== id)); save(presets.map(m => m.groupId === id ? { ...m, groupId: undefined } : m)) }
+  const removeGroup = async (id: string) => { if (!await confirm({ title: 'Eliminar grupo', message: 'Se elimina el grupo; sus mensajes quedan sin grupo.', confirmLabel: 'Eliminar' })) return; onUpdate({ ...store, presetGroups: pgroups.filter(g => g.id !== id), presets: presets.map(m => m.groupId === id ? { ...m, groupId: undefined } : m) }) }
   const toggleGroup = (id: string) => setCollapsedGroups(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const toggleMsg = (id: string) => setCollapsedMsgs(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const msgLang = (id: string) => lang[id] || 'en' // default: inglés
