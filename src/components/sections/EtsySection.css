@@ -547,6 +547,10 @@
 .creacion-group-section { margin-bottom: 4px; }
 .creacion-group-heading { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin: 12px 0 8px; }
 .creacion-group-tag { font-size: 10px; padding: 1px 8px; background: var(--accent-soft); color: var(--accent); border-radius: 8px; }
+.creacion-title-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 15px; font-weight: 700; color: var(--text-primary); outline: none; font-family: inherit; }
+.creacion-title-input:focus { border-color: var(--accent); }
+.creacion-desc-input { width: 100%; padding: 7px 12px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 12px; color: var(--text-primary); outline: none; font-family: inherit; }
+.creacion-desc-input:focus { border-color: var(--accent); }
 .creacion-group-select { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
 .creacion-group-select select { flex: 1; padding: 6px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 6px; font-size: 12px; color: var(--text-primary); outline: none; cursor: pointer; }
 .creacion-group-select select:focus { border-color: var(--accent); }

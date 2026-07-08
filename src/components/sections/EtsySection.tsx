@@ -780,6 +780,8 @@ function CreacionesPanel({ panel, save, panels, groups }: { panel: PromptPanel; 
       </div>
       {expanded && (
         <div className="creacion-body">
+          <input className="creacion-title-input" value={panel.title} onChange={e => updatePanel({ title: e.target.value })} placeholder="Nombre del panel..." />
+          <input className="creacion-desc-input" value={panel.description || ''} onChange={e => updatePanel({ description: e.target.value })} placeholder="Descripción (opcional)..." />
           <label className="creacion-group-select"><Layers size={12} /> Grupo
             <select value={panel.groupId || ''} onChange={e => updatePanel({ groupId: e.target.value || undefined })}>
               <option value="">Sin grupo</option>
