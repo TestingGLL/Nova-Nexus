@@ -22,7 +22,12 @@ export function applyUiScale(value?: string) {
   // viewport units, so the `--ui-zoom` var lets the full-screen layout divide its
   // `100vh/100vw` by the same factor (see index.css) and avoid being clipped.
   root.style.setProperty('--ui-zoom', v)
-  ;(root.style as unknown as { zoom: string }).zoom = v
+  // IMPORTANT: at the default scale (1) do NOT set `zoom` at all. Keeping the root
+  // in Chromium's "zoom mode" — even at factor 1 — triggers an intermittent
+  // first-paint mis-layout glitch. Clearing it entirely avoids that code path.
+  const style = root.style as unknown as { zoom: string }
+  if (v === DEFAULT_UI_SCALE || Number(v) === 1) style.zoom = ''
+  else style.zoom = v
 }
 
 export function setUiScale(value: string) {
