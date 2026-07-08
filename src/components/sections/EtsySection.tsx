@@ -11,7 +11,7 @@ import './EtsySection.css'
 interface SubArticle { id: string; title: string; description: string; price?: string; inLaunches?: boolean }
 interface Article { id: string; title: string; description: string; subArticles: SubArticle[]; launchDate?: string; order?: number; createdAt?: string; inLaunches?: boolean; launched?: boolean; cover?: string; price?: string; groupId?: string; icon?: string }
 interface ArticleGroup { id: string; name: string; color?: string; defaultPrice?: string }
-interface ClientInfo { id: string; name: string; gender: string; country: string; favGroupId?: string; recurring?: boolean }
+interface ClientInfo { id: string; name: string; gender: string; country: string; favGroupId?: string; recurring?: boolean; createdTs?: number }
 // Lanzamientos → Organizador: paneles con artículos ordenados (oficiales o personalizados).
 interface OrgItem { id: string; articleId?: string; subArticleId?: string; customTitle?: string; customDesc?: string; launched?: boolean; launchDate?: string }
 interface Organizer { id: string; name: string; items: OrgItem[] }
@@ -97,6 +97,7 @@ interface StoreData {
   organizers?: Organizer[]; flowOrganizerId?: string | null
   presets?: PresetMsg[]; presetGroups?: PresetGroup[]
   creacionGroups?: CreacionGroup[]; creacionTags?: string[]
+  generador?: PromptPanel[]; generadorGroups?: CreacionGroup[]; generadorTags?: string[]
 }
 
 const defaultStores: StoreData[] = [
@@ -862,10 +863,10 @@ function CreacionesPanel({ panel, save, panels, groups }: { panel: PromptPanel; 
 
 // Tarjeta de un grupo de Creaciones: ícono cuadrado de color, título, descripción,
 // tag, edición completa y los paneles que contiene.
-function CreacionGroupCard({ group, tags, groups, groupPanels, save, panels, onUpdateGroup, onRemoveGroup, onAddTag }: {
+function CreacionGroupCard({ group, tags, groups, groupPanels, save, panels, onUpdateGroup, onRemoveGroup, onDuplicateGroup, onAddTag }: {
   group: CreacionGroup; tags: string[]; groups: CreacionGroup[]; groupPanels: PromptPanel[]
   save: (p: PromptPanel[]) => void; panels: PromptPanel[]
-  onUpdateGroup: (u: Partial<CreacionGroup>) => void; onRemoveGroup: () => void; onAddTag: (t: string) => void
+  onUpdateGroup: (u: Partial<CreacionGroup>) => void; onRemoveGroup: () => void; onDuplicateGroup: () => void; onAddTag: (t: string) => void
 }) {
   const [open, setOpen] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -882,6 +883,7 @@ function CreacionGroupCard({ group, tags, groups, groupPanels, save, panels, onU
         {group.tag && <span className="creacion-group-tag"><Tag size={10} /> {group.tag}</span>}
         <span className="creacion-group-count">{groupPanels.length}</span>
         <button className="preset-icon-btn" onClick={() => setEditing(e => !e)} title="Editar grupo">{editing ? <Check size={13} /> : <Edit3 size={13} />}</button>
+        <button className="preset-icon-btn" onClick={onDuplicateGroup} title="Duplicar grupo"><Copy size={13} /></button>
         <button className="preset-icon-btn del" onClick={onRemoveGroup} title="Eliminar grupo"><Trash2 size={13} /></button>
       </div>
       {group.description && !editing && <p className="creacion-group-desc">{group.description}</p>}
@@ -918,10 +920,16 @@ function CreacionGroupCard({ group, tags, groups, groupPanels, save, panels, onU
   )
 }
 
-function CreacionesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
-  const panels = store.creaciones || []
-  const groups = store.creacionGroups || []
-  const tags = store.creacionTags || []
+// Pestaña reutilizable de paneles de prompts (Creaciones y Generador de textos).
+// `fields` define qué claves del store respaldan los datos, para que ambas pestañas
+// sean independientes con el mismo funcionamiento.
+type CreacionesFields = { panels: 'creaciones' | 'generador'; groups: 'creacionGroups' | 'generadorGroups'; tags: 'creacionTags' | 'generadorTags' }
+const CREACIONES_FIELDS: CreacionesFields = { panels: 'creaciones', groups: 'creacionGroups', tags: 'creacionTags' }
+
+function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store: StoreData; onUpdate: (s: StoreData) => void; fields?: CreacionesFields }) {
+  const panels = (store[fields.panels] as PromptPanel[] | undefined) || []
+  const groups = (store[fields.groups] as CreacionGroup[] | undefined) || []
+  const tags = (store[fields.tags] as string[] | undefined) || []
   const [newPanelTitle, setNewPanelTitle] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [showNewGroup, setShowNewGroup] = useState(false)
@@ -933,9 +941,9 @@ function CreacionesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: St
   const [ngNewTag, setNgNewTag] = useState('')  // etiqueta nueva escrita
   const confirm = useConfirm()
 
-  const save = (p: PromptPanel[]) => onUpdate({ ...store, creaciones: p })
-  const saveGroups = (g: CreacionGroup[]) => onUpdate({ ...store, creacionGroups: g })
-  const addTagToPool = (t: string) => { const tag = t.trim(); if (tag && !tags.includes(tag)) onUpdate({ ...store, creacionTags: [...tags, tag] }) }
+  const save = (p: PromptPanel[]) => onUpdate({ ...store, [fields.panels]: p })
+  const saveGroups = (g: CreacionGroup[]) => onUpdate({ ...store, [fields.groups]: g })
+  const addTagToPool = (t: string) => { const tag = t.trim(); if (tag && !tags.includes(tag)) onUpdate({ ...store, [fields.tags]: [...tags, tag] }) }
   const addPanel = () => { if (!newPanelTitle.trim()) return; save([...panels, { id: 'cp-' + Date.now(), title: newPanelTitle.trim(), description: '', mainPrompt: '', prompts: [] }]); setNewPanelTitle(''); setShowNew(false) }
 
   const addGroup = () => {
@@ -944,7 +952,7 @@ function CreacionesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: St
     const tag = typed || ngTag || undefined
     const newTags = typed && !tags.includes(typed) ? [...tags, typed] : tags
     const g: CreacionGroup = { id: 'cg-' + Date.now(), name: ngName.trim(), description: ngDesc.trim() || undefined, color: ngColor, icon: ngIcon.trim() || undefined, tag }
-    onUpdate({ ...store, creacionGroups: [...groups, g], creacionTags: newTags })
+    onUpdate({ ...store, [fields.groups]: [...groups, g], [fields.tags]: newTags })
     setNgName(''); setNgDesc(''); setNgColor(CREACION_GROUP_COLORS[0]); setNgIcon(''); setNgTag(''); setNgNewTag(''); setShowNewGroup(false)
   }
   const updateGroup = (id: string, u: Partial<CreacionGroup>) => saveGroups(groups.map(g => g.id === id ? { ...g, ...u } : g))
@@ -952,6 +960,17 @@ function CreacionesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: St
     const g = groups.find(x => x.id === id)
     if (!await confirm({ title: 'Eliminar grupo', message: `¿Eliminar el grupo «${g?.name || ''}»? Sus paneles no se borran: quedan en «Sin grupo».`, confirmLabel: 'Eliminar grupo' })) return
     saveGroups(groups.filter(g => g.id !== id)); save(panels.map(p => p.groupId === id ? { ...p, groupId: undefined } : p))
+  }
+  const duplicateGroup = (id: string) => {
+    const g = groups.find(x => x.id === id); if (!g) return
+    const newId = 'cg-' + Date.now()
+    const ng: CreacionGroup = { ...g, id: newId, name: g.name + ' (copia)' }
+    const base = Date.now()
+    const dupPanels = panels.filter(p => p.groupId === id).map((p, k) => ({
+      ...p, id: 'cp-' + base + '-' + k, groupId: newId,
+      prompts: p.prompts.map((pr, j) => ({ ...pr, id: 'pr-' + base + '-' + k + '-' + j })),
+    }))
+    onUpdate({ ...store, [fields.groups]: [...groups, ng], [fields.panels]: [...panels, ...dupPanels] })
   }
 
   const groupsAlpha = [...groups].sort((a, b) => byName(a.name, b.name))
@@ -985,7 +1004,7 @@ function CreacionesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: St
       )}
       {panels.length === 0 && groups.length === 0 && !showNew && !showNewGroup && <div className="articles-empty"><Sparkles size={24} /><p>Registrá tus prompts de creación</p></div>}
       {groupsAlpha.map(g => (
-        <CreacionGroupCard key={g.id} group={g} tags={tags} groups={groups} groupPanels={panels.filter(p => p.groupId === g.id)} save={save} panels={panels} onUpdateGroup={u => updateGroup(g.id, u)} onRemoveGroup={() => removeGroup(g.id)} onAddTag={addTagToPool} />
+        <CreacionGroupCard key={g.id} group={g} tags={tags} groups={groups} groupPanels={panels.filter(p => p.groupId === g.id)} save={save} panels={panels} onUpdateGroup={u => updateGroup(g.id, u)} onRemoveGroup={() => removeGroup(g.id)} onDuplicateGroup={() => duplicateGroup(g.id)} onAddTag={addTagToPool} />
       ))}
       {ungrouped.length > 0 && (
         <div className="creacion-group-section">
@@ -1395,7 +1414,7 @@ function PlanificacionTab() {
 
 const COUNTRIES: { name: string; flag: string }[] = [
   { name: 'Alemania', flag: '🇩🇪' }, { name: 'Arabia Saudita', flag: '🇸🇦' }, { name: 'Argentina', flag: '🇦🇷' },
-  { name: 'Australia', flag: '🇦🇺' }, { name: 'Austria', flag: '🇦🇹' }, { name: 'Bélgica', flag: '🇧🇪' },
+  { name: 'Australia', flag: '🇦🇺' }, { name: 'Austria', flag: '🇦🇹' }, { name: 'Barbados', flag: '🇧🇧' }, { name: 'Bélgica', flag: '🇧🇪' },
   { name: 'Brasil', flag: '🇧🇷' }, { name: 'Canadá', flag: '🇨🇦' }, { name: 'Corea del Sur', flag: '🇰🇷' },
   { name: 'Dinamarca', flag: '🇩🇰' }, { name: 'España', flag: '🇪🇸' }, { name: 'Estados Unidos', flag: '🇺🇸' },
   { name: 'Filipinas', flag: '🇵🇭' }, { name: 'Finlandia', flag: '🇫🇮' }, { name: 'Francia', flag: '🇫🇷' }, { name: 'Italia', flag: '🇮🇹' },
@@ -1420,6 +1439,7 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const [filterGender, setFilterGender] = useState('all')
   const [filterGroup, setFilterGroup] = useState('all')
   const [filterRecurring, setFilterRecurring] = useState(false)
+  const [sortMode, setSortMode] = useState<'name' | 'recent' | 'oldest'>('name')
   const [dashOpen, setDashOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [subtab, setSubtab] = useState<'lista' | 'gestion'>('lista')
@@ -1431,7 +1451,7 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
     // Warn if a client with the same name AND country already exists.
     const dupe = clients.some(c => c.name.trim().toLowerCase() === name.trim().toLowerCase() && c.country === country)
     if (dupe && !await confirm({ title: 'Cliente duplicado', message: `Ya existe un cliente llamado «${name.trim()}» en ${country}. ¿Crearlo de todos modos?`, confirmLabel: 'Crear igual' })) return
-    const c: ClientInfo = { id: 'cli-' + Date.now(), name: name.trim(), gender, country, favGroupId: favGroupId || undefined, recurring: false }
+    const c: ClientInfo = { id: 'cli-' + Date.now(), name: name.trim(), gender, country, favGroupId: favGroupId || undefined, recurring: false, createdTs: Date.now() }
     onUpdate({ ...store, clientList: [c, ...clients] }); setName('')
   }
   const remove = async (id: string) => {
@@ -1461,8 +1481,13 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   )
   const anyFilter = filterCountry !== 'all' || filterGender !== 'all' || filterGroup !== 'all' || filterRecurring || !!q
   const resetFilters = () => { setFilterCountry('all'); setFilterGender('all'); setFilterGroup('all'); setFilterRecurring(false); setSearch('') }
-  // Alphabetical order.
-  const sortedFiltered = [...filtered].sort((a, b) => byName(a.name, b.name))
+  // Marca de tiempo de creación (createdTs, o el timestamp embebido en el id 'cli-<ts>').
+  const clientTs = (c: ClientInfo) => c.createdTs ?? (Number((c.id.match(/(\d{10,})/) || [])[1]) || 0)
+  // Orden: alfabético, o por fecha/hora de creación (recientes/antiguos).
+  const sortedFiltered = [...filtered].sort((a, b) =>
+    sortMode === 'recent' ? clientTs(b) - clientTs(a)
+      : sortMode === 'oldest' ? clientTs(a) - clientTs(b)
+        : byName(a.name, b.name))
   // Duplicate detection: same name (case-insensitive) + same country.
   const dupGroups = (() => {
     const m = new Map<string, ClientInfo[]>()
@@ -1566,6 +1591,7 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
           <select value={filterCountry} onChange={e => setFilterCountry(e.target.value)}><option value="all">Todos los países</option>{countriesAlpha.map(c => <option key={c} value={c}>{flagOf(c)} {c}</option>)}</select>
           <select value={filterGender} onChange={e => setFilterGender(e.target.value)}><option value="all">Todos los géneros</option>{gendersAlpha.map(g => <option key={g}>{g}</option>)}</select>
           <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)}><option value="all">Todos los grupos</option>{groupsAlpha.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}<option value="__none">Sin favorito</option></select>
+          <select value={sortMode} onChange={e => setSortMode(e.target.value as 'name' | 'recent' | 'oldest')} title="Ordenar clientes"><option value="name">Orden: A–Z</option><option value="recent">Más recientes</option><option value="oldest">Más antiguos</option></select>
           <button className={`clientes-recurring-toggle ${filterRecurring ? 'on' : ''}`} onClick={() => setFilterRecurring(v => !v)} title="Solo recurrentes"><Star size={13} /> Recurrentes</button>
           {anyFilter && <button className="clientes-reset-btn" onClick={resetFilters}><RotateCcw size={13} /> Limpiar</button>}
         </div>
@@ -1745,7 +1771,7 @@ function BannerParticles() {
 function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () => void; onUpdate: (store: StoreData) => void }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(store)
-  const [storeTab, setStoreTab] = useState<'informacion' | 'articles' | 'launches' | 'creaciones' | 'planificacion' | 'predeterminadas' | 'clientes'>('informacion')
+  const [storeTab, setStoreTab] = useState<'informacion' | 'articles' | 'launches' | 'creaciones' | 'generador' | 'planificacion' | 'predeterminadas' | 'clientes'>('informacion')
   const [showReviews, setShowReviews] = useState(false)
   const [showCountries, setShowCountries] = useState(false)
   const [editStat, setEditStat] = useState<null | 'sales' | 'products'>(null)
@@ -1822,6 +1848,7 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
         <button className={storeTab === 'articles' ? 'active' : ''} onClick={() => setStoreTab('articles')}>Artículos ({store.articles.length})</button>
         <button className={storeTab === 'launches' ? 'active' : ''} onClick={() => setStoreTab('launches')}>Lanzamientos</button>
         <button className={storeTab === 'creaciones' ? 'active' : ''} onClick={() => setStoreTab('creaciones')}>Creaciones</button>
+        <button className={storeTab === 'generador' ? 'active' : ''} onClick={() => setStoreTab('generador')}>Generador de textos</button>
         <button className={storeTab === 'clientes' ? 'active' : ''} onClick={() => setStoreTab('clientes')}>Clientes ({(store.clientList || []).length})</button>
         <button className={storeTab === 'planificacion' ? 'active' : ''} onClick={() => setStoreTab('planificacion')}>Planificación</button>
         <button className={storeTab === 'predeterminadas' ? 'active' : ''} onClick={() => setStoreTab('predeterminadas')}>Predeterminadas</button>
@@ -1858,6 +1885,7 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
       {storeTab === 'articles' && <ArticlesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'launches' && <LaunchesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'creaciones' && <CreacionesTab store={store} onUpdate={onUpdate} />}
+      {storeTab === 'generador' && <CreacionesTab store={store} onUpdate={onUpdate} fields={{ panels: 'generador', groups: 'generadorGroups', tags: 'generadorTags' }} />}
       {storeTab === 'clientes' && <ClientesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'planificacion' && <PlanificacionTab />}
       {storeTab === 'predeterminadas' && <PredeterminadasTab store={store} onUpdate={onUpdate} />}
