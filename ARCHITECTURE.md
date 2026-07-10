@@ -111,6 +111,7 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 | `nn-reminders` / `nn-reminder-blocks` | Recordatorios (editor por bloques) |
 | `nn-exercise-routines` / `nn-stretches` | Rutinas de ejercicio / estiramientos |
 | `nn-week-routine` / `nn-active-week` | Rutina semanal / semana activa |
+| `nn-week-autoadvance` / `nn-week-advance-marker` | Auto-avance de semana cada lunes (on/off) / lunes de la última semana procesada |
 | `nn-water` / `nn-water-sound` | Contador de vasos de agua |
 
 ### Etsy

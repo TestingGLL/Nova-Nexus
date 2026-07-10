@@ -61,7 +61,7 @@ function WaterCounter() {
 }
 
 interface ExerciseData { name: string; sets: number; reps: string; rest: string; tip: string; mode?: 'reps' | 'time'; time?: string; youtube?: string }
-interface Routine { id: string; name: string; description: string; exercises: ExerciseData[]; color: string; emoji: string; weeks?: ExerciseData[][]; banner?: string; bannerPos?: { x: number; y: number } }
+interface Routine { id: string; name: string; description: string; exercises: ExerciseData[]; color: string; emoji: string; weeks?: ExerciseData[][]; banner?: string; bannerPos?: { x: number; y: number }; bannerZoom?: number; hideName?: boolean; sectionNames?: string[] }
 
 // Notify HoyPanel (and Inicio) so it re-reads routines/week in real time.
 function notifyRoutines() { try { window.dispatchEvent(new CustomEvent('nn-routines-updated')) } catch {} }
@@ -89,19 +89,18 @@ function formatExerciseTime(raw?: string): string {
   const m = Math.floor(n / 60), s = n % 60
   return s === 0 ? `${m} min` : `${m} min ${s}s`
 }
-// Background for a routine banner. Panels may have no color and just show the image.
+// Banner background. With a custom image the accent color is NOT applied (the image
+// shows as-is); without an image the accent color (or a neutral fallback) is used.
 const NEUTRAL_BANNER = 'linear-gradient(135deg, #64748b, #475569)'
-function bannerStyle(r: Routine): CSSProperties {
-  if (r.banner) {
-    const pos = r.bannerPos ? `${r.bannerPos.x}% ${r.bannerPos.y}%` : 'center'
-    return {
-      backgroundImage: r.color
-        ? `linear-gradient(135deg, ${r.color}55, ${r.color}aa), url(${r.banner})`
-        : `url(${r.banner})`,
-      backgroundSize: 'cover', backgroundPosition: pos,
-    }
-  }
+function bannerBg(r: Routine): CSSProperties {
+  if (r.banner) return { background: '#1e293b' }
   return { background: r.color ? `linear-gradient(135deg, ${r.color}, ${r.color}99)` : NEUTRAL_BANNER }
+}
+// Framing (position + zoom) for the banner's <img> layer.
+function bannerImgStyle(r: Routine): CSSProperties {
+  const x = r.bannerPos?.x ?? 50, y = r.bannerPos?.y ?? 50
+  const z = (r.bannerZoom ?? 100) / 100
+  return { objectPosition: `${x}% ${y}%`, transform: `scale(${z})` }
 }
 
 const ROUTINE_COLORS =['#ef4444', '#3b82f6', '#8b5cf6', '#f97316', '#22c55e', '#06b6d4', '#eab308', '#ec4899']
@@ -126,6 +125,13 @@ function loadRoutines(key: string, fallback: Routine[]): Routine[] {
   try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback } catch { return fallback }
 }
 
+// yyyy-mm-dd of the Monday of the week containing `d` (weeks start Monday).
+function mondayOfWeek(d = new Date()): string {
+  const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7))
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+
 // A day-plan entry in nn-week-routine: either a legacy routineId string, or { rid, week }.
 type PlanEntry = { rid: string; week: number }
 function parsePlanEntry(v: unknown, fallbackWeek = 0): PlanEntry | null {
@@ -148,9 +154,15 @@ function ExercisePanel() {
   const [bannerConfig, setBannerConfig] = useState(false)
   const [expandedEx, setExpandedEx] = useState<Set<number>>(new Set())
   const [quickWeek, setQuickWeek] = useState(0)
+  const [editingSection, setEditingSection] = useState<number | null>(null)
+  const [autoAdvance, setAutoAdvance] = useState(() => { try { return localStorage.getItem('nn-week-autoadvance') !== '0' } catch { return true } })
+  const dragPanel = useRef<string | null>(null)
+  const [dragOverPanel, setDragOverPanel] = useState<string | null>(null)
   const bannerInputRef = useRef<HTMLInputElement>(null)
   const confirm = useConfirm()
   const toggleExpand = (i: number) => setExpandedEx(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n })
+  const openRoutine = (id: string) => { setActiveRoutine(id); setWeek(0); setBannerConfig(false); setExpandedEx(new Set()) }
+  const toggleAutoAdvance = () => { const v = !autoAdvance; setAutoAdvance(v); try { localStorage.setItem('nn-week-autoadvance', v ? '1' : '0') } catch {} }
 
   // Deep-link from Inicio's "Rutina de hoy" panel: open today's routine directly.
   useEffect(() => {
@@ -158,8 +170,32 @@ function ExercisePanel() {
       const rid = localStorage.getItem('__nn_open_routine')
       if (rid) {
         localStorage.removeItem('__nn_open_routine')
-        if (routines.some(r => r.id === rid)) { setShowSection('ejercicios'); setActiveRoutine(rid) }
+        if (routines.some(r => r.id === rid)) { setShowSection('ejercicios'); openRoutine(rid) }
       }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Auto-advance: each new week (Mondays), bump every day-plan entry to the next
+  // week of its panel. On by default; can be turned off in the Creador de Rutinas.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('nn-week-autoadvance') === '0') return
+      const curMon = mondayOfWeek()
+      const marker = localStorage.getItem('nn-week-advance-marker')
+      if (!marker) { localStorage.setItem('nn-week-advance-marker', curMon); return }
+      if (marker >= curMon) return
+      const weeksElapsed = Math.round((Date.parse(curMon) - Date.parse(marker)) / 604800000)
+      localStorage.setItem('nn-week-advance-marker', curMon)
+      if (weeksElapsed <= 0) return
+      const raw = localStorage.getItem('nn-week-routine')
+      const plan: Record<string, string | PlanEntry> = raw ? JSON.parse(raw) : {}
+      let changed = false
+      WEEKDAYS.forEach(d => {
+        const e = parsePlanEntry(plan[d])
+        if (e?.rid) { const nw = Math.min(3, e.week + weeksElapsed); if (nw !== e.week) { plan[d] = { rid: e.rid, week: nw }; changed = true } }
+      })
+      if (changed) { setWeekPlan(plan); localStorage.setItem('nn-week-routine', JSON.stringify(plan)); notifyRoutines() }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -169,15 +205,58 @@ function ExercisePanel() {
   const saveList = (l: Routine[]) => { if (isStretch) { setStretches(l); localStorage.setItem('nn-stretches', JSON.stringify(l)) } else { setRoutines(l); localStorage.setItem('nn-exercise-routines', JSON.stringify(l)) } notifyRoutines() }
   const saveWeek = (w: Record<string, string | PlanEntry>) => { setWeekPlan(w); localStorage.setItem('nn-week-routine', JSON.stringify(w)); notifyRoutines() }
 
-  // Week-aware exercise storage. Week 0 stays in `exercises` for backwards-compat;
-  // all 4 weeks live in `weeks` once edited.
-  const weeksOf = (r: Routine): ExerciseData[][] => r.weeks && r.weeks.length === 4 ? r.weeks : [r.exercises || [], [], [], []]
+  // Exercises: a fixed 4 weeks. Stretches: a variable number of named sections.
+  // Week/section 0 stays in `exercises` for backwards-compat.
+  const sectionCount = (r: Routine) => isStretch ? Math.max(1, r.sectionNames?.length || r.weeks?.length || 1) : 4
+  const weeksOf = (r: Routine): ExerciseData[][] => {
+    const n = sectionCount(r)
+    const arr = (r.weeks && r.weeks.length) ? r.weeks.map(a => a || []) : [r.exercises || []]
+    const out = arr.slice(0, n)
+    while (out.length < n) out.push([])
+    return out
+  }
+  const sectionNamesOf = (r: Routine): string[] => {
+    const n = sectionCount(r)
+    const names = r.sectionNames ? [...r.sectionNames] : []
+    while (names.length < n) names.push(isStretch ? `Rutina ${names.length + 1}` : `Semana ${names.length + 1}`)
+    return names.slice(0, n)
+  }
   const exercisesOf = (r: Routine, w: number) => weeksOf(r)[w] || []
   const setWeekExercises = (rid: string, w: number, exs: ExerciseData[]) => saveList(list.map(r => {
     if (r.id !== rid) return r
     const wk = weeksOf(r).map(a => [...a]); wk[w] = exs
     return { ...r, weeks: wk, exercises: wk[0] }
   }))
+  // Named sections (Estiramientos): add / rename / remove.
+  const addSection = (rid: string) => {
+    const r = list.find(x => x.id === rid); if (!r) return
+    const names = sectionNamesOf(r); const wk = weeksOf(r).map(a => [...a])
+    names.push(`Rutina ${names.length + 1}`); wk.push([])
+    saveList(list.map(x => x.id === rid ? { ...x, sectionNames: names, weeks: wk, exercises: wk[0] } : x))
+    setWeek(wk.length - 1)
+  }
+  const renameSection = (rid: string, idx: number, name: string) => {
+    const r = list.find(x => x.id === rid); if (!r) return
+    const names = sectionNamesOf(r); names[idx] = name
+    saveList(list.map(x => x.id === rid ? { ...x, sectionNames: names } : x))
+  }
+  const removeSection = (rid: string, idx: number) => {
+    const r = list.find(x => x.id === rid); if (!r || sectionCount(r) <= 1) return
+    const names = sectionNamesOf(r).filter((_, i) => i !== idx)
+    const wk = weeksOf(r).filter((_, i) => i !== idx)
+    saveList(list.map(x => x.id === rid ? { ...x, sectionNames: names, weeks: wk, exercises: wk[0] } : x))
+    setWeek(w => Math.min(w, names.length - 1))
+  }
+  // Manual reorder of the panels via drag grips.
+  const reorderPanels = (targetId: string) => {
+    const from = dragPanel.current
+    setDragOverPanel(null); dragPanel.current = null
+    if (!from || from === targetId) return
+    const fromIdx = list.findIndex(r => r.id === from)
+    const toIdx = list.findIndex(r => r.id === targetId)
+    if (fromIdx < 0 || toIdx < 0) return
+    const next = [...list]; const [m] = next.splice(fromIdx, 1); next.splice(toIdx, 0, m); saveList(next)
+  }
 
   const updateRoutine = (id: string, u: Partial<Routine>) => saveList(list.map(r => r.id === id ? { ...r, ...u } : r))
   const onBannerFile = (rid: string, file?: File | null) => {
@@ -213,7 +292,8 @@ function ExercisePanel() {
     return (
       <div className="card exercise-card exercise-detail">
         <button className="exercise-back" onClick={() => setActiveRoutine(null)}><ArrowLeft size={16} /> Volver</button>
-        <div className={`exercise-banner-lg ${routine.banner ? 'has-img' : ''} ${!routine.color ? 'no-color' : ''}`} style={bannerStyle(routine)}>
+        <div className={`exercise-banner-lg ${routine.banner ? 'has-img' : ''} ${!routine.color ? 'no-color' : ''}`} style={bannerBg(routine)}>
+          {routine.banner && <span className="banner-clip"><img className="routine-banner-img" src={routine.banner} alt="" style={bannerImgStyle(routine)} /></span>}
           <input ref={bannerInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { onBannerFile(routine.id, e.target.files?.[0]); e.target.value = '' }} />
           <button className="exercise-banner-gear" onClick={() => setBannerConfig(v => !v)} title="Configurar banner"><Settings size={16} /></button>
           {bannerConfig && (
@@ -223,27 +303,32 @@ function ExercisePanel() {
                 <span className="ebc-label">Nombre (opcional)</span>
                 <input className="ebc-name-input" value={routine.name} placeholder="Sin nombre" onChange={e => updateRoutine(routine.id, { name: e.target.value })} />
               </label>
+              {routine.name.trim() && (
+                <label className="ebc-check"><input type="checkbox" checked={!!routine.hideName} onChange={e => updateRoutine(routine.id, { hideName: e.target.checked })} /> Ocultar el nombre en el banner</label>
+              )}
               <span className="ebc-label">Imagen</span>
               <div className="ebc-row">
                 <button className="exercise-banner-btn" onClick={() => bannerInputRef.current?.click()}><Plus size={13} /> {routine.banner ? 'Cambiar' : 'Subir'}</button>
-                {routine.banner && <button className="exercise-banner-btn" onClick={() => updateRoutine(routine.id, { banner: undefined, bannerPos: undefined })}><X size={13} /> Quitar</button>}
+                {routine.banner && <button className="exercise-banner-btn" onClick={() => updateRoutine(routine.id, { banner: undefined, bannerPos: undefined, bannerZoom: undefined })}><X size={13} /> Quitar</button>}
               </div>
               {routine.banner && (
                 <div className="ebc-pos">
-                  <span className="ebc-label">Posición de la imagen</span>
-                  <label className="ebc-slider"><span>↔</span><input type="range" min={0} max={100} value={routine.bannerPos?.x ?? 50} onChange={e => updateRoutine(routine.id, { bannerPos: { x: Number(e.target.value), y: routine.bannerPos?.y ?? 50 } })} /></label>
-                  <label className="ebc-slider"><span>↕</span><input type="range" min={0} max={100} value={routine.bannerPos?.y ?? 50} onChange={e => updateRoutine(routine.id, { bannerPos: { x: routine.bannerPos?.x ?? 50, y: Number(e.target.value) } })} /></label>
-                  <button className="ebc-reset" onClick={() => updateRoutine(routine.id, { bannerPos: undefined })}>Centrar</button>
+                  <span className="ebc-label">Encuadre de la imagen</span>
+                  <label className="ebc-slider"><span title="Horizontal">↔</span><input type="range" min={0} max={100} value={routine.bannerPos?.x ?? 50} onChange={e => updateRoutine(routine.id, { bannerPos: { x: Number(e.target.value), y: routine.bannerPos?.y ?? 50 } })} /></label>
+                  <label className="ebc-slider"><span title="Vertical">↕</span><input type="range" min={0} max={100} value={routine.bannerPos?.y ?? 50} onChange={e => updateRoutine(routine.id, { bannerPos: { x: routine.bannerPos?.x ?? 50, y: Number(e.target.value) } })} /></label>
+                  <label className="ebc-slider"><span title="Zoom">🔍</span><input type="range" min={100} max={300} value={routine.bannerZoom ?? 100} onChange={e => updateRoutine(routine.id, { bannerZoom: Number(e.target.value) })} /></label>
+                  <button className="ebc-reset" onClick={() => updateRoutine(routine.id, { bannerPos: undefined, bannerZoom: undefined })}>Restablecer</button>
                 </div>
               )}
-              <span className="ebc-label">Color</span>
+              <span className="ebc-label">Color de acento</span>
               <div className="exercise-color-row">
                 <button className={`exercise-color-dot none ${!routine.color ? 'active' : ''}`} onClick={() => updateRoutine(routine.id, { color: '' })} title="Sin color"><X size={11} /></button>
                 {ROUTINE_COLORS.map(c => <button key={c} className={`exercise-color-dot ${routine.color === c ? 'active' : ''}`} style={{ background: c }} onClick={() => updateRoutine(routine.id, { color: c })} />)}
               </div>
+              {routine.banner && <span className="ebc-hint">El color de acento no se aplica al banner mientras tenga una imagen.</span>}
             </div>
           )}
-          {routine.name.trim() && <h2 className="exercise-banner-name">{routine.name}</h2>}
+          {!routine.hideName && routine.name.trim() && <h2 className="exercise-banner-name">{routine.name}</h2>}
           <div className="exercise-banner-meta">
             <span>{exercisesOf(routine, week).length} ejercicios</span>
             <span>·</span>
@@ -251,10 +336,22 @@ function ExercisePanel() {
           </div>
         </div>
         <div className="week-subtabs">
-          {[0, 1, 2, 3].map(w => (
-            <button key={w} className={`week-subtab ${week === w ? 'active' : ''}`} onClick={() => setWeek(w)}>Semana {w + 1}</button>
+          {sectionNamesOf(routine).map((name, wi) => (
+            editingSection === wi && isStretch ? (
+              <input key={wi} className="week-subtab-edit" value={name} autoFocus onChange={e => renameSection(routine.id, wi, e.target.value)} onBlur={() => setEditingSection(null)} onKeyDown={e => e.key === 'Enter' && setEditingSection(null)} />
+            ) : (
+              <button key={wi} className={`week-subtab ${week === wi ? 'active' : ''}`} onClick={() => setWeek(wi)} onDoubleClick={() => isStretch && setEditingSection(wi)} title={isStretch ? 'Doble clic para renombrar' : undefined}>{name}</button>
+            )
           ))}
+          {isStretch && <button className="week-subtab-add" onClick={() => addSection(routine.id)} title="Agregar rutina"><Plus size={14} /></button>}
         </div>
+        {isStretch && (
+          <div className="section-caption">
+            <span className="section-caption-title">{sectionNamesOf(routine)[week]}</span>
+            <button className="section-caption-btn" onClick={() => setEditingSection(week)} title="Renombrar"><Edit3 size={12} /></button>
+            {sectionCount(routine) > 1 && <button className="section-caption-btn danger" onClick={() => removeSection(routine.id, week)} title="Eliminar esta rutina"><Trash2 size={12} /></button>}
+          </div>
+        )}
         <div className="exercise-edit-list">
           {exercisesOf(routine, week).map((e, i) => {
             const mode = e.mode || 'reps'
@@ -311,19 +408,23 @@ function ExercisePanel() {
         const exTotal = wks.reduce((a, w) => a + w.length, 0)
         const setTotal = wks.reduce((a, w) => a + w.reduce((s, e) => s + e.sets, 0), 0)
         return (
-        <div key={r.id} className="routine-card" role="button" tabIndex={0} onClick={() => setActiveRoutine(r.id)}>
+        <div key={r.id}
+          className={`routine-card ${dragOverPanel === r.id ? 'drag-over' : ''}`}
+          role="button" tabIndex={0} onClick={() => openRoutine(r.id)}
+          onDragOver={e => { e.preventDefault(); if (dragPanel.current && dragPanel.current !== r.id) setDragOverPanel(r.id) }}
+          onDrop={() => reorderPanels(r.id)}
+        >
+          <span className="routine-card-grip" draggable onClick={e => e.stopPropagation()} onDragStart={e => { e.stopPropagation(); dragPanel.current = r.id }} onDragEnd={() => { dragPanel.current = null; setDragOverPanel(null) }} title="Arrastrar para reordenar"><GripVertical size={14} /></span>
           <button className="routine-card-del" title="Eliminar panel" onClick={e => { e.stopPropagation(); askRemoveRoutine(r.id) }}><Trash2 size={13} /></button>
-          <div className={`routine-banner ${r.banner ? 'has-img' : ''} ${!r.color ? 'no-color' : ''}`} style={bannerStyle(r)}>
-            {r.name.trim() && <span className="routine-name">{r.name}</span>}
+          <div className={`routine-banner ${r.banner ? 'has-img' : ''} ${!r.color ? 'no-color' : ''}`} style={bannerBg(r)}>
+            {r.banner && <span className="banner-clip"><img className="routine-banner-img" src={r.banner} alt="" style={bannerImgStyle(r)} /></span>}
+            {!r.hideName && r.name.trim() && <span className="routine-name">{r.name}</span>}
           </div>
           <div className="routine-stats">
-            <div className="routine-stat highlight"><span className="routine-stat-num">{weekCount}</span><span className="routine-stat-lbl">{weekCount === 1 ? 'semana' : 'semanas'}</span></div>
+            <div className="routine-stat highlight"><span className="routine-stat-num">{weekCount}</span><span className="routine-stat-lbl">{isStretch ? (weekCount === 1 ? 'rutina' : 'rutinas') : (weekCount === 1 ? 'semana' : 'semanas')}</span></div>
             <div className="routine-stat highlight"><span className="routine-stat-num">{exTotal}</span><span className="routine-stat-lbl">ejercicios</span></div>
             <div className="routine-stat"><span className="routine-stat-num">{setTotal}</span><span className="routine-stat-lbl">series</span></div>
           </div>
-          {r.exercises.length > 0 && (
-            <div className="routine-preview">{r.exercises.slice(0, 3).map(e => e.name).join(' · ')}{r.exercises.length > 3 ? '…' : ''}</div>
-          )}
         </div>
         )
       })}
@@ -352,6 +453,11 @@ function ExercisePanel() {
             </select>
             <button className="cqw-apply" onClick={applyQuickWeek} title="Aplicar esta semana a todos los días con rutina asignada"><CalendarClock size={13} /> Aplicar a todos</button>
           </div>
+          <label className="creador-autoadvance">
+            <input type="checkbox" checked={autoAdvance} onChange={toggleAutoAdvance} />
+            <span>Avanzar de semana automáticamente cada lunes</span>
+            <span className="creador-autoadvance-hint">Al pasar el domingo, cada día sube a la semana siguiente del mismo panel.</span>
+          </label>
           <div className="week-routine">
             {WEEKDAYS.map(d => {
               const entry = parsePlanEntry(weekPlan[d], activeWeek)
