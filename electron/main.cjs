@@ -90,7 +90,15 @@ function createWindow() {
       if (menu.items.length) menu.append(new MenuItem({ type: 'separator' }));
       if (params.editFlags.canCut) menu.append(new MenuItem({ role: 'cut', label: 'Cortar' }));
       if (params.editFlags.canCopy) menu.append(new MenuItem({ role: 'copy', label: 'Copiar' }));
-      if (params.editFlags.canPaste) menu.append(new MenuItem({ role: 'paste', label: 'Pegar' }));
+      if (params.editFlags.canPaste) {
+        // Tres variantes de pegado, consistentes en toda la app:
+        //  · Pegar / con formato de origen → mantiene el formato del origen (rich).
+        //  · Pegar sin formato → texto plano (pasteAndMatchStyle descarta el formato).
+        // El atajo Ctrl+V sigue siendo el pegado clásico normal (role 'paste').
+        menu.append(new MenuItem({ role: 'paste', label: 'Pegar' }));
+        menu.append(new MenuItem({ label: 'Pegar con formato de origen', click: () => win.webContents.paste() }));
+        menu.append(new MenuItem({ role: 'pasteAndMatchStyle', label: 'Pegar sin formato' }));
+      }
       if (params.isEditable) menu.append(new MenuItem({ role: 'selectAll', label: 'Seleccionar todo' }));
     }
     if (menu.items.length) menu.popup();
