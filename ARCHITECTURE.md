@@ -103,6 +103,7 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 |---|---|
 | `nn-cards` | Tarjetas (protegidas por contraseña en la UI) |
 | `nn-shopping` / `nn-custom-categories` | Listas de compras / categorías |
+| `nn-shopping-sort` | Orden de las listas de compras (`manual` / `alpha`) |
 | `nn-wishlist` | Compras / wishlist |
 | `nn-diary` / `nn-diary-chapters` | Diario de pensamientos |
 | `nn-goals` | Objetivos |

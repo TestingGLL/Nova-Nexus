@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { CSSProperties } from 'react'
-import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle, Settings, ClipboardList } from 'lucide-react'
+import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, ChevronRight, Flame, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle, Settings, ClipboardList } from 'lucide-react'
 import { addNotification } from '../../lib/notifications'
 import { useWater, WATER_GOAL } from '../../lib/water'
 import ColorInput from '../ColorInput'
@@ -807,9 +807,16 @@ function ListaComprasTab() {
   const [editingColor, setEditingColor] = useState<string | null>(null)
   const [filterCat, setFilterCat] = useState<string | null>(null)
   const [showResumen, setShowResumen] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [editingItem, setEditingItem] = useState<string | null>(null)
+  const [sortMode, setSortMode] = useState<'manual' | 'alpha'>(() => { try { return localStorage.getItem('nn-shopping-sort') === 'alpha' ? 'alpha' : 'manual' } catch { return 'manual' } })
+  const dragGroup = useRef<string | null>(null)
+  const [dragOverGroup, setDragOverGroup] = useState<string | null>(null)
 
   const confirm = useConfirm()
   const saveBoards = (b: ShoppingBoard[]) => { setBoards(b); localStorage.setItem('nn-shopping', JSON.stringify(b)) }
+  const toggleCollapse = (id: string) => setCollapsedGroups(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const setSort = (m: 'manual' | 'alpha') => { setSortMode(m); try { localStorage.setItem('nn-shopping-sort', m) } catch {} }
   const board = boards.find(b => b.id === activeBoard) || boards[0]
   const groups = board?.groups || []
   const setGroups = (g: ShoppingGroup[]) => saveBoards(boards.map(b => b.id === board.id ? { ...b, groups: g } : b))
@@ -865,6 +872,19 @@ function ListaComprasTab() {
   }
   const toggleItem = (groupId: string, itemId: string) => setGroups(groups.map(g => g.id === groupId ? { ...g, items: g.items.map(i => i.id === itemId ? { ...i, done: !i.done } : i) } : g))
   const removeItem = (groupId: string, itemId: string) => setGroups(groups.map(g => g.id === groupId ? { ...g, items: g.items.filter(i => i.id !== itemId) } : g))
+  const updateItemText = (groupId: string, itemId: string, text: string) => setGroups(groups.map(g => g.id === groupId ? { ...g, items: g.items.map(i => i.id === itemId ? { ...i, text } : i) } : g))
+
+  // Manual reorder of the lists (only in 'manual' sort mode).
+  const reorderGroups = (targetId: string) => {
+    const from = dragGroup.current
+    setDragOverGroup(null); dragGroup.current = null
+    if (!from || from === targetId) return
+    const fromIdx = groups.findIndex(g => g.id === from)
+    const toIdx = groups.findIndex(g => g.id === targetId)
+    if (fromIdx < 0 || toIdx < 0) return
+    const next = [...groups]; const [m] = next.splice(fromIdx, 1); next.splice(toIdx, 0, m); setGroups(next)
+  }
+  const displayGroups = sortMode === 'alpha' ? [...groups].sort((a, b) => a.name.localeCompare(b.name, 'es')) : groups
 
   const totalItems = groups.reduce((a, g) => a + g.items.length, 0)
   const doneItems = groups.reduce((a, g) => a + g.items.filter(i => i.done).length, 0)
@@ -906,6 +926,12 @@ function ListaComprasTab() {
             <option value="">Todas las categorías</option>
             {defaultCategories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          {groups.length > 1 && (
+            <div className="shopping-sort-toggle" title="Orden de las listas">
+              <button className={sortMode === 'manual' ? 'active' : ''} onClick={() => setSort('manual')} title="Orden manual (arrastrá las listas para reordenarlas)"><GripVertical size={12} /> Manual</button>
+              <button className={sortMode === 'alpha' ? 'active' : ''} onClick={() => setSort('alpha')} title="Orden alfabético">A-Z</button>
+            </div>
+          )}
           <button className={`shopping-resumen-btn ${showResumen ? 'active' : ''}`} onClick={() => setShowResumen(v => !v)} title="Resumen de ítems pendientes de todas las listas"><ClipboardList size={14} /> Resumen</button>
           <button className="shopping-add-group-btn" onClick={() => setShowNewGroup(!showNewGroup)}><Plus size={14} /> Nueva lista</button>
         </div>
@@ -949,11 +975,22 @@ function ListaComprasTab() {
       {groups.length === 0 && !showNewGroup && (<div className="shopping-empty"><ShoppingCart size={32} /><p>Sin listas de compras</p><p className="shopping-empty-hint">Creá tu primera lista</p></div>)}
 
       <div className="shopping-groups">
-        {groups.map(g => {
+        {displayGroups.map(g => {
           const filteredItems = filterCat ? g.items.filter(i => i.category === filterCat) : g.items
+          const collapsed = collapsedGroups.has(g.id)
+          const gd = g.items.filter(i => i.done).length
           return (
-            <div key={g.id} className="card shopping-group" style={{ borderLeft: `4px solid ${g.color}` }}>
+            <div key={g.id}
+              className={`card shopping-group ${collapsed ? 'collapsed' : ''} ${dragOverGroup === g.id ? 'drag-over' : ''}`}
+              style={{ borderLeft: `4px solid ${g.color}` }}
+              onDragOver={sortMode === 'manual' ? (e => { e.preventDefault(); if (dragGroup.current && dragGroup.current !== g.id) setDragOverGroup(g.id) }) : undefined}
+              onDrop={sortMode === 'manual' ? (() => reorderGroups(g.id)) : undefined}
+            >
               <div className="shopping-group-header">
+                {sortMode === 'manual' && (
+                  <span className="shopping-group-grip" draggable onDragStart={() => { dragGroup.current = g.id }} onDragEnd={() => { dragGroup.current = null; setDragOverGroup(null) }} title="Arrastrar para reordenar"><GripVertical size={13} /></span>
+                )}
+                <button className="shopping-group-collapse" onClick={() => toggleCollapse(g.id)} title={collapsed ? 'Desplegar lista' : 'Contraer lista'}>{collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}</button>
                 <div className="shopping-group-color-wrap">
                   <button className="shopping-group-dot" style={{ background: g.color }} onClick={() => setEditingColor(editingColor === g.id ? null : g.id)} title="Cambiar color" />
                   {editingColor === g.id && (
@@ -973,33 +1010,37 @@ function ListaComprasTab() {
                 <button className="shopping-group-edit" onClick={() => duplicateGroup(g.id)} title="Duplicar lista"><Copy size={11} /></button>
                 <button className="shopping-group-delete" onClick={() => removeGroup(g.id)} title="Eliminar"><Trash2 size={11} /></button>
               </div>
-              {g.items.length > 0 && (() => {
-                const gd = g.items.filter(i => i.done).length
-                return (
+              {!collapsed && (<>
+                {g.items.length > 0 && (
                   <div className="shopping-group-progress">
                     <div className="shopping-group-bar"><div className="shopping-group-bar-fill" style={{ width: `${(gd / g.items.length) * 100}%`, background: g.color }} /></div>
                     <span className="shopping-group-progress-txt">{gd}/{g.items.length}</span>
                   </div>
-                )
-              })()}
-              <div className="shopping-items">
-                {filteredItems.map(item => (
-                  <div key={item.id} className={`shopping-item ${item.done ? 'done' : ''}`}>
-                    <button className={`shopping-check ${item.done ? 'checked' : ''}`} style={{ borderColor: g.color, background: item.done ? g.color : 'transparent' }} onClick={() => toggleItem(g.id, item.id)}>{item.done && <Check size={10} />}</button>
-                    <span className={`shopping-item-text ${item.done ? 'struck' : ''}`}>{item.text}</span>
-                    {item.category && <span className="shopping-item-cat">{item.category}</span>}
-                    <button className="shopping-item-delete" onClick={() => removeItem(g.id, item.id)}><X size={11} /></button>
-                  </div>
-                ))}
-              </div>
-              <div className="shopping-add-item">
-                <input placeholder="Agregar ítem (pegá varios separados por coma)..." value={newItemTexts[g.id] || ''} onChange={e => setNewItemTexts({ ...newItemTexts, [g.id]: e.target.value })} onKeyDown={e => e.key === 'Enter' && addItem(g.id)} onPaste={e => onPasteItems(g.id, e)} />
-                <select className="shopping-item-cat-select" value={newItemCats[g.id] || ''} onChange={e => setNewItemCats({ ...newItemCats, [g.id]: e.target.value })}>
-                  <option value="">Sin categoría</option>
-                  {defaultCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <button onClick={() => addItem(g.id)} disabled={!(newItemTexts[g.id]?.trim())} style={{ background: g.color }}><Plus size={12} /></button>
-              </div>
+                )}
+                <div className="shopping-items">
+                  {filteredItems.map(item => (
+                    <div key={item.id} className={`shopping-item ${item.done ? 'done' : ''}`}>
+                      <button className={`shopping-check ${item.done ? 'checked' : ''}`} style={{ borderColor: g.color, background: item.done ? g.color : 'transparent' }} onClick={() => toggleItem(g.id, item.id)}>{item.done && <Check size={10} />}</button>
+                      {editingItem === item.id ? (
+                        <input className="shopping-item-edit" value={item.text} onChange={e => updateItemText(g.id, item.id, e.target.value)} onBlur={() => setEditingItem(null)} onKeyDown={e => e.key === 'Enter' && setEditingItem(null)} autoFocus />
+                      ) : (
+                        <span className={`shopping-item-text ${item.done ? 'struck' : ''}`} onDoubleClick={() => setEditingItem(item.id)} title="Doble clic para editar">{item.text}</span>
+                      )}
+                      {item.category && <span className="shopping-item-cat">{item.category}</span>}
+                      <button className="shopping-item-editbtn" onClick={() => setEditingItem(editingItem === item.id ? null : item.id)} title="Editar ítem"><Edit3 size={11} /></button>
+                      <button className="shopping-item-delete" onClick={() => removeItem(g.id, item.id)}><X size={11} /></button>
+                    </div>
+                  ))}
+                </div>
+                <div className="shopping-add-item">
+                  <input placeholder="Agregar ítem (pegá varios separados por coma)..." value={newItemTexts[g.id] || ''} onChange={e => setNewItemTexts({ ...newItemTexts, [g.id]: e.target.value })} onKeyDown={e => e.key === 'Enter' && addItem(g.id)} onPaste={e => onPasteItems(g.id, e)} />
+                  <select className="shopping-item-cat-select" value={newItemCats[g.id] || ''} onChange={e => setNewItemCats({ ...newItemCats, [g.id]: e.target.value })}>
+                    <option value="">Sin categoría</option>
+                    {defaultCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <button onClick={() => addItem(g.id)} disabled={!(newItemTexts[g.id]?.trim())} style={{ background: g.color }}><Plus size={12} /></button>
+                </div>
+              </>)}
             </div>
           )
         })}
@@ -1018,7 +1059,9 @@ function WishlistTab() {
   const [newName, setNewName] = useState('')
   const [newCat, setNewCat] = useState('General')
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
   const cats = ['General', 'Tecnología', 'Ropa', 'Hogar', 'Juegos', 'Otros']
+  const toggleCat = (c: string) => setCollapsedCats(p => { const n = new Set(p); n.has(c) ? n.delete(c) : n.add(c); return n })
 
   const save = (w: WishItem[]) => { setItems(w); localStorage.setItem('nn-wishlist', JSON.stringify(w)) }
   const addNames = (names: string[]) => {
@@ -1048,14 +1091,17 @@ function WishlistTab() {
         <select value={newCat} onChange={e => setNewCat(e.target.value)}>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>
         <button onClick={add} disabled={!newName.trim()}><Plus size={14} /></button>
       </div>
-      {cats.filter(c => grouped[c]?.length > 0).map(c => (
-        <div key={c} className="wishlist-group">
-          <div className="wishlist-mini-banner" style={{ background: `linear-gradient(135deg, ${wishCatColors[c]}22, ${wishCatColors[c]}0a)`, borderLeft: `3px solid ${wishCatColors[c]}` }}>
+      {cats.filter(c => grouped[c]?.length > 0).map(c => {
+        const catCollapsed = collapsedCats.has(c)
+        return (
+        <div key={c} className={`wishlist-group ${catCollapsed ? 'collapsed' : ''}`}>
+          <div className="wishlist-mini-banner" style={{ background: `linear-gradient(135deg, ${wishCatColors[c]}22, ${wishCatColors[c]}0a)`, borderLeft: `3px solid ${wishCatColors[c]}` }} onClick={() => toggleCat(c)} title={catCollapsed ? 'Desplegar' : 'Contraer'}>
+            <button className="wishlist-banner-collapse" onClick={e => { e.stopPropagation(); toggleCat(c) }}>{catCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}</button>
             <span className="wishlist-banner-dot" style={{ background: wishCatColors[c] }} />
             <span className="wishlist-banner-name">{c}</span>
             <span className="wishlist-banner-count">{grouped[c].length}</span>
           </div>
-          {grouped[c].map(item => (
+          {!catCollapsed && grouped[c].map(item => (
             <div key={item.id} className={`wishlist-item ${item.done ? 'done' : ''}`}>
               <button className={`shopping-check ${item.done ? 'checked' : ''}`} style={{ borderColor: wishCatColors[c], background: item.done ? wishCatColors[c] : 'transparent' }} onClick={() => toggle(item.id)}>{item.done && <Check size={10} />}</button>
               {editingId === item.id ? (
@@ -1070,7 +1116,7 @@ function WishlistTab() {
             </div>
           ))}
         </div>
-      ))}
+      )})}
       {items.length === 0 && <div className="shopping-empty"><ShoppingBag size={28} /><p>Sin artículos en la lista de deseos</p></div>}
     </div>
   )
