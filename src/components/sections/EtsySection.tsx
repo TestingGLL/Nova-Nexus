@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, RotateCcw, Copy, Minus } from 'lucide-react'
+import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, RotateCcw, Copy, Minus, Languages, Hash, Lightbulb } from 'lucide-react'
 import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
 import ColorInput from '../ColorInput'
@@ -82,6 +82,22 @@ function migrateCreaciones(s: any): { creaciones: PromptPanel[]; creacionGroups:
   })
   return { creaciones, creacionGroups: groups, creacionTags: tags }
 }
+// SEO: paneles → subgrupos → tags. El formato define cómo se separan las palabras
+// DENTRO de cada keyword; los tags se guardan crudos y se formatean al mostrar/copiar.
+type SeoFormat = 1 | 2 | 3   // 1: palabra_palabra · 2: palabra palabra · 3: palabrapalabra
+type SeoCase = 'lower' | 'upper' | 'sentence'
+interface SeoGroup { id: string; name: string; format: SeoFormat; textCase: SeoCase; tags: string[] }
+interface SeoPanel { id: string; name: string; groups: SeoGroup[] }
+function seoWords(raw: string): string[] { return (raw || '').trim().split(/[_\s-]+/).filter(Boolean) }
+function formatTag(raw: string, format: SeoFormat, textCase: SeoCase): string {
+  const words = seoWords(raw).map(w => w.toLowerCase())
+  const sep = format === 1 ? '_' : format === 3 ? '' : ' '
+  let out = words.join(sep)
+  if (textCase === 'upper') out = out.toUpperCase()
+  else if (textCase === 'sentence') out = out.charAt(0).toUpperCase() + out.slice(1)
+  return out
+}
+
 interface WordGroup { name: string; words: string[] }
 function loadWordGroups(): WordGroup[] { try { const s = localStorage.getItem('nn-prompt-groups'); return s ? JSON.parse(s) : [] } catch { return [] } }
 interface IncomeEntry { id: string; amount: number; date: string; note: string }
@@ -98,6 +114,7 @@ interface StoreData {
   presets?: PresetMsg[]; presetGroups?: PresetGroup[]
   creacionGroups?: CreacionGroup[]; creacionTags?: string[]
   generador?: PromptPanel[]; generadorGroups?: CreacionGroup[]; generadorTags?: string[]
+  seo?: SeoPanel[]; ideas?: string
 }
 
 const defaultStores: StoreData[] = [
@@ -1421,6 +1438,18 @@ const COUNTRIES: { name: string; flag: string }[] = [
   { name: 'Suecia', flag: '🇸🇪' }, { name: 'Suiza', flag: '🇨🇭' }, { name: 'Otro', flag: '🌍' },
 ]
 const flagOf = (name: string) => COUNTRIES.find(c => c.name === name)?.flag || '🌍'
+const COUNTRY_EN: Record<string, string> = {
+  'Alemania': 'Germany', 'Arabia Saudita': 'Saudi Arabia', 'Argentina': 'Argentina', 'Australia': 'Australia',
+  'Austria': 'Austria', 'Barbados': 'Barbados', 'Bélgica': 'Belgium', 'Brasil': 'Brazil', 'Canadá': 'Canada',
+  'Corea del Sur': 'South Korea', 'Dinamarca': 'Denmark', 'España': 'Spain', 'Estados Unidos': 'United States',
+  'Filipinas': 'Philippines', 'Finlandia': 'Finland', 'Francia': 'France', 'Italia': 'Italy', 'Japón': 'Japan',
+  'México': 'Mexico', 'Nueva Zelanda': 'New Zealand', 'Países Bajos': 'Netherlands', 'Polonia': 'Poland',
+  'Reino Unido': 'United Kingdom', 'Suecia': 'Sweden', 'Suiza': 'Switzerland', 'Otro': 'Other', 'Sin país': 'No country',
+}
+const countryEn = (name: string) => COUNTRY_EN[name] || name
+// "Otro" / "Sin país" siempre al final, sin importar el criterio de orden.
+const isOtherCountry = (n: string) => n === 'Otro' || n === 'Sin país'
+const byCountrySort = (a: string, b: string) => (isOtherCountry(a) ? 1 : 0) - (isOtherCountry(b) ? 1 : 0) || byName(a, b)
 const GENDERS = ['Femenino', 'Masculino', 'Desconocido']
 const normGender = (g: string) => (g === 'Otro' ? 'Desconocido' : g)
 const genderColor = (g: string) => { const n = normGender(g); return n === 'Femenino' ? '#ec4899' : n === 'Masculino' ? '#38bdf8' : '#9ca3af' }
@@ -1461,11 +1490,11 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const groupName = (id?: string) => groups.find(g => g.id === id)?.name || '—'
 
   // Dashboard aggregates.
-  const byCountry = Array.from(clients.reduce((m, c) => m.set(c.country, (m.get(c.country) || 0) + 1), new Map<string, number>())).sort((a, b) => b[1] - a[1])
+  const byCountry = Array.from(clients.reduce((m, c) => m.set(c.country, (m.get(c.country) || 0) + 1), new Map<string, number>())).sort((a, b) => (isOtherCountry(a[0]) ? 1 : 0) - (isOtherCountry(b[0]) ? 1 : 0) || b[1] - a[1])
   const byGender = GENDERS.map(g => [g, clients.filter(c => normGender(c.gender) === g).length] as [string, number]).filter(x => x[1] > 0)
   const recurringCount = clients.filter(c => c.recurring).length
   // Filtros ordenados alfabéticamente (los países/grupos que se ofrecen para filtrar).
-  const countriesAlpha = Array.from(new Set(clients.map(c => c.country))).sort((a, b) => byName(a, b))
+  const countriesAlpha = Array.from(new Set(clients.map(c => c.country))).sort(byCountrySort)
   const groupsAlpha = [...groups].sort((a, b) => byName(a.name, b.name))
   const gendersAlpha = [...GENDERS].sort((a, b) => byName(a, b))
 
@@ -1684,7 +1713,9 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
     )
   }
 
-  const ungrouped = presets.filter(m => !m.groupId || !pgroups.some(g => g.id === m.groupId))
+  // Mensajes ordenados alfabéticamente por el título en inglés (fallback al español).
+  const sortMsgs = (arr: PresetMsg[]) => [...arr].sort((a, b) => byName(a.titleEn || a.titleEs, b.titleEn || b.titleEs))
+  const ungrouped = sortMsgs(presets.filter(m => !m.groupId || !pgroups.some(g => g.id === m.groupId)))
   return (
     <div className="predeterminadas-tab">
       <div className="preset-toolbar">
@@ -1695,7 +1726,7 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
       {pgroups.map(g => {
         const gColor = g.color || DEFAULT_GROUP_COLOR
         const gCollapsed = collapsedGroups.has(g.id)
-        const gMsgs = presets.filter(m => m.groupId === g.id)
+        const gMsgs = sortMsgs(presets.filter(m => m.groupId === g.id))
         return (
         <div key={g.id} className="preset-group card">
           <div className="preset-group-head" style={{ background: `linear-gradient(135deg, ${gColor}, ${gColor}cc)` }}>
@@ -1711,6 +1742,114 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
         )
       })}
       {ungrouped.length > 0 && <div className="preset-ungrouped">{pgroups.length > 0 && <span className="preset-ungrouped-label">Sin grupo</span>}{ungrouped.map(renderMsg)}</div>}
+    </div>
+  )
+}
+
+// ============ IDEAS TAB ============
+function IdeasTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
+  return (
+    <div className="ideas-tab">
+      <div className="ideas-head"><Lightbulb size={16} /> <span>Ideas de {store.name}</span></div>
+      <RichTextEditor html={store.ideas || ''} onChange={h => onUpdate({ ...store, ideas: h })} docKey={store.id + '-ideas'} placeholder="Anotá ideas para esta tienda..." minHeight={360} />
+    </div>
+  )
+}
+
+// ============ SEO TAB ============
+function SeoTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData) => void }) {
+  const panels = store.seo || []
+  const [newTag, setNewTag] = useState<Record<string, string>>({})
+  const [copied, setCopied] = useState<string | null>(null)
+  const [editingTag, setEditingTag] = useState<string | null>(null)
+  const [editTagVal, setEditTagVal] = useState('')
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [showNewPanel, setShowNewPanel] = useState(false)
+  const [newPanelName, setNewPanelName] = useState('')
+  const confirm = useConfirm()
+
+  const save = (p: SeoPanel[]) => onUpdate({ ...store, seo: p })
+  const mapPanel = (pid: string, fn: (p: SeoPanel) => SeoPanel) => save(panels.map(p => p.id === pid ? fn(p) : p))
+  const mapGroup = (pid: string, gid: string, fn: (g: SeoGroup) => SeoGroup) => mapPanel(pid, p => ({ ...p, groups: p.groups.map(g => g.id === gid ? fn(g) : g) }))
+  const setGroup = (pid: string, gid: string, u: Partial<SeoGroup>) => mapGroup(pid, gid, g => ({ ...g, ...u }))
+
+  const addPanel = () => { save([...panels, { id: 'sp-' + Date.now(), name: newPanelName.trim() || 'Nuevo panel', groups: [] }]); setNewPanelName(''); setShowNewPanel(false) }
+  const removePanel = async (pid: string) => { const p = panels.find(x => x.id === pid); if (!await confirm({ title: 'Eliminar panel', message: `¿Eliminar el panel «${p?.name || ''}» y todos sus subgrupos?`, confirmLabel: 'Eliminar' })) return; save(panels.filter(p => p.id !== pid)) }
+  const addGroup = (pid: string) => mapPanel(pid, p => ({ ...p, groups: [...p.groups, { id: 'sg-' + Date.now(), name: 'Nuevo subgrupo', format: 1, textCase: 'lower', tags: [] }] }))
+  const removeGroup = async (pid: string, gid: string) => { if (!await confirm({ title: 'Eliminar subgrupo', message: '¿Eliminar este subgrupo y sus tags?' })) return; mapPanel(pid, p => ({ ...p, groups: p.groups.filter(g => g.id !== gid) })) }
+
+  const addTags = (pid: string, gid: string, raw: string) => {
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean)
+    if (!parts.length) return
+    mapGroup(pid, gid, g => ({ ...g, tags: [...g.tags, ...parts] }))
+    setNewTag(s => ({ ...s, [gid]: '' }))
+  }
+  const removeTag = (pid: string, gid: string, idx: number) => mapGroup(pid, gid, g => ({ ...g, tags: g.tags.filter((_, i) => i !== idx) }))
+  const commitEditTag = (pid: string, gid: string, idx: number, prev: string) => { mapGroup(pid, gid, g => ({ ...g, tags: g.tags.map((t, i) => i === idx ? (editTagVal.trim() || prev) : t) })); setEditingTag(null) }
+  const copyGroup = (g: SeoGroup) => { navigator.clipboard.writeText(g.tags.map(t => formatTag(t, g.format, g.textCase)).join(', ')); setCopied(g.id); setTimeout(() => setCopied(null), 1500) }
+  const toggle = (id: string) => setCollapsed(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  return (
+    <div className="seo-tab">
+      <div className="seo-toolbar">
+        <button className="articles-add-btn-big" onClick={() => setShowNewPanel(s => !s)}><Plus size={14} /> Nuevo panel</button>
+      </div>
+      {showNewPanel && (<div className="card seo-new-panel"><input value={newPanelName} onChange={e => setNewPanelName(e.target.value)} placeholder="Nombre del panel..." autoFocus onKeyDown={e => e.key === 'Enter' && addPanel()} /><button className="modal-submit" onClick={addPanel}>Crear</button></div>)}
+      {panels.length === 0 && !showNewPanel && <div className="articles-empty"><Hash size={24} /><p>Sin paneles de SEO. Creá el primero con «Nuevo panel».</p></div>}
+      {panels.map(panel => {
+        const pOpen = !collapsed.has(panel.id)
+        return (
+        <div key={panel.id} className="seo-panel card">
+          <div className="seo-panel-head">
+            <button className="seo-collapse" onClick={() => toggle(panel.id)} title={pOpen ? 'Minimizar' : 'Expandir'}>{pOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
+            <input className="seo-panel-name" value={panel.name} onChange={e => mapPanel(panel.id, p => ({ ...p, name: e.target.value }))} placeholder="Nombre del panel..." />
+            <span className="seo-panel-count">{panel.groups.length} subgrupos</span>
+            <button className="preset-icon-btn" onClick={() => addGroup(panel.id)} title="Agregar subgrupo"><Plus size={14} /></button>
+            <button className="preset-icon-btn del" onClick={() => removePanel(panel.id)} title="Eliminar panel"><Trash2 size={14} /></button>
+          </div>
+          {pOpen && (
+            <div className="seo-panel-body">
+              {panel.groups.length === 0 && <p className="article-group-empty">Sin subgrupos. Agregá uno con el botón +.</p>}
+              {panel.groups.map(g => (
+                <div key={g.id} className="seo-group">
+                  <div className="seo-group-head">
+                    <input className="seo-group-name" value={g.name} onChange={e => setGroup(panel.id, g.id, { name: e.target.value })} placeholder="Subgrupo..." />
+                    <span className="seo-group-count" title="Cantidad de tags"><Hash size={11} /> {g.tags.length}</span>
+                    <select className="seo-fmt" value={g.format} onChange={e => setGroup(panel.id, g.id, { format: Number(e.target.value) as SeoFormat })} title="Formato de separación de palabras clave">
+                      <option value={1}>palabra_palabra</option>
+                      <option value={2}>palabra palabra</option>
+                      <option value={3}>palabrapalabra</option>
+                    </select>
+                    <select className="seo-case" value={g.textCase} onChange={e => setGroup(panel.id, g.id, { textCase: e.target.value as SeoCase })} title="Mayúsculas / minúsculas">
+                      <option value="lower">minúsculas</option>
+                      <option value="upper">MAYÚSCULAS</option>
+                      <option value="sentence">Tipo oración</option>
+                    </select>
+                    <button className="preset-copy" onClick={() => copyGroup(g)} title="Copiar keywords (separadas por coma)">{copied === g.id ? <Check size={14} /> : <Copy size={14} />}</button>
+                    <button className="preset-icon-btn del" onClick={() => removeGroup(panel.id, g.id)} title="Eliminar subgrupo"><Trash2 size={13} /></button>
+                  </div>
+                  <div className="seo-tags">
+                    {g.tags.map((t, i) => {
+                      const key = `${g.id}:${i}`
+                      return editingTag === key ? (
+                        <input key={key} className="seo-tag-edit" value={editTagVal} autoFocus onChange={e => setEditTagVal(e.target.value)} onBlur={() => commitEditTag(panel.id, g.id, i, t)} onKeyDown={e => { if (e.key === 'Enter') commitEditTag(panel.id, g.id, i, t) }} />
+                      ) : (
+                        <span key={key} className="seo-tag" onDoubleClick={() => { setEditingTag(key); setEditTagVal(t) }} title="Doble clic para editar">
+                          {formatTag(t, g.format, g.textCase)}
+                          <button className="seo-tag-del" onClick={() => removeTag(panel.id, g.id, i)}><X size={10} /></button>
+                        </span>
+                      )
+                    })}
+                    {g.tags.length === 0 && <span className="seo-tags-empty">Sin tags todavía.</span>}
+                  </div>
+                  <input className="seo-tag-input" value={newTag[g.id] || ''} onChange={e => setNewTag(s => ({ ...s, [g.id]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTags(panel.id, g.id, newTag[g.id] || '') } }} onBlur={() => (newTag[g.id] || '').trim() && addTags(panel.id, g.id, newTag[g.id] || '')} placeholder="Escribí una keyword y Enter (o coma) para agregarla..." />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        )
+      })}
     </div>
   )
 }
@@ -1769,7 +1908,7 @@ function BannerParticles() {
 function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () => void; onUpdate: (store: StoreData) => void }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(store)
-  const [storeTab, setStoreTab] = useState<'informacion' | 'articles' | 'launches' | 'creaciones' | 'generador' | 'planificacion' | 'predeterminadas' | 'clientes'>('informacion')
+  const [storeTab, setStoreTab] = useState<'informacion' | 'articles' | 'launches' | 'creaciones' | 'generador' | 'planificacion' | 'predeterminadas' | 'seo' | 'ideas' | 'clientes'>('informacion')
   const [showReviews, setShowReviews] = useState(false)
   const [showCountries, setShowCountries] = useState(false)
   const [editStat, setEditStat] = useState<null | 'sales' | 'products'>(null)
@@ -1785,7 +1924,8 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
   // Clientes por país (orden alfabético) para el dato "Países" del dashboard.
   const countryCounts = Array.from((store.clientList || []).reduce((m, c) => {
     const k = (c.country || '').trim() || 'Sin país'; return m.set(k, (m.get(k) || 0) + 1)
-  }, new Map<string, number>())).sort((a, b) => byName(a[0], b[0]))
+  }, new Map<string, number>())).sort((a, b) => byCountrySort(a[0], b[0]))
+  const [countriesEn, setCountriesEn] = useState(false)
 
   return (
     <div className="store-view">
@@ -1850,6 +1990,8 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
         <button className={storeTab === 'clientes' ? 'active' : ''} onClick={() => setStoreTab('clientes')}>Clientes ({(store.clientList || []).length})</button>
         <button className={storeTab === 'planificacion' ? 'active' : ''} onClick={() => setStoreTab('planificacion')}>Planificación</button>
         <button className={storeTab === 'predeterminadas' ? 'active' : ''} onClick={() => setStoreTab('predeterminadas')}>Predeterminadas</button>
+        <button className={storeTab === 'seo' ? 'active' : ''} onClick={() => setStoreTab('seo')}>SEO</button>
+        <button className={storeTab === 'ideas' ? 'active' : ''} onClick={() => setStoreTab('ideas')}>Ideas</button>
       </div>
 
       {storeTab === 'informacion' && (
@@ -1870,9 +2012,14 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
             </div>
             {showCountries && (
               <div className="store-countries-list">
+                {countryCounts.length > 0 && (
+                  <div className="store-countries-toolbar">
+                    <button className={`store-countries-translate ${countriesEn ? 'on' : ''}`} onClick={() => setCountriesEn(v => !v)} title="Traducir todos los países al inglés"><Languages size={13} /> {countriesEn ? 'Ver en español' : 'Traducir a inglés'}</button>
+                  </div>
+                )}
                 {countryCounts.length === 0
                   ? <p className="store-countries-empty">Sin clientes cargados. Agregalos en la pestaña «Clientes».</p>
-                  : countryCounts.map(([c, n]) => <div key={c} className="store-country-row"><span className="store-country-name">{flagOf(c)} {c}</span><span className="store-country-count">{n}</span></div>)}
+                  : countryCounts.map(([c, n]) => <div key={c} className="store-country-row"><span className="store-country-name">{flagOf(c)} {countriesEn ? countryEn(c) : c}</span><span className="store-country-count">{n}</span></div>)}
               </div>
             )}
           </div>
@@ -1887,6 +2034,8 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
       {storeTab === 'clientes' && <ClientesTab store={store} onUpdate={onUpdate} />}
       {storeTab === 'planificacion' && <PlanificacionTab />}
       {storeTab === 'predeterminadas' && <PredeterminadasTab store={store} onUpdate={onUpdate} />}
+      {storeTab === 'seo' && <SeoTab store={store} onUpdate={onUpdate} />}
+      {storeTab === 'ideas' && <IdeasTab store={store} onUpdate={onUpdate} />}
     </div>
   )
 }

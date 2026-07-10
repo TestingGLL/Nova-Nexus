@@ -1132,3 +1132,41 @@
 .preset-group-addmsg { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border: 1px solid rgba(255,255,255,0.5); background: rgba(0,0,0,0.18); color: #fff; border-radius: 7px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .preset-group-addmsg:hover { background: rgba(0,0,0,0.32); }
 .preset-msg.collapsed { opacity: 0.92; }
+
+/* ============ COUNTRIES TRANSLATE (Información) ============ */
+.store-countries-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.store-countries-translate { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid var(--border); background: none; color: var(--text-secondary); border-radius: 7px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.store-countries-translate:hover { border-color: var(--accent); color: var(--accent); }
+.store-countries-translate.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+/* ============ IDEAS TAB ============ */
+.ideas-tab { display: flex; flex-direction: column; gap: 12px; }
+.ideas-head { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--text-primary); }
+
+/* ============ SEO TAB ============ */
+.seo-tab { display: flex; flex-direction: column; gap: 12px; }
+.seo-toolbar { display: flex; gap: 8px; }
+.seo-new-panel { padding: 14px !important; display: flex; gap: 8px; }
+.seo-new-panel input { flex: 1; padding: 8px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); font-family: inherit; outline: none; }
+.seo-panel { padding: 0 !important; overflow: hidden; }
+.seo-panel-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.seo-collapse { display: flex; padding: 2px; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-radius: 6px; }
+.seo-collapse:hover { background: var(--bg-hover); color: var(--text-primary); }
+.seo-panel-name { flex: 1; min-width: 0; border: none; background: none; font-size: 15px; font-weight: 700; color: var(--text-primary); outline: none; padding: 3px 6px; border-radius: 6px; font-family: inherit; }
+.seo-panel-name:focus { background: var(--bg-hover); }
+.seo-panel-count { font-size: 11px; color: var(--text-secondary); background: var(--bg-active); padding: 2px 8px; border-radius: 8px; white-space: nowrap; }
+.seo-panel-body { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
+.seo-group { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.seo-group-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.seo-group-name { flex: 1; min-width: 100px; border: none; background: none; font-size: 13px; font-weight: 600; color: var(--text-primary); outline: none; padding: 3px 6px; border-radius: 6px; font-family: inherit; }
+.seo-group-name:focus { background: var(--bg-hover); }
+.seo-group-count { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.seo-fmt, .seo-case { padding: 5px 8px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 7px; font-size: 11px; color: var(--text-primary); font-family: inherit; outline: none; cursor: pointer; }
+.seo-tags { display: flex; flex-wrap: wrap; gap: 6px; min-height: 8px; }
+.seo-tag { display: inline-flex; align-items: center; gap: 5px; padding: 4px 6px 4px 10px; background: var(--bg-hover); border: 1px solid var(--border); border-radius: 999px; font-size: 12px; color: var(--text-primary); }
+.seo-tag-del { display: flex; padding: 1px; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-radius: 50%; }
+.seo-tag-del:hover { background: rgba(239,68,68,0.15); color: #ef4444; }
+.seo-tag-edit { padding: 4px 10px; border: 1px solid var(--accent); background: var(--bg-primary); border-radius: 999px; font-size: 12px; color: var(--text-primary); outline: none; font-family: inherit; width: 140px; }
+.seo-tags-empty { font-size: 11px; color: var(--text-secondary); opacity: 0.7; }
+.seo-tag-input { padding: 7px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 12px; color: var(--text-primary); font-family: inherit; outline: none; }
+.seo-tag-input:focus { border-color: var(--accent); }
