@@ -207,8 +207,6 @@ function ExercisePanel() {
     saveWeek(next)
   }
 
-  const totalSets = (r: Routine) => r.exercises.reduce((a, e) => a + e.sets, 0)
-
   // Detail / edit view for a routine
   const routine = list.find(r => r.id === activeRoutine)
   if (routine) {
@@ -307,21 +305,28 @@ function ExercisePanel() {
 
   const renderGrid = () => (
     <div className="exercise-grid-lg">
-      {list.map(r => (
+      {list.map(r => {
+        const wks = weeksOf(r)
+        const weekCount = wks.filter(w => w.length > 0).length || 1
+        const exTotal = wks.reduce((a, w) => a + w.length, 0)
+        const setTotal = wks.reduce((a, w) => a + w.reduce((s, e) => s + e.sets, 0), 0)
+        return (
         <div key={r.id} className="routine-card" role="button" tabIndex={0} onClick={() => setActiveRoutine(r.id)}>
           <button className="routine-card-del" title="Eliminar panel" onClick={e => { e.stopPropagation(); askRemoveRoutine(r.id) }}><Trash2 size={13} /></button>
           <div className={`routine-banner ${r.banner ? 'has-img' : ''} ${!r.color ? 'no-color' : ''}`} style={bannerStyle(r)}>
             {r.name.trim() && <span className="routine-name">{r.name}</span>}
           </div>
           <div className="routine-stats">
-            <span><strong>{r.exercises.length}</strong> ejercicios</span>
-            <span><strong>{totalSets(r)}</strong> series</span>
+            <div className="routine-stat highlight"><span className="routine-stat-num">{weekCount}</span><span className="routine-stat-lbl">{weekCount === 1 ? 'semana' : 'semanas'}</span></div>
+            <div className="routine-stat highlight"><span className="routine-stat-num">{exTotal}</span><span className="routine-stat-lbl">ejercicios</span></div>
+            <div className="routine-stat"><span className="routine-stat-num">{setTotal}</span><span className="routine-stat-lbl">series</span></div>
           </div>
           {r.exercises.length > 0 && (
             <div className="routine-preview">{r.exercises.slice(0, 3).map(e => e.name).join(' · ')}{r.exercises.length > 3 ? '…' : ''}</div>
           )}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 
