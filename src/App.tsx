@@ -16,7 +16,7 @@ import './App.css'
 
 export type Section = 'inicio' | 'personal' | 'finanzas' | 'etsy' | 'proyectos' | 'software' | 'edicion' | 'notas' | 'extras' | 'alertas' | 'configuracion'
 
-export const APP_VERSION = '1.01.14'
+export const APP_VERSION = '1.01.15'
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)

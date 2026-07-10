@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle } from 'lucide-react'
+import type { CSSProperties } from 'react'
+import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, Flame, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle, Settings, ClipboardList } from 'lucide-react'
 import { addNotification } from '../../lib/notifications'
 import { useWater, WATER_GOAL } from '../../lib/water'
 import ColorInput from '../ColorInput'
@@ -70,9 +71,39 @@ function openLink(url?: string) {
   const u = /^https?:\/\//i.test(url) ? url : `https://${url}`
   try { if (window.electronAPI?.openExternal) window.electronAPI.openExternal(u); else window.open(u, '_blank') } catch { window.open(u, '_blank') }
 }
+// Extract the 11-char YouTube id from watch?v=, youtu.be/ or /shorts/ URLs.
+function youtubeId(url?: string): string | null {
+  if (!url) return null
+  const m = url.match(/(?:youtu\.be\/|watch\?v=|\/shorts\/|\/embed\/|&v=)([A-Za-z0-9_-]{11})/)
+  return m ? m[1] : null
+}
+function youtubeThumb(url?: string): string | null {
+  const id = youtubeId(url)
+  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null
+}
+// A "por tiempo" value is stored as seconds; 60 → "1 min", 120 → "2 min", <60 → "Ns".
+function formatExerciseTime(raw?: string): string {
+  const n = parseInt(String(raw ?? '').replace(/\D/g, ''), 10)
+  if (!n || n <= 0) return ''
+  if (n < 60) return `${n}s`
+  const m = Math.floor(n / 60), s = n % 60
+  return s === 0 ? `${m} min` : `${m} min ${s}s`
+}
+// Background for a routine banner. Panels may have no color and just show the image.
+const NEUTRAL_BANNER = 'linear-gradient(135deg, #64748b, #475569)'
+function bannerStyle(r: Routine): CSSProperties {
+  if (r.banner) {
+    return {
+      backgroundImage: r.color
+        ? `linear-gradient(135deg, ${r.color}55, ${r.color}aa), url(${r.banner})`
+        : `url(${r.banner})`,
+      backgroundSize: 'cover', backgroundPosition: 'center',
+    }
+  }
+  return { background: r.color ? `linear-gradient(135deg, ${r.color}, ${r.color}99)` : NEUTRAL_BANNER }
+}
 
-const EMOJI_OPTIONS = ['💪', '🏋️', '🤸', '🦵', '🧘', '🔥', '⚡', '🏃', '🤾', '🚴', '🧗', '🥊']
-const ROUTINE_COLORS = ['#ef4444', '#3b82f6', '#8b5cf6', '#f97316', '#22c55e', '#06b6d4', '#eab308', '#ec4899']
+const ROUTINE_COLORS =['#ef4444', '#3b82f6', '#8b5cf6', '#f97316', '#22c55e', '#06b6d4', '#eab308', '#ec4899']
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 const defaultRoutines: Routine[] = [
@@ -113,8 +144,12 @@ function ExercisePanel() {
   const [newPanelName, setNewPanelName] = useState('')
   const [weekPlan, setWeekPlan] = useState<Record<string, string | PlanEntry>>(() => { try { const s = localStorage.getItem('nn-week-routine'); return s ? JSON.parse(s) : {} } catch { return {} } })
   const [activeWeek] = useState<number>(() => { try { return Number(localStorage.getItem('nn-active-week')) || 0 } catch { return 0 } })
+  const [bannerConfig, setBannerConfig] = useState(false)
+  const [expandedEx, setExpandedEx] = useState<Set<number>>(new Set())
+  const [quickWeek, setQuickWeek] = useState(0)
   const bannerInputRef = useRef<HTMLInputElement>(null)
   const confirm = useConfirm()
+  const toggleExpand = (i: number) => setExpandedEx(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n })
 
   // Deep-link from Inicio's "Rutina de hoy" panel: open today's routine directly.
   useEffect(() => {
@@ -157,9 +192,18 @@ function ExercisePanel() {
   const askRemoveRoutine = async (id: string) => { const r = list.find(x => x.id === id); if (!await confirm({ title: 'Eliminar panel', message: `¿Eliminar «${r?.name || 'este panel'}» y sus ejercicios?`, confirmLabel: 'Eliminar' })) return; removeRoutine(id) }
 
   const addPanel = () => {
-    if (!newPanelName.trim()) return
-    const panel: Routine = { id: 'rt-' + Date.now(), name: newPanelName.trim(), description: '', exercises: [], color: ROUTINE_COLORS[list.length % ROUTINE_COLORS.length], emoji: '💪' }
+    const panel: Routine = { id: 'rt-' + Date.now(), name: newPanelName.trim(), description: '', exercises: [], color: ROUTINE_COLORS[list.length % ROUTINE_COLORS.length], emoji: '' }
     saveList([...list, panel]); setNewPanelName(''); setShowNewPanel(false)
+  }
+
+  // "Asignación rápida": set the same week on every day that has a routine assigned.
+  const applyQuickWeek = () => {
+    const next: Record<string, string | PlanEntry> = { ...weekPlan }
+    WEEKDAYS.forEach(d => {
+      const entry = parsePlanEntry(weekPlan[d], activeWeek)
+      if (entry?.rid) next[d] = { rid: entry.rid, week: quickWeek }
+    })
+    saveWeek(next)
   }
 
   const totalSets = (r: Routine) => r.exercises.reduce((a, e) => a + e.sets, 0)
@@ -170,28 +214,28 @@ function ExercisePanel() {
     return (
       <div className="card exercise-card exercise-detail">
         <button className="exercise-back" onClick={() => setActiveRoutine(null)}><ArrowLeft size={16} /> Volver</button>
-        <div className={`exercise-banner-lg ${routine.banner ? 'has-img' : ''}`} style={routine.banner
-          ? { backgroundImage: `linear-gradient(135deg, ${routine.color}55, ${routine.color}aa), url(${routine.banner})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-          : { background: `linear-gradient(135deg, ${routine.color}, ${routine.color}99)` }}>
-          <div className="exercise-banner-actions">
-            <input ref={bannerInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { onBannerFile(routine.id, e.target.files?.[0]); e.target.value = '' }} />
-            <button className="exercise-banner-btn" onClick={() => bannerInputRef.current?.click()} title="Subir un banner personalizado"><Plus size={13} /> {routine.banner ? 'Cambiar banner' : 'Banner'}</button>
-            {routine.banner && <button className="exercise-banner-btn" onClick={() => updateRoutine(routine.id, { banner: undefined })} title="Quitar banner"><X size={13} /> Quitar</button>}
-          </div>
-          <div className="exercise-banner-emoji-pick">
-            <span className="exercise-banner-emoji">{routine.emoji}</span>
-            <div className="emoji-picker-pop">
-              {EMOJI_OPTIONS.map(em => <button key={em} onClick={() => updateRoutine(routine.id, { emoji: em })}>{em}</button>)}
+        <div className={`exercise-banner-lg ${routine.banner ? 'has-img' : ''} ${!routine.color ? 'no-color' : ''}`} style={bannerStyle(routine)}>
+          <input ref={bannerInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { onBannerFile(routine.id, e.target.files?.[0]); e.target.value = '' }} />
+          <button className="exercise-banner-gear" onClick={() => setBannerConfig(v => !v)} title="Configurar banner"><Settings size={16} /></button>
+          {bannerConfig && (
+            <div className="exercise-banner-config" onClick={e => e.stopPropagation()}>
+              <span className="ebc-title">Configuración del banner</span>
+              <div className="ebc-row">
+                <button className="exercise-banner-btn" onClick={() => bannerInputRef.current?.click()}><Plus size={13} /> {routine.banner ? 'Cambiar imagen' : 'Subir imagen'}</button>
+                {routine.banner && <button className="exercise-banner-btn" onClick={() => updateRoutine(routine.id, { banner: undefined })}><X size={13} /> Quitar imagen</button>}
+              </div>
+              <span className="ebc-label">Color</span>
+              <div className="exercise-color-row">
+                <button className={`exercise-color-dot none ${!routine.color ? 'active' : ''}`} onClick={() => updateRoutine(routine.id, { color: '' })} title="Sin color"><X size={11} /></button>
+                {ROUTINE_COLORS.map(c => <button key={c} className={`exercise-color-dot ${routine.color === c ? 'active' : ''}`} style={{ background: c }} onClick={() => updateRoutine(routine.id, { color: c })} />)}
+              </div>
             </div>
-          </div>
-          <input className="exercise-banner-name-input" value={routine.name} onChange={e => updateRoutine(routine.id, { name: e.target.value })} />
+          )}
+          <input className="exercise-banner-name-input" value={routine.name} placeholder="Nombre del panel (opcional)" onChange={e => updateRoutine(routine.id, { name: e.target.value })} />
           <div className="exercise-banner-meta">
             <span>{exercisesOf(routine, week).length} ejercicios</span>
             <span>·</span>
             <span>{exercisesOf(routine, week).reduce((a, e) => a + e.sets, 0)} series</span>
-          </div>
-          <div className="exercise-color-row">
-            {ROUTINE_COLORS.map(c => <button key={c} className={`exercise-color-dot ${routine.color === c ? 'active' : ''}`} style={{ background: c }} onClick={() => updateRoutine(routine.id, { color: c })} />)}
           </div>
         </div>
         <div className="week-subtabs">
@@ -202,9 +246,19 @@ function ExercisePanel() {
         <div className="exercise-edit-list">
           {exercisesOf(routine, week).map((e, i) => {
             const mode = e.mode || 'reps'
+            const open = expandedEx.has(i)
+            const thumb = youtubeThumb(e.youtube)
+            const hasLink = !!e.youtube?.trim()
             return (
             <div key={i} className="exercise-edit-item">
-              <input className="ex-name" value={e.name} onChange={ev => updateExercise(routine.id, i, { name: ev.target.value })} />
+              <div className="ex-head">
+                <input className="ex-name" value={e.name} onChange={ev => updateExercise(routine.id, i, { name: ev.target.value })} />
+                <div className="ex-play-wrap">
+                  <button className={`ex-play-btn ${hasLink ? '' : 'disabled'}`} onClick={() => hasLink && openLink(e.youtube)} disabled={!hasLink} title={hasLink ? 'Ver en YouTube' : 'Sin link de YouTube'}><Play size={15} fill="currentColor" /></button>
+                  {thumb && <img className="ex-play-thumb" src={thumb} alt="" loading="lazy" />}
+                </div>
+                <button className="ex-del" onClick={() => removeExercise(routine.id, i)} title="Eliminar ejercicio"><X size={14} /></button>
+              </div>
               <div className="ex-fields">
                 <label>Series<input type="number" value={e.sets} onChange={ev => updateExercise(routine.id, i, { sets: Number(ev.target.value) })} /></label>
                 <div className="ex-mode-toggle">
@@ -212,16 +266,21 @@ function ExercisePanel() {
                   <button className={mode === 'time' ? 'active' : ''} onClick={() => updateExercise(routine.id, i, { mode: 'time' })}>Tiempo</button>
                 </div>
                 {mode === 'time'
-                  ? <label>Tiempo<input value={e.time || ''} placeholder="30s" onChange={ev => updateExercise(routine.id, i, { time: ev.target.value })} /></label>
+                  ? <label>Tiempo (seg)<input type="number" value={e.time || ''} placeholder="60" onChange={ev => updateExercise(routine.id, i, { time: ev.target.value })} />{formatExerciseTime(e.time) && <span className="ex-time-hint">{formatExerciseTime(e.time)}</span>}</label>
                   : <label>Reps<input value={e.reps} onChange={ev => updateExercise(routine.id, i, { reps: ev.target.value })} /></label>}
-                <button className="ex-del" onClick={() => removeExercise(routine.id, i)}><X size={12} /></button>
               </div>
-              <div className="ex-youtube-row">
-                <Play size={14} className="ex-youtube-icon" />
-                <input className="ex-youtube" value={e.youtube || ''} placeholder="Link de YouTube (opcional)..." onChange={ev => updateExercise(routine.id, i, { youtube: ev.target.value })} />
-                {e.youtube?.trim() && <button className="ex-youtube-open" onClick={() => openLink(e.youtube)} title="Ver video"><Play size={13} /> Ver</button>}
-              </div>
-              <textarea className="ex-tip" value={e.tip} placeholder="Descripción o listado de tips (uno por línea)..." rows={2} onChange={ev => updateExercise(routine.id, i, { tip: ev.target.value })} />
+              <button className="ex-toggle-more" onClick={() => toggleExpand(i)}>
+                {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />} {open ? 'Ocultar' : 'Descripción y link'}
+              </button>
+              {open && (
+                <div className="ex-collapsible">
+                  <div className="ex-youtube-row">
+                    <Play size={14} className="ex-youtube-icon" />
+                    <input className="ex-youtube" value={e.youtube || ''} placeholder="Link de YouTube (opcional)..." onChange={ev => updateExercise(routine.id, i, { youtube: ev.target.value })} />
+                  </div>
+                  <textarea className="ex-tip" value={e.tip} placeholder="Descripción o listado de tips (uno por línea)..." rows={2} onChange={ev => updateExercise(routine.id, i, { tip: ev.target.value })} />
+                </div>
+              )}
             </div>
             )
           })}
@@ -237,11 +296,8 @@ function ExercisePanel() {
       {list.map(r => (
         <div key={r.id} className="routine-card" role="button" tabIndex={0} onClick={() => setActiveRoutine(r.id)}>
           <button className="routine-card-del" title="Eliminar panel" onClick={e => { e.stopPropagation(); askRemoveRoutine(r.id) }}><Trash2 size={13} /></button>
-          <div className={`routine-banner ${r.banner ? 'has-img' : ''}`} style={r.banner
-            ? { backgroundImage: `linear-gradient(135deg, ${r.color}55, ${r.color}aa), url(${r.banner})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-            : { background: `linear-gradient(135deg, ${r.color}, ${r.color}aa)` }}>
-            <span className="routine-emoji">{r.emoji}</span>
-            <span className="routine-name">{r.name}</span>
+          <div className={`routine-banner ${r.banner ? 'has-img' : ''} ${!r.color ? 'no-color' : ''}`} style={bannerStyle(r)}>
+            <span className="routine-name">{r.name || 'Sin nombre'}</span>
           </div>
           <div className="routine-stats">
             <span><strong>{r.exercises.length}</strong> ejercicios</span>
@@ -270,6 +326,13 @@ function ExercisePanel() {
             <div><span className="creador-banner-title">Creador de Rutinas</span><span className="creador-banner-sub">Asigná una rutina y su semana a cada día — se sincroniza con Inicio</span></div>
           </div>
           <span className="creador-label">Asigná una rutina y semana a cada día</span>
+          <div className="creador-quick-week">
+            <span className="cqw-label">Asignación rápida de semana</span>
+            <select value={quickWeek} onChange={e => setQuickWeek(Number(e.target.value))}>
+              {[0, 1, 2, 3].map(w => <option key={w} value={w}>Semana {w + 1}</option>)}
+            </select>
+            <button className="cqw-apply" onClick={applyQuickWeek} title="Aplicar esta semana a todos los días con rutina asignada"><CalendarClock size={13} /> Aplicar a todos</button>
+          </div>
           <div className="week-routine">
             {WEEKDAYS.map(d => {
               const entry = parsePlanEntry(weekPlan[d], activeWeek)
@@ -281,7 +344,7 @@ function ExercisePanel() {
                   <span className="week-day-name">{d}</span>
                   <select value={rid} onChange={e => saveWeek({ ...weekPlan, [d]: e.target.value ? { rid: e.target.value, week: 0 } : '' })} style={rid ? { borderColor: rt?.color } : undefined}>
                     <option value="">Descanso</option>
-                    {routines.map(r => <option key={r.id} value={r.id}>{r.emoji} {r.name}</option>)}
+                    {routines.map(r => <option key={r.id} value={r.id}>{r.name || 'Sin nombre'}</option>)}
                   </select>
                   {rid && (
                     <select className="week-day-week" value={wk} onChange={e => saveWeek({ ...weekPlan, [d]: { rid, week: Number(e.target.value) } })} style={{ borderColor: rt?.color }} title="Semana del panel">
@@ -299,8 +362,8 @@ function ExercisePanel() {
           <button className="custom-panel-new" onClick={() => setShowNewPanel(!showNewPanel)}><Plus size={14} /> Nueva rutina</button>
           {showNewPanel && (
             <div className="custom-panel-new-form">
-              <input value={newPanelName} onChange={e => setNewPanelName(e.target.value)} placeholder="Nombre de la rutina..." onKeyDown={e => e.key === 'Enter' && addPanel()} autoFocus />
-              <button onClick={addPanel} disabled={!newPanelName.trim()}>Crear</button>
+              <input value={newPanelName} onChange={e => setNewPanelName(e.target.value)} placeholder="Nombre de la rutina (opcional)..." onKeyDown={e => e.key === 'Enter' && addPanel()} autoFocus />
+              <button onClick={addPanel}>Crear</button>
             </div>
           )}
         </>
@@ -341,10 +404,16 @@ function isCardExpired(expiry: string): boolean {
   return expYear < curYear || (expYear === curYear && mm < curMonth)
 }
 
-// ---- Pedidos Ya: promociones por tarjeta ----
-interface PedidoPromo { id: string; cardId: string; days: number[]; discount: number; cap: number; freq: 'mensual' | 'semanal' | 'unica' }
+// ---- Promociones por tarjeta (Pedidos Ya / Rappi / Presencial) ----
+type PromoApp = 'pedidosya' | 'rappi' | 'presencial'
+interface PedidoPromo { id: string; cardId: string; days: number[]; discount: number; cap: number; freq: 'mensual' | 'semanal' | 'unica'; app?: PromoApp }
 const PY_DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const PY_FREQ: Record<PedidoPromo['freq'], string> = { mensual: 'Mensual', semanal: 'Semanal', unica: 'Única compra' }
+const PROMO_APPS: Record<PromoApp, { label: string; icon: string; color: string }> = {
+  pedidosya: { label: 'Pedidos Ya', icon: '🛵', color: '#d9021b' },
+  rappi: { label: 'Rappi', icon: '🛍️', color: '#ff6b1a' },
+  presencial: { label: 'Presencial', icon: '🏪', color: '#0ea5e9' },
+}
 function loadPromos(): PedidoPromo[] { try { const s = localStorage.getItem('nn-pedidosya'); return s ? JSON.parse(s) : [] } catch { return [] } }
 
 function PedidosYaTab({ cards }: { cards: CardData[] }) {
@@ -354,13 +423,14 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
   const [discount, setDiscount] = useState('')
   const [cap, setCap] = useState('')
   const [freq, setFreq] = useState<PedidoPromo['freq']>('mensual')
+  const [app, setApp] = useState<PromoApp>('pedidosya')
   const confirm = useConfirm()
 
   const save = (p: PedidoPromo[]) => { setPromos(p); localStorage.setItem('nn-pedidosya', JSON.stringify(p)) }
   const toggleDay = (d: number) => setDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d].sort((a, b) => a - b))
   const add = () => {
     if (!cardId || days.length === 0 || !discount) return
-    save([{ id: 'py-' + Date.now(), cardId, days, discount: Number(discount), cap: Number(cap) || 0, freq }, ...promos])
+    save([{ id: 'py-' + Date.now(), cardId, days, discount: Number(discount), cap: Number(cap) || 0, freq, app }, ...promos])
     setDays([]); setDiscount(''); setCap('')
   }
   const remove = async (id: string) => {
@@ -375,8 +445,9 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
   return (
     <div className="pedidosya-tab">
       <div className="card pedidosya-add">
-        <div className="card-title">🛵 Nueva promoción</div>
+        <div className="card-title">🏷️ Nueva promoción</div>
         <div className="py-add-grid">
+          <label className="py-field"><span>Aplicación</span><select value={app} onChange={e => setApp(e.target.value as PromoApp)}>{(Object.keys(PROMO_APPS) as PromoApp[]).map(a => <option key={a} value={a}>{PROMO_APPS[a].icon} {PROMO_APPS[a].label}</option>)}</select></label>
           <label className="py-field"><span>Tarjeta</span><select value={cardId} onChange={e => setCardId(e.target.value)}>{cards.map(c => <option key={c.id} value={c.id}>{c.label?.trim() || c.bank?.trim() || 'Tarjeta'}</option>)}</select></label>
           <label className="py-field"><span>Descuento %</span><input type="number" value={discount} onChange={e => setDiscount(e.target.value)} placeholder="30" /></label>
           <label className="py-field"><span>Tope de reintegro</span><input type="number" value={cap} onChange={e => setCap(e.target.value)} placeholder="$ (opcional)" /></label>
@@ -399,7 +470,7 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
                 <span className="py-promo-discount">{p.discount}%</span>
                 <div className="py-promo-info">
                   <span className="py-promo-days">{p.days.map(d => PY_DAYS[d]).join(' · ')}</span>
-                  <span className="py-promo-meta">{p.cap > 0 ? `Tope $${p.cap.toLocaleString('es-AR')}` : 'Sin tope'} · {PY_FREQ[p.freq]}</span>
+                  <span className="py-promo-meta"><span className="py-promo-app" style={{ background: `${PROMO_APPS[p.app || 'pedidosya'].color}22`, color: PROMO_APPS[p.app || 'pedidosya'].color }}>{PROMO_APPS[p.app || 'pedidosya'].icon} {PROMO_APPS[p.app || 'pedidosya'].label}</span>{p.cap > 0 ? `Tope $${p.cap.toLocaleString('es-AR')}` : 'Sin tope'} · {PY_FREQ[p.freq]}</span>
                 </div>
                 <button className="py-promo-del" onClick={() => remove(p.id)}><Trash2 size={13} /></button>
               </div>
@@ -414,7 +485,7 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
             {promos.filter(p => !cardOf(p.cardId)).map(p => (
               <div key={p.id} className="py-promo">
                 <span className="py-promo-discount">{p.discount}%</span>
-                <div className="py-promo-info"><span className="py-promo-days">{p.days.map(d => PY_DAYS[d]).join(' · ')}</span><span className="py-promo-meta">{p.cap > 0 ? `Tope $${p.cap.toLocaleString('es-AR')}` : 'Sin tope'} · {PY_FREQ[p.freq]}</span></div>
+                <div className="py-promo-info"><span className="py-promo-days">{p.days.map(d => PY_DAYS[d]).join(' · ')}</span><span className="py-promo-meta"><span className="py-promo-app" style={{ background: `${PROMO_APPS[p.app || 'pedidosya'].color}22`, color: PROMO_APPS[p.app || 'pedidosya'].color }}>{PROMO_APPS[p.app || 'pedidosya'].icon} {PROMO_APPS[p.app || 'pedidosya'].label}</span>{p.cap > 0 ? `Tope $${p.cap.toLocaleString('es-AR')}` : 'Sin tope'} · {PY_FREQ[p.freq]}</span></div>
                 <button className="py-promo-del" onClick={() => remove(p.id)}><Trash2 size={13} /></button>
               </div>
             ))}
@@ -464,7 +535,7 @@ function TarjetasTab() {
     <div className="tarjetas-content">
       <div className="tarjetas-subtabs">
         <button className={subtab === 'tarjetas' ? 'active' : ''} onClick={() => setSubtab('tarjetas')}><CreditCard size={13} /> Tarjetas {!unlocked && <Lock size={11} />}</button>
-        <button className={subtab === 'pedidosya' ? 'active' : ''} onClick={() => setSubtab('pedidosya')}>🛵 Pedidos Ya</button>
+        <button className={subtab === 'pedidosya' ? 'active' : ''} onClick={() => setSubtab('pedidosya')}>🏷️ Promociones</button>
       </div>
       {subtab === 'pedidosya' ? <PedidosYaTab cards={cards} /> : !unlocked ? lockScreen : (
       <>
@@ -680,6 +751,13 @@ interface ShoppingGroup { id: string; name: string; color: string; items: Shoppi
 const defaultGroupColors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
 const defaultCategories = ['Bebidas', 'Alimentos', 'Higiene', 'Limpieza', 'Otros']
 
+// Split text into items. On Enter/typing we only split on commas & newlines (so
+// multi-word items like "papel higiénico" survive); on paste we also split spaces.
+function splitToItems(raw: string, splitSpaces = false): string[] {
+  const re = splitSpaces ? /[\n,]+|\s+/ : /[\n,]+/
+  return raw.split(re).map(s => s.trim()).filter(Boolean)
+}
+
 // Lists live inside boards ("pestañas"); each board holds several lists (groups).
 interface ShoppingBoard { id: string; name: string; groups: ShoppingGroup[] }
 function loadBoards(): ShoppingBoard[] {
@@ -709,6 +787,7 @@ function ListaComprasTab() {
   const [editingGroup, setEditingGroup] = useState<string | null>(null)
   const [editingColor, setEditingColor] = useState<string | null>(null)
   const [filterCat, setFilterCat] = useState<string | null>(null)
+  const [showResumen, setShowResumen] = useState(false)
 
   const confirm = useConfirm()
   const saveBoards = (b: ShoppingBoard[]) => { setBoards(b); localStorage.setItem('nn-shopping', JSON.stringify(b)) }
@@ -747,17 +826,38 @@ function ListaComprasTab() {
     const next = [...groups]; next.splice(idx + 1, 0, dup); setGroups(next)
   }
 
-  const addItem = (groupId: string) => {
-    const text = newItemTexts[groupId]?.trim(); if (!text) return
+  // Append one or more items to a group, giving each a unique id.
+  const addItemsToGroup = (groupId: string, texts: string[]) => {
+    if (texts.length === 0) return
     const cat = newItemCats[groupId] || undefined
-    setGroups(groups.map(g => g.id === groupId ? { ...g, items: [...g.items, { id: 'si-' + Date.now(), text, done: false, category: cat }] } : g))
+    const stamp = Date.now()
+    const items: ShoppingItem[] = texts.map((text, k) => ({ id: `si-${stamp}-${k}`, text, done: false, category: cat }))
+    setGroups(groups.map(g => g.id === groupId ? { ...g, items: [...g.items, ...items] } : g))
     setNewItemTexts({ ...newItemTexts, [groupId]: '' })
+  }
+  const addItem = (groupId: string) => addItemsToGroup(groupId, splitToItems(newItemTexts[groupId] || ''))
+  // Pasting a blob of words separated by commas, newlines or spaces → many items.
+  const onPasteItems = (groupId: string, e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData('text')
+    const parts = splitToItems(text, true)
+    if (parts.length <= 1) return // single word: let the default paste happen
+    e.preventDefault()
+    addItemsToGroup(groupId, parts)
   }
   const toggleItem = (groupId: string, itemId: string) => setGroups(groups.map(g => g.id === groupId ? { ...g, items: g.items.map(i => i.id === itemId ? { ...i, done: !i.done } : i) } : g))
   const removeItem = (groupId: string, itemId: string) => setGroups(groups.map(g => g.id === groupId ? { ...g, items: g.items.filter(i => i.id !== itemId) } : g))
 
   const totalItems = groups.reduce((a, g) => a + g.items.length, 0)
   const doneItems = groups.reduce((a, g) => a + g.items.filter(i => i.done).length, 0)
+
+  // Build and copy a plain-text summary of every pending item, grouped by list.
+  const copyResumen = () => {
+    const text = groups
+      .filter(g => g.items.some(i => !i.done))
+      .map(g => `${g.name}:\n` + g.items.filter(i => !i.done).map(i => `  - ${i.text}`).join('\n'))
+      .join('\n\n')
+    try { navigator.clipboard.writeText(text) } catch {}
+  }
 
   return (
     <div className="shopping-content">
@@ -787,9 +887,31 @@ function ListaComprasTab() {
             <option value="">Todas las categorías</option>
             {defaultCategories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          <button className={`shopping-resumen-btn ${showResumen ? 'active' : ''}`} onClick={() => setShowResumen(v => !v)} title="Resumen de ítems pendientes de todas las listas"><ClipboardList size={14} /> Resumen</button>
           <button className="shopping-add-group-btn" onClick={() => setShowNewGroup(!showNewGroup)}><Plus size={14} /> Nueva lista</button>
         </div>
       </div>
+
+      {showResumen && (
+        <div className="card shopping-resumen">
+          <div className="shopping-resumen-head">
+            <ClipboardList size={16} />
+            <strong>Resumen de pendientes</strong>
+            <span className="shopping-resumen-total">{totalItems - doneItems} por comprar</span>
+            <button className="shopping-resumen-copy" onClick={copyResumen} disabled={totalItems - doneItems === 0}><Copy size={12} /> Copiar</button>
+            <button className="shopping-resumen-close" onClick={() => setShowResumen(false)}><X size={14} /></button>
+          </div>
+          {groups.filter(g => g.items.some(i => !i.done)).map(g => (
+            <div key={g.id} className="shopping-resumen-list">
+              <span className="shopping-resumen-list-name" style={{ color: g.color }}><span className="shopping-resumen-dot" style={{ background: g.color }} />{g.name} <em>({g.items.filter(i => !i.done).length})</em></span>
+              <div className="shopping-resumen-items">
+                {g.items.filter(i => !i.done).map(i => <span key={i.id} className="shopping-resumen-item">{i.text}</span>)}
+              </div>
+            </div>
+          ))}
+          {totalItems - doneItems === 0 && <div className="shopping-resumen-empty">¡Todo comprado! No hay ítems pendientes.</div>}
+        </div>
+      )}
 
       {showNewGroup && (
         <div className="card shopping-new-group">
@@ -832,6 +954,15 @@ function ListaComprasTab() {
                 <button className="shopping-group-edit" onClick={() => duplicateGroup(g.id)} title="Duplicar lista"><Copy size={11} /></button>
                 <button className="shopping-group-delete" onClick={() => removeGroup(g.id)} title="Eliminar"><Trash2 size={11} /></button>
               </div>
+              {g.items.length > 0 && (() => {
+                const gd = g.items.filter(i => i.done).length
+                return (
+                  <div className="shopping-group-progress">
+                    <div className="shopping-group-bar"><div className="shopping-group-bar-fill" style={{ width: `${(gd / g.items.length) * 100}%`, background: g.color }} /></div>
+                    <span className="shopping-group-progress-txt">{gd}/{g.items.length}</span>
+                  </div>
+                )
+              })()}
               <div className="shopping-items">
                 {filteredItems.map(item => (
                   <div key={item.id} className={`shopping-item ${item.done ? 'done' : ''}`}>
@@ -843,7 +974,7 @@ function ListaComprasTab() {
                 ))}
               </div>
               <div className="shopping-add-item">
-                <input placeholder="Agregar ítem..." value={newItemTexts[g.id] || ''} onChange={e => setNewItemTexts({ ...newItemTexts, [g.id]: e.target.value })} onKeyDown={e => e.key === 'Enter' && addItem(g.id)} />
+                <input placeholder="Agregar ítem (pegá varios separados por coma)..." value={newItemTexts[g.id] || ''} onChange={e => setNewItemTexts({ ...newItemTexts, [g.id]: e.target.value })} onKeyDown={e => e.key === 'Enter' && addItem(g.id)} onPaste={e => onPasteItems(g.id, e)} />
                 <select className="shopping-item-cat-select" value={newItemCats[g.id] || ''} onChange={e => setNewItemCats({ ...newItemCats, [g.id]: e.target.value })}>
                   <option value="">Sin categoría</option>
                   {defaultCategories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -871,7 +1002,18 @@ function WishlistTab() {
   const cats = ['General', 'Tecnología', 'Ropa', 'Hogar', 'Juegos', 'Otros']
 
   const save = (w: WishItem[]) => { setItems(w); localStorage.setItem('nn-wishlist', JSON.stringify(w)) }
-  const add = () => { if (!newName.trim()) return; save([...items, { id: 'wish-' + Date.now(), name: newName.trim(), category: newCat, done: false }]); setNewName('') }
+  const addNames = (names: string[]) => {
+    if (names.length === 0) return
+    const stamp = Date.now()
+    save([...items, ...names.map((name, k) => ({ id: `wish-${stamp}-${k}`, name, category: newCat, done: false }))])
+    setNewName('')
+  }
+  const add = () => addNames(splitToItems(newName))
+  const onPasteWish = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const parts = splitToItems(e.clipboardData.getData('text'), true)
+    if (parts.length <= 1) return
+    e.preventDefault(); addNames(parts)
+  }
   const toggle = (id: string) => save(items.map(i => i.id === id ? { ...i, done: !i.done } : i))
   const remove = (id: string) => save(items.filter(i => i.id !== id))
   const update = (id: string, u: Partial<WishItem>) => save(items.map(i => i.id === id ? { ...i, ...u } : i))
@@ -883,7 +1025,7 @@ function WishlistTab() {
   return (
     <div className="wishlist-content">
       <div className="wishlist-add">
-        <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Artículo que deseo comprar..." onKeyDown={e => e.key === 'Enter' && add()} />
+        <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Artículo que deseo comprar (pegá varios separados por coma)..." onKeyDown={e => e.key === 'Enter' && add()} onPaste={onPasteWish} />
         <select value={newCat} onChange={e => setNewCat(e.target.value)}>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>
         <button onClick={add} disabled={!newName.trim()}><Plus size={14} /></button>
       </div>
