@@ -101,7 +101,7 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 ### Personal / Salud
 | Clave | Contenido |
 |---|---|
-| `nn-cards` | Tarjetas (protegidas por contraseña en la UI) |
+| `nn-cards` / `nn-cards-view` | Tarjetas (protegidas por contraseña) / vista `list`|`grid` |
 | `nn-shopping` / `nn-custom-categories` | Listas de compras / categorías |
 | `nn-shopping-sort` / `nn-shopping-collapsed` | Orden de las listas (`manual`/`alpha`) / listas contraídas |
 | `nn-wishlist` | Compras / wishlist |

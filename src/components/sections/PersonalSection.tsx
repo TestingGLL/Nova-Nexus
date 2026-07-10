@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { CSSProperties } from 'react'
-import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, ChevronRight, Flame, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle, Settings, ClipboardList } from 'lucide-react'
+import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, ChevronRight, Flame, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle, Settings, ClipboardList, LayoutGrid, LayoutList } from 'lucide-react'
 import { addNotification } from '../../lib/notifications'
 import { useWater, WATER_GOAL } from '../../lib/water'
 import ColorInput from '../ColorInput'
@@ -401,9 +401,12 @@ const CARD_COLORS = [
   '#0b132b', '#1c2541', '#231942', '#1d3557',
 ]
 
+// Titular por defecto de las tarjetas.
+const DEFAULT_HOLDER = 'Matías Gallardo'
+
+// Card number formatted in groups of 4 separated by a single space.
 function formatCardNumber(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 16)
-  return digits.replace(/(.{4})/g, '$1 - ').replace(/ - $/, '').trim()
+  return raw.replace(/\D/g, '').slice(0, 16).replace(/(.{4})(?=.)/g, '$1 ')
 }
 
 function formatExpiry(raw: string): string {
@@ -412,15 +415,28 @@ function formatExpiry(raw: string): string {
   return digits
 }
 
+// The last day of a card's MM/AA month, or null if the expiry is incomplete.
+function expiryDate(expiry: string): Date | null {
+  const d = (expiry || '').replace(/\D/g, '')
+  if (d.length < 4) return null
+  const mm = parseInt(d.slice(0, 2), 10), yy = parseInt(d.slice(2, 4), 10)
+  if (!mm || mm > 12) return null
+  return new Date(2000 + yy, mm, 0, 23, 59, 59) // day 0 of next month = last day of mm
+}
+
 // A card is expired once the current date passes the end of its MM/AA month.
 function isCardExpired(expiry: string): boolean {
-  const d = (expiry || '').replace(/\D/g, '')
-  if (d.length < 4) return false
-  const mm = parseInt(d.slice(0, 2), 10), yy = parseInt(d.slice(2, 4), 10)
-  if (!mm || mm > 12) return false
+  const exp = expiryDate(expiry)
+  return exp ? exp < new Date() : false
+}
+
+// A card "vence pronto" if it is not yet expired but does so within the next 3 months.
+function isExpiringSoon(expiry: string): boolean {
+  const exp = expiryDate(expiry)
+  if (!exp) return false
   const now = new Date()
-  const expYear = 2000 + yy, curYear = now.getFullYear(), curMonth = now.getMonth() + 1
-  return expYear < curYear || (expYear === curYear && mm < curMonth)
+  const cutoff = new Date(now.getFullYear(), now.getMonth() + 3, now.getDate(), 23, 59, 59)
+  return exp >= now && exp <= cutoff
 }
 
 // ---- Promociones por tarjeta (Pedidos Ya / Rappi / Presencial) ----
@@ -443,28 +459,98 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
   const [cap, setCap] = useState('')
   const [freq, setFreq] = useState<PedidoPromo['freq']>('mensual')
   const [app, setApp] = useState<PromoApp>('pedidosya')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [fApp, setFApp] = useState<'all' | PromoApp>('all')
+  const [fDay, setFDay] = useState<'all' | number>('all')
+  const [fCard, setFCard] = useState<'all' | string>('all')
   const confirm = useConfirm()
 
   const save = (p: PedidoPromo[]) => { setPromos(p); localStorage.setItem('nn-pedidosya', JSON.stringify(p)) }
   const toggleDay = (d: number) => setDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d].sort((a, b) => a - b))
-  const add = () => {
+  const resetForm = () => { setEditingId(null); setDays([]); setDiscount(''); setCap('') }
+  const submit = () => {
     if (!cardId || days.length === 0 || !discount) return
-    save([{ id: 'py-' + Date.now(), cardId, days, discount: Number(discount), cap: Number(cap) || 0, freq, app }, ...promos])
-    setDays([]); setDiscount(''); setCap('')
+    const data = { cardId, days, discount: Number(discount), cap: Number(cap) || 0, freq, app }
+    if (editingId) save(promos.map(p => p.id === editingId ? { ...p, ...data } : p))
+    else save([{ id: 'py-' + Date.now(), ...data }, ...promos])
+    resetForm()
+  }
+  const startEdit = (p: PedidoPromo) => {
+    setEditingId(p.id); setCardId(p.cardId); setDays(p.days); setDiscount(String(p.discount))
+    setCap(p.cap ? String(p.cap) : ''); setFreq(p.freq); setApp(p.app || 'pedidosya')
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {}
   }
   const remove = async (id: string) => {
-    if (!await confirm({ title: 'Eliminar promoción', message: '¿Eliminar esta promoción de Pedidos Ya?' })) return
+    if (!await confirm({ title: 'Eliminar promoción', message: '¿Eliminar esta promoción?' })) return
+    if (editingId === id) resetForm()
     save(promos.filter(p => p.id !== id))
   }
   const cardOf = (id: string) => cards.find(c => c.id === id)
   const cardName = (id: string) => { const c = cardOf(id); return c ? (c.label?.trim() || c.bank?.trim() || 'Tarjeta') : 'Tarjeta eliminada' }
+  // Gasto necesario para alcanzar el tope de reintegro: tope / (descuento/100).
+  const spendForCap = (discount: number, cap: number) => (discount > 0 && cap > 0) ? Math.ceil(cap * 100 / discount) : 0
+  const money = (n: number) => `$${n.toLocaleString('es-AR')}`
+
+  // Weekday index today, mapped to PY_DAYS (0 = Lunes).
+  const todayIdx = (new Date().getDay() + 6) % 7
+  const todayPromos = promos.filter(p => p.days.includes(todayIdx) && cardOf(p.cardId))
+  const matchesFilters = (p: PedidoPromo) =>
+    (fApp === 'all' || (p.app || 'pedidosya') === fApp) &&
+    (fDay === 'all' || p.days.includes(fDay)) &&
+    (fCard === 'all' || p.cardId === fCard)
+
+  const renderPromo = (p: PedidoPromo) => {
+    const appInfo = PROMO_APPS[p.app || 'pedidosya']
+    const spend = spendForCap(p.discount, p.cap)
+    return (
+      <div key={p.id} className={`py-promo ${editingId === p.id ? 'editing' : ''}`}>
+        <span className="py-promo-discount">{p.discount}%</span>
+        <div className="py-promo-info">
+          <span className="py-promo-days">{p.days.map(d => PY_DAYS[d]).join(' · ')}</span>
+          <span className="py-promo-meta">
+            <span className="py-promo-app" style={{ background: `${appInfo.color}22`, color: appInfo.color }}>{appInfo.icon} {appInfo.label}</span>
+            {p.cap > 0 ? `Tope ${money(p.cap)}` : 'Sin tope'} · {PY_FREQ[p.freq]}
+          </span>
+          {spend > 0 && <span className="py-promo-spend">💳 Gastá {money(spend)} para llegar al tope</span>}
+        </div>
+        <div className="py-promo-actions">
+          <button className="py-promo-edit" onClick={() => startEdit(p)} title="Editar promoción"><Edit3 size={13} /></button>
+          <button className="py-promo-del" onClick={() => remove(p.id)} title="Eliminar"><Trash2 size={13} /></button>
+        </div>
+      </div>
+    )
+  }
 
   if (cards.length === 0) return <div className="maint-empty" style={{ padding: '40px 0' }}>Primero cargá una tarjeta en la pestaña «Tarjetas».</div>
 
+  const spendHint = spendForCap(Number(discount) || 0, Number(cap) || 0)
+  const visiblePromos = promos.filter(matchesFilters)
+
   return (
     <div className="pedidosya-tab">
-      <div className="card pedidosya-add">
-        <div className="card-title">🏷️ Nueva promoción</div>
+      {/* Panel de promos de hoy */}
+      <div className="card py-today">
+        <div className="py-today-head"><CalendarClock size={15} /> Promos de hoy — {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][todayIdx]}</div>
+        {todayPromos.length === 0 ? (
+          <span className="py-today-empty">No hay promociones para hoy.</span>
+        ) : (
+          <div className="py-today-list">
+            {todayPromos.map(p => {
+              const appInfo = PROMO_APPS[p.app || 'pedidosya']
+              return (
+                <div key={p.id} className="py-today-chip" style={{ borderColor: appInfo.color }}>
+                  <span className="py-today-disc" style={{ color: appInfo.color }}>{p.discount}%</span>
+                  <span className="py-today-card">{cardName(p.cardId)}</span>
+                  <span className="py-today-app">{appInfo.icon} {appInfo.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className={`card pedidosya-add ${editingId ? 'editing' : ''}`}>
+        <div className="card-title">🏷️ {editingId ? 'Editar promoción' : 'Nueva promoción'}</div>
         <div className="py-add-grid">
           <label className="py-field"><span>Aplicación</span><select value={app} onChange={e => setApp(e.target.value as PromoApp)}>{(Object.keys(PROMO_APPS) as PromoApp[]).map(a => <option key={a} value={a}>{PROMO_APPS[a].icon} {PROMO_APPS[a].label}</option>)}</select></label>
           <label className="py-field"><span>Tarjeta</span><select value={cardId} onChange={e => setCardId(e.target.value)}>{cards.map(c => <option key={c.id} value={c.id}>{c.label?.trim() || c.bank?.trim() || 'Tarjeta'}</option>)}</select></label>
@@ -472,42 +558,50 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
           <label className="py-field"><span>Tope de reintegro</span><input type="number" value={cap} onChange={e => setCap(e.target.value)} placeholder="$ (opcional)" /></label>
           <label className="py-field"><span>Frecuencia</span><select value={freq} onChange={e => setFreq(e.target.value as PedidoPromo['freq'])}><option value="mensual">Mensual</option><option value="semanal">Semanal</option><option value="unica">Única compra</option></select></label>
         </div>
+        {spendHint > 0 && <div className="py-spend-hint">💳 Con {discount}% y tope {money(Number(cap))}, necesitás gastar <strong>{money(spendHint)}</strong> para alcanzarlo.</div>}
         <div className="py-days">
           {PY_DAYS.map((d, i) => <button key={i} className={`py-day ${days.includes(i) ? 'on' : ''}`} onClick={() => toggleDay(i)}>{d}</button>)}
         </div>
-        <button className="py-add-btn" onClick={add} disabled={!cardId || days.length === 0 || !discount}><Plus size={14} /> Agregar promoción</button>
+        <div className="py-add-actions">
+          {editingId && <button className="py-cancel-btn" onClick={resetForm}>Cancelar</button>}
+          <button className="py-add-btn" onClick={submit} disabled={!cardId || days.length === 0 || !discount}>{editingId ? <><Save size={14} /> Guardar cambios</> : <><Plus size={14} /> Agregar promoción</>}</button>
+        </div>
       </div>
 
+      {promos.length > 0 && (
+        <div className="py-filters">
+          <select value={fApp} onChange={e => setFApp(e.target.value as 'all' | PromoApp)}>
+            <option value="all">Toda aplicación</option>
+            {(Object.keys(PROMO_APPS) as PromoApp[]).map(a => <option key={a} value={a}>{PROMO_APPS[a].icon} {PROMO_APPS[a].label}</option>)}
+          </select>
+          <select value={fDay} onChange={e => setFDay(e.target.value === 'all' ? 'all' : Number(e.target.value))}>
+            <option value="all">Todo día</option>
+            {PY_DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+          </select>
+          <select value={fCard} onChange={e => setFCard(e.target.value)}>
+            <option value="all">Toda tarjeta</option>
+            {cards.map(c => <option key={c.id} value={c.id}>{c.label?.trim() || c.bank?.trim() || 'Tarjeta'}</option>)}
+          </select>
+          {(fApp !== 'all' || fDay !== 'all' || fCard !== 'all') && <button className="py-filter-clear" onClick={() => { setFApp('all'); setFDay('all'); setFCard('all') }}><X size={12} /> Limpiar</button>}
+        </div>
+      )}
+
       <div className="pedidosya-list">
-        {cards.filter(c => promos.some(p => p.cardId === c.id)).map(c => (
+        {cards.filter(c => visiblePromos.some(p => p.cardId === c.id)).map(c => (
           <div key={c.id} className="py-card-group">
             <div className="py-card-head" style={{ background: `linear-gradient(135deg, ${c.color || '#1a1a2e'}, ${c.color || '#1a1a2e'}cc)` }}>
-              <span>{cardName(c.id)}</span><span className="py-card-bank">{c.bank}</span>
+              <span>{cardName(c.id)}</span><span className="py-card-bank">{(c.bank || '').toUpperCase()}</span>
             </div>
-            {promos.filter(p => p.cardId === c.id).map(p => (
-              <div key={p.id} className="py-promo">
-                <span className="py-promo-discount">{p.discount}%</span>
-                <div className="py-promo-info">
-                  <span className="py-promo-days">{p.days.map(d => PY_DAYS[d]).join(' · ')}</span>
-                  <span className="py-promo-meta"><span className="py-promo-app" style={{ background: `${PROMO_APPS[p.app || 'pedidosya'].color}22`, color: PROMO_APPS[p.app || 'pedidosya'].color }}>{PROMO_APPS[p.app || 'pedidosya'].icon} {PROMO_APPS[p.app || 'pedidosya'].label}</span>{p.cap > 0 ? `Tope $${p.cap.toLocaleString('es-AR')}` : 'Sin tope'} · {PY_FREQ[p.freq]}</span>
-                </div>
-                <button className="py-promo-del" onClick={() => remove(p.id)}><Trash2 size={13} /></button>
-              </div>
-            ))}
+            {visiblePromos.filter(p => p.cardId === c.id).map(renderPromo)}
           </div>
         ))}
         {promos.length === 0 && <div className="maint-empty">Sin promociones. Agregá la primera arriba.</div>}
+        {promos.length > 0 && visiblePromos.length === 0 && <div className="maint-empty">Ninguna promoción coincide con los filtros.</div>}
         {/* Promos whose card was deleted */}
-        {promos.filter(p => !cardOf(p.cardId)).length > 0 && (
+        {visiblePromos.filter(p => !cardOf(p.cardId)).length > 0 && (
           <div className="py-card-group">
             <div className="py-card-head" style={{ background: 'linear-gradient(135deg,#475569,#64748b)' }}><span>Tarjeta eliminada</span></div>
-            {promos.filter(p => !cardOf(p.cardId)).map(p => (
-              <div key={p.id} className="py-promo">
-                <span className="py-promo-discount">{p.discount}%</span>
-                <div className="py-promo-info"><span className="py-promo-days">{p.days.map(d => PY_DAYS[d]).join(' · ')}</span><span className="py-promo-meta"><span className="py-promo-app" style={{ background: `${PROMO_APPS[p.app || 'pedidosya'].color}22`, color: PROMO_APPS[p.app || 'pedidosya'].color }}>{PROMO_APPS[p.app || 'pedidosya'].icon} {PROMO_APPS[p.app || 'pedidosya'].label}</span>{p.cap > 0 ? `Tope $${p.cap.toLocaleString('es-AR')}` : 'Sin tope'} · {PY_FREQ[p.freq]}</span></div>
-                <button className="py-promo-del" onClick={() => remove(p.id)}><Trash2 size={13} /></button>
-              </div>
-            ))}
+            {visiblePromos.filter(p => !cardOf(p.cardId)).map(renderPromo)}
           </div>
         )}
       </div>
@@ -525,21 +619,29 @@ function TarjetasTab() {
   const [showCvv, setShowCvv] = useState<Record<string, boolean>>({})
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState<string>('all')
+  const [expiringSoon, setExpiringSoon] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => { try { return localStorage.getItem('nn-cards-view') === 'grid' ? 'grid' : 'list' } catch { return 'list' } })
+  const [editingCard, setEditingCard] = useState<string | null>(null)
+  const [menuCard, setMenuCard] = useState<string | null>(null)
   const confirm = useConfirm()
   const save = (c: CardData[]) => { setCards(c); localStorage.setItem('nn-cards', JSON.stringify(c)) }
-  const copyText = (text: string, field: string) => { navigator.clipboard.writeText(text.replace(/\s-\s/g, '')); setCopied(field); setTimeout(() => setCopied(null), 1500) }
+  const setView = (m: 'list' | 'grid') => { setViewMode(m); try { localStorage.setItem('nn-cards-view', m) } catch {} }
+  const copyText = (text: string, field: string) => { navigator.clipboard.writeText(text.replace(/\D/g, '')); setCopied(field); setTimeout(() => setCopied(null), 1500) }
   const tryUnlock = () => { if (password === 'A5/911') { setUnlocked(true); setError(false) } else { setError(true) } }
-  const addCard = () => { save([...cards, { id: 'card-' + Date.now(), label: '', bank: '', type: 'visa', number: '', holder: '', expiry: '', cvv: '', color: CARD_COLORS[cards.length % CARD_COLORS.length] }]) }
+  const addCard = () => { const id = 'card-' + Date.now(); save([...cards, { id, label: '', bank: '', type: 'visa', number: '', holder: DEFAULT_HOLDER, expiry: '', cvv: '', color: CARD_COLORS[cards.length % CARD_COLORS.length] }]); setEditingCard(id); setMenuCard(null) }
   const updateCard = (id: string, updates: Partial<CardData>) => save(cards.map(c => c.id === id ? { ...c, ...updates } : c))
   const removeCard = async (id: string) => {
     const c = cards.find(x => x.id === id)
+    setMenuCard(null)
     if (!await confirm({ title: 'Eliminar tarjeta', message: `¿Eliminar la tarjeta «${c?.label?.trim() || c?.bank?.trim() || 'sin nombre'}»?` })) return
     save(cards.filter(c => c.id !== id))
   }
 
-  const lockScreen = (<div className="tarjetas-lock"><Lock size={32} /><p>Ingresá la contraseña para acceder</p><div className="tarjetas-lock-form"><input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(false) }} onKeyDown={e => e.key === 'Enter' && tryUnlock()} placeholder="Contraseña" /><button onClick={tryUnlock}>Ingresar</button></div>{error && <span className="tarjetas-error">Contraseña incorrecta</span>}</div>)
+  const lockScreen = (<div className="tarjetas-lock"><Lock size={32} /><p>Ingresá la contraseña para acceder</p><div className="tarjetas-lock-form"><div className="tarjetas-lock-input"><input type={showPassword ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); setError(false) }} onKeyDown={e => e.key === 'Enter' && tryUnlock()} placeholder="Contraseña" /><button type="button" className="tarjetas-lock-eye" onClick={() => setShowPassword(v => !v)} title={showPassword ? 'Ocultar' : 'Mostrar'}>{showPassword ? <EyeOff size={15} /> : <Eye size={15} />}</button></div><button onClick={tryUnlock}>Ingresar</button></div>{error && <span className="tarjetas-error">Contraseña incorrecta</span>}</div>)
 
   const filtered = cards.filter(c => {
+    if (expiringSoon && !isExpiringSoon(c.expiry)) return false
     if (filterType !== 'all' && c.type !== filterType) return false
     if (!search) return true
     const q = search.toLowerCase()
@@ -564,23 +666,40 @@ function TarjetasTab() {
           {['all', 'visa', 'mastercard', 'amex'].map(t => (
             <button key={t} className={filterType === t ? 'active' : ''} onClick={() => setFilterType(t)}>{t === 'all' ? 'Todas' : t === 'amex' ? 'Amex' : t.charAt(0).toUpperCase() + t.slice(1)}</button>
           ))}
+          <button className={expiringSoon ? 'active' : ''} onClick={() => setExpiringSoon(v => !v)} title="Tarjetas que vencen en los próximos 3 meses"><CalendarClock size={12} /> Vencen pronto</button>
+        </div>
+        <div className="tarjetas-view-toggle">
+          <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setView('list')} title="Vista de lista"><LayoutList size={15} /></button>
+          <button className={viewMode === 'grid' ? 'active' : ''} onClick={() => setView('grid')} title="Vista de cuadrícula"><LayoutGrid size={15} /></button>
         </div>
       </div>
-      <div className="tarjetas-grid">
-        {filtered.map(card => (
-          <div key={card.id} className={`tarjeta-card-v2 ${isCardExpired(card.expiry) ? 'expired' : ''}`} style={{ background: `linear-gradient(135deg, ${card.color || '#1a1a2e'}, ${card.color || '#1a1a2e'}cc)` }}>
-            {isCardExpired(card.expiry) && <span className="tarjeta-v2-expired"><AlertTriangle size={11} /> Vencida</span>}
+      <div className={`tarjetas-grid ${viewMode === 'list' ? 'list-view' : ''}`}>
+        {filtered.map(card => {
+          const expired = isCardExpired(card.expiry)
+          const soon = !expired && isExpiringSoon(card.expiry)
+          const editing = editingCard === card.id
+          return (
+          <div key={card.id} className={`tarjeta-card-v2 ${expired ? 'expired' : ''} ${editing ? 'editing' : ''}`} style={{ background: `linear-gradient(135deg, ${card.color || '#1a1a2e'}, ${card.color || '#1a1a2e'}cc)` }}>
+            {expired && <span className="tarjeta-v2-expired"><AlertTriangle size={11} /> Vencida</span>}
+            {soon && <span className="tarjeta-v2-soon"><CalendarClock size={11} /> Vence pronto</span>}
+            <button className="tarjeta-v2-gear" onClick={() => setMenuCard(menuCard === card.id ? null : card.id)} title="Opciones"><Settings size={15} /></button>
+            {menuCard === card.id && (
+              <div className="tarjeta-v2-menu" onClick={e => e.stopPropagation()}>
+                <button onClick={() => { setEditingCard(editing ? null : card.id); setMenuCard(null) }}><Edit3 size={13} /> {editing ? 'Cerrar edición' : 'Editar'}</button>
+                <button className="danger" onClick={() => removeCard(card.id)}><Trash2 size={13} /> Eliminar</button>
+              </div>
+            )}
             <div className="tarjeta-v2-top">
-              <span className="tarjeta-v2-bank">{card.bank || 'Banco'}</span>
-              <select className="tarjeta-v2-type" value={card.type} onChange={e => updateCard(card.id, { type: e.target.value as CardData['type'] })}><option value="visa">Visa</option><option value="mastercard">Mastercard</option><option value="amex">Amex</option></select>
+              <span className="tarjeta-v2-bank">{(card.bank || 'Banco').toUpperCase()}</span>
+              <span className="tarjeta-v2-brand">{card.type === 'amex' ? 'AMEX' : card.type.toUpperCase()}</span>
             </div>
-            <div className="tarjeta-v2-number" onClick={() => copyText(formatCardNumber(card.number), card.id + '-num')}>
-              {formatCardNumber(card.number) || 'XXXX - XXXX - XXXX - XXXX'}
+            <div className="tarjeta-v2-number" onClick={() => copyText(card.number, card.id + '-num')} title="Clic para copiar">
+              {formatCardNumber(card.number) || 'XXXX XXXX XXXX XXXX'}
               {copied === card.id + '-num' && <span className="tarjeta-v2-copied">Copiado</span>}
             </div>
             <div className="tarjeta-v2-bottom">
-              <div className="tarjeta-v2-field"><span>TITULAR</span><span>{card.holder || '—'}</span></div>
-              <div className="tarjeta-v2-field"><span>VENCE</span><span style={isCardExpired(card.expiry) ? { color: '#fca5a5', fontWeight: 700 } : undefined}>{formatExpiry(card.expiry) || 'MM/AA'}</span></div>
+              <div className="tarjeta-v2-field"><span>TITULAR</span><span>{card.holder || DEFAULT_HOLDER}</span></div>
+              <div className="tarjeta-v2-field"><span>VENCE</span><span style={expired ? { color: '#fca5a5', fontWeight: 700 } : undefined}>{formatExpiry(card.expiry) || 'MM/AA'}</span></div>
               <div className="tarjeta-v2-field cvv-field">
                 <span>CVV</span>
                 <span className="tarjeta-v2-cvv">
@@ -589,25 +708,32 @@ function TarjetasTab() {
                 </span>
               </div>
             </div>
-            <div className="tarjeta-v2-actions">
-              <input className="tarjeta-v2-edit-field" value={card.bank} onChange={e => updateCard(card.id, { bank: e.target.value })} placeholder="Banco *" />
-              <input className="tarjeta-v2-edit-field" value={card.number} onChange={e => updateCard(card.id, { number: e.target.value.replace(/\D/g, '').slice(0, 16) })} placeholder="Número *" />
-              <input className="tarjeta-v2-edit-field" value={card.holder} onChange={e => updateCard(card.id, { holder: e.target.value })} placeholder="Titular *" />
-              <div className="tarjeta-v2-edit-row">
-                <input className="tarjeta-v2-edit-field" value={card.expiry} onChange={e => updateCard(card.id, { expiry: e.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="MMAA *" />
-                <input className="tarjeta-v2-edit-field" value={card.cvv} onChange={e => updateCard(card.id, { cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="CVV *" />
+            {editing && (
+              <div className="tarjeta-v2-actions">
+                <div className="tarjeta-v2-edit-row">
+                  <input className="tarjeta-v2-edit-field bank" value={card.bank} onChange={e => updateCard(card.id, { bank: e.target.value.toUpperCase() })} placeholder="BANCO *" />
+                  <select className="tarjeta-v2-edit-field" value={card.type} onChange={e => updateCard(card.id, { type: e.target.value as CardData['type'] })}><option value="visa">Visa</option><option value="mastercard">Mastercard</option><option value="amex">Amex</option></select>
+                </div>
+                <input className="tarjeta-v2-edit-field" value={formatCardNumber(card.number)} onChange={e => updateCard(card.id, { number: e.target.value.replace(/\D/g, '').slice(0, 16) })} placeholder="Número *" inputMode="numeric" />
+                <input className="tarjeta-v2-edit-field" value={card.holder} onChange={e => updateCard(card.id, { holder: e.target.value })} placeholder="Titular *" />
+                <div className="tarjeta-v2-edit-row">
+                  <input className="tarjeta-v2-edit-field" value={formatExpiry(card.expiry)} onChange={e => updateCard(card.id, { expiry: e.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="MM/AA *" inputMode="numeric" />
+                  <input className="tarjeta-v2-edit-field" value={card.cvv} onChange={e => updateCard(card.id, { cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="CVV *" inputMode="numeric" />
+                </div>
+                <div className="tarjeta-v2-palette">
+                  {CARD_COLORS.map(c => (
+                    <button key={c} className={`tarjeta-v2-swatch ${card.color === c ? 'active' : ''}`} style={{ background: c }} onClick={() => updateCard(card.id, { color: c })} title="Color de tarjeta" />
+                  ))}
+                </div>
+                <button className="tarjeta-v2-done" onClick={() => setEditingCard(null)}><Check size={13} /> Listo</button>
               </div>
-              <div className="tarjeta-v2-palette">
-                {CARD_COLORS.map(c => (
-                  <button key={c} className={`tarjeta-v2-swatch ${card.color === c ? 'active' : ''}`} style={{ background: c }} onClick={() => updateCard(card.id, { color: c })} title="Color de tarjeta" />
-                ))}
-              </div>
-              <button className="tarjeta-v2-delete" onClick={() => removeCard(card.id)}><Trash2 size={12} /> Eliminar</button>
-            </div>
+            )}
           </div>
-        ))}
+          )
+        })}
         <button className="card tarjeta-add" onClick={addCard}><Plus size={24} /><span>Agregar tarjeta</span></button>
       </div>
+      {menuCard && <div className="tarjeta-menu-backdrop" onClick={() => setMenuCard(null)} />}
       </>
       )}
     </div>
