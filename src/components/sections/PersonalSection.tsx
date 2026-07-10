@@ -193,7 +193,7 @@ function ExercisePanel() {
       let changed = false
       WEEKDAYS.forEach(d => {
         const e = parsePlanEntry(plan[d])
-        if (e?.rid) { const nw = Math.min(3, e.week + weeksElapsed); if (nw !== e.week) { plan[d] = { rid: e.rid, week: nw }; changed = true } }
+        if (e?.rid) { const nw = (e.week + weeksElapsed) % 4; if (nw !== e.week) { plan[d] = { rid: e.rid, week: nw }; changed = true } }
       })
       if (changed) { setWeekPlan(plan); localStorage.setItem('nn-week-routine', JSON.stringify(plan)); notifyRoutines() }
     } catch {}
