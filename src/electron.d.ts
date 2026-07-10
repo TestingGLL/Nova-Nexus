@@ -19,6 +19,8 @@ interface ElectronAPI {
   transferClearReceived: () => Promise<{ success: boolean }>
   transferStatus: () => Promise<{ running: boolean; ip: string; port: number; url: string; dir?: string }>
   transferOpenFolder: () => Promise<{ success: boolean }>
+  saveConversion: (name: string, base64: string) => Promise<{ success: boolean; path?: string; message?: string }>
+  openConversionsFolder: () => Promise<{ success: boolean }>
   showNotification: (title: string, body: string) => Promise<{ success: boolean }>
   getBluetoothDevices: () => Promise<Array<{ id: string; name: string; battery: number | null; class: string }>>
   getCryptoPrices: (ids?: string) => Promise<{ success: boolean; data?: Record<string, { ars: number; usd: number; ars_24h_change?: number; last_updated_at?: number }>; message?: string }>

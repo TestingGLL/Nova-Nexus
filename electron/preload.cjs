@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   transferClearReceived: () => ipcRenderer.invoke('transfer-clear-received'),
   transferStatus: () => ipcRenderer.invoke('transfer-status'),
   transferOpenFolder: () => ipcRenderer.invoke('transfer-open-folder'),
+  saveConversion: (name, base64) => ipcRenderer.invoke('save-conversion', name, base64),
+  openConversionsFolder: () => ipcRenderer.invoke('open-conversions-folder'),
   getMundialScores: () => ipcRenderer.invoke('get-mundial-scores'),
   getMundialArgentina: () => ipcRenderer.invoke('get-mundial-argentina'),
   getCryptoPrices: (ids) => ipcRenderer.invoke('get-crypto-prices', ids),

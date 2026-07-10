@@ -1,6 +1,13 @@
 import { useState, useRef } from 'react'
 import { ImageIcon, Download, Upload, FolderOpen, Trash2, Check, Loader, X } from 'lucide-react'
+import { useToast } from '../Toast'
 import './EdicionSection.css'
+
+// Convierte una URL de blob a base64 (data URL) para guardarla vía Electron.
+async function blobUrlToBase64(url: string): Promise<string> {
+  const blob = await (await fetch(url)).blob()
+  return await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(blob) })
+}
 
 // ============ CONVERTER ============
 const FORMATS = ['JPG', 'PNG', 'WEBP', 'ICO'] as const
@@ -44,6 +51,14 @@ function ImageConverter() {
   const [dragActive, setDragActive] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const folderRef = useRef<HTMLInputElement>(null)
+  const toast = useToast()
+  // En la app de escritorio los convertidos se guardan en Documentos/Nova Nexus/Conversiones.
+  const isDesktop = !!window.electronAPI?.saveConversion
+
+  const saveToConversions = async (name: string, url: string): Promise<boolean> => {
+    if (!window.electronAPI?.saveConversion) return false
+    try { const b64 = await blobUrlToBase64(url); const r = await window.electronAPI.saveConversion(name, b64); return !!r?.success } catch { return false }
+  }
 
   const addFiles = (files: File[]) => {
     const imgs = files.filter(f => f.type.startsWith('image/'))
@@ -109,17 +124,23 @@ function ImageConverter() {
 
   const convertAll = async () => {
     setConverting(true)
+    let saved = 0
     for (const item of items) {
       if (item.status === 'done') continue
       setItems(prev => prev.map(x => x.id === item.id ? { ...x, status: 'converting' } : x))
       const result = await convertItem(item)
       setItems(prev => prev.map(x => x.id === item.id ? (result ? { ...x, status: 'done', resultUrl: result.url, resultName: result.name } : { ...x, status: 'error' }) : x))
+      // Guardado automático en Documentos/Nova Nexus/Conversiones (escritorio).
+      if (result && isDesktop && await saveToConversions(result.name, result.url)) saved++
     }
     setConverting(false)
+    if (saved > 0) toast.success(`${saved} archivo(s) guardado(s) en Documentos › Nova Nexus › Conversiones`)
   }
 
-  const downloadOne = (item: QueueItem) => {
+  const downloadOne = async (item: QueueItem) => {
     if (!item.resultUrl || !item.resultName) return
+    // En escritorio: reguardar en la carpeta Conversiones. En navegador: descarga clásica.
+    if (isDesktop) { if (await saveToConversions(item.resultName, item.resultUrl)) toast.success(`Guardado en Conversiones: ${item.resultName}`); return }
     const a = document.createElement('a'); a.href = item.resultUrl; a.download = item.resultName; a.click()
   }
 
@@ -127,6 +148,7 @@ function ImageConverter() {
     const done = items.filter(i => i.status === 'done' && i.resultUrl)
     done.forEach((item, i) => { setTimeout(() => downloadOne(item), i * 250) })
   }
+  const openFolder = () => { window.electronAPI?.openConversionsFolder?.() }
 
   const pendingCount = items.filter(i => i.status !== 'done').length
   const doneCount = items.filter(i => i.status === 'done').length
@@ -176,7 +198,7 @@ function ImageConverter() {
                     {item.status === 'error' && 'Error'}
                   </span>
                 </div>
-                {item.status === 'done' && <button className="queue-download" onClick={() => downloadOne(item)} title="Descargar"><Download size={14} /></button>}
+                {item.status === 'done' && <button className="queue-download" onClick={() => downloadOne(item)} title={isDesktop ? 'Guardar en Conversiones' : 'Descargar'}><Download size={14} /></button>}
                 <button className="queue-remove" onClick={() => removeItem(item.id)}><X size={13} /></button>
               </div>
             ))}
@@ -186,7 +208,8 @@ function ImageConverter() {
             <button className="convert-btn" onClick={convertAll} disabled={converting || pendingCount === 0}>
               {converting ? 'Convirtiendo…' : `Convertir ${pendingCount > 0 ? pendingCount : ''} a ${targetFormat}`}
             </button>
-            {doneCount > 0 && <button className="download-all-btn" onClick={downloadAll}><Download size={15} /> Descargar todo ({doneCount})</button>}
+            {doneCount > 0 && <button className="download-all-btn" onClick={downloadAll}><Download size={15} /> {isDesktop ? `Guardar todo (${doneCount})` : `Descargar todo (${doneCount})`}</button>}
+            {isDesktop && doneCount > 0 && <button className="download-all-btn" onClick={openFolder}><FolderOpen size={15} /> Abrir carpeta</button>}
           </div>
         </>
       )}

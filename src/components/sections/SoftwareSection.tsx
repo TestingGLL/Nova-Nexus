@@ -534,7 +534,17 @@ const SOFT_TABS: { id: string; label: string; icon: React.ReactNode }[] = [
 ]
 
 export default function SoftwareSection() {
-  const [tab, setTab] = useState<string>('browser')
+  const [tab, setTab] = useState<string>(() => {
+    // Deep-link desde la barra superior: abre una tab puntual (ej. Transferencias).
+    try { const t = localStorage.getItem('__nn_software_tab'); if (t) { localStorage.removeItem('__nn_software_tab'); return t } } catch {}
+    return 'browser'
+  })
+  // Si la sección ya estaba montada, el acceso directo llega por evento.
+  useEffect(() => {
+    const onOpen = (e: Event) => { const d = (e as CustomEvent).detail; if (typeof d === 'string') setTab(d) }
+    window.addEventListener('nn-open-software-tab', onOpen)
+    return () => window.removeEventListener('nn-open-software-tab', onOpen)
+  }, [])
   const { order, tabProps } = useReorderableTabs(SOFT_TABS.map(t => t.id), 'nn-software-tab-order')
   const tabMap = Object.fromEntries(SOFT_TABS.map(t => [t.id, t]))
 

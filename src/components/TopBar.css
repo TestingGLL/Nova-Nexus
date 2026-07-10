@@ -40,3 +40,19 @@
 .water-chip.complete .water-chip-icon { color: #22c55e; }
 .water-chip-count { position: relative; font-size: 13px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .water-chip-goal { font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+
+.topbar-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: all 0.2s;
+}
+.topbar-shortcut:hover { border-color: var(--accent); color: var(--accent); }

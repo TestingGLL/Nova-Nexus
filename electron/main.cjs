@@ -1,9 +1,21 @@
 const { app, BrowserWindow, ipcMain, shell, Notification: ElectronNotification, Tray, Menu, MenuItem, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { exec } = require('child_process');
 const transfer = require('./transfer.cjs');
 
 let tray = null;
+
+// ----- Carpetas de datos en Documentos (persistentes, se crean solas) -----
+// Documentos/Nova Nexus/{Transferencias, Conversiones}. Se recrean automáticamente
+// también en una PC nueva porque se aseguran al iniciar y en cada uso.
+function appDocsDir() { return path.join(app.getPath('documents'), 'Nova Nexus'); }
+function transfersDir() { return path.join(appDocsDir(), 'Transferencias'); }
+function conversionsDir() { return path.join(appDocsDir(), 'Conversiones'); }
+function ensureAppFolders() {
+  try { fs.mkdirSync(transfersDir(), { recursive: true }); } catch {}
+  try { fs.mkdirSync(conversionsDir(), { recursive: true }); } catch {}
+}
 
 const isDev = !app.isPackaged;
 
@@ -298,7 +310,8 @@ ipcMain.handle('open-appdata', async () => {
 // ----- WiFi file transfer -----
 ipcMain.handle('transfer-start', async () => {
   try {
-    const dir = path.join(app.getPath('downloads'), 'Nova Nexus');
+    ensureAppFolders();
+    const dir = transfersDir();
     const info = await transfer.start(dir);
     return { success: true, ...info, dir };
   } catch (err) {
@@ -323,11 +336,33 @@ ipcMain.handle('transfer-clear-received', () => { transfer.clearReceived(); retu
 ipcMain.handle('transfer-status', async () => {
   // Auto-start on first query so the server is up as soon as the app opens.
   if (!transfer.isRunning()) {
-    try { const dir = path.join(app.getPath('downloads'), 'Nova Nexus'); await transfer.start(dir); } catch {}
+    try { ensureAppFolders(); await transfer.start(transfersDir()); } catch {}
   }
   return { ...transfer.getStatus(), dir: transfer.getDownloadDir() };
 });
 ipcMain.handle('transfer-open-folder', async () => { const d = transfer.getDownloadDir(); if (d) await shell.openPath(d); return { success: !!d }; });
+
+// ----- Conversiones (Edición → Convertidor de Imágenes) -----
+// Guarda un archivo convertido (data URL / base64) en Documentos/Nova Nexus/Conversiones.
+ipcMain.handle('save-conversion', async (_e, name, base64) => {
+  try {
+    ensureAppFolders();
+    const dir = conversionsDir();
+    const safe = (String(name || 'conversion').replace(/[<>:"/\\|?*]/g, '_').trim()) || 'conversion';
+    let dest = path.join(dir, safe);
+    if (fs.existsSync(dest)) {
+      const ext = path.extname(safe); const b = path.basename(safe, ext);
+      let n = 1; while (fs.existsSync(path.join(dir, `${b} (${n})${ext}`))) n++;
+      dest = path.join(dir, `${b} (${n})${ext}`);
+    }
+    const data = Buffer.from(String(base64).replace(/^data:[^;]+;base64,/, ''), 'base64');
+    fs.writeFileSync(dest, data);
+    return { success: true, path: dest };
+  } catch (err) {
+    return { success: false, message: String((err && err.message) || err) };
+  }
+});
+ipcMain.handle('open-conversions-folder', async () => { ensureAppFolders(); await shell.openPath(conversionsDir()); return { success: true }; });
 
 // ----- Mundial 2026 (ESPN API) -----
 function mapMundialEvent(ev) {
@@ -506,7 +541,7 @@ if (!gotLock) {
   app.whenReady().then(() => {
     createWindow();
     // Auto-start the WiFi transfer server on launch (fixed port + stable token).
-    try { transfer.start(path.join(app.getPath('downloads'), 'Nova Nexus')); } catch {}
+    try { ensureAppFolders(); transfer.start(transfersDir()); } catch {}
   });
 
   app.on('before-quit', () => { app.isQuitting = true; try { transfer.stop(); } catch {} });
