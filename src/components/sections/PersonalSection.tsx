@@ -770,11 +770,11 @@ interface ShoppingGroup { id: string; name: string; color: string; items: Shoppi
 const defaultGroupColors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
 const defaultCategories = ['Bebidas', 'Alimentos', 'Higiene', 'Limpieza', 'Otros']
 
-// Split text into items. On Enter/typing we only split on commas & newlines (so
-// multi-word items like "papel higiénico" survive); on paste we also split spaces.
-function splitToItems(raw: string, splitSpaces = false): string[] {
-  const re = splitSpaces ? /[\n,]+|\s+/ : /[\n,]+/
-  return raw.split(re).map(s => s.trim()).filter(Boolean)
+// Split text into items, separating ONLY on commas and line breaks — never on
+// spaces, so multi-word items like "Puré de tomate" stay as one. Blank/whitespace
+// lines are dropped.
+function splitToItems(raw: string): string[] {
+  return raw.split(/[\r\n,]+/).map(s => s.trim()).filter(Boolean)
 }
 
 // Lists live inside boards ("pestañas"); each board holds several lists (groups).
@@ -858,7 +858,7 @@ function ListaComprasTab() {
   // Pasting a blob of words separated by commas, newlines or spaces → many items.
   const onPasteItems = (groupId: string, e: React.ClipboardEvent<HTMLInputElement>) => {
     const text = e.clipboardData.getData('text')
-    const parts = splitToItems(text, true)
+    const parts = splitToItems(text)
     if (parts.length <= 1) return // single word: let the default paste happen
     e.preventDefault()
     addItemsToGroup(groupId, parts)
@@ -1029,7 +1029,7 @@ function WishlistTab() {
   }
   const add = () => addNames(splitToItems(newName))
   const onPasteWish = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    const parts = splitToItems(e.clipboardData.getData('text'), true)
+    const parts = splitToItems(e.clipboardData.getData('text'))
     if (parts.length <= 1) return
     e.preventDefault(); addNames(parts)
   }
