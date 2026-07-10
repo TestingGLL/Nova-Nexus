@@ -807,7 +807,7 @@ function ListaComprasTab() {
   const [editingColor, setEditingColor] = useState<string | null>(null)
   const [filterCat, setFilterCat] = useState<string | null>(null)
   const [showResumen, setShowResumen] = useState(false)
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => { try { const s = localStorage.getItem('nn-shopping-collapsed'); return new Set(s ? JSON.parse(s) : []) } catch { return new Set() } })
   const [editingItem, setEditingItem] = useState<string | null>(null)
   const [sortMode, setSortMode] = useState<'manual' | 'alpha'>(() => { try { return localStorage.getItem('nn-shopping-sort') === 'alpha' ? 'alpha' : 'manual' } catch { return 'manual' } })
   const dragGroup = useRef<string | null>(null)
@@ -815,7 +815,7 @@ function ListaComprasTab() {
 
   const confirm = useConfirm()
   const saveBoards = (b: ShoppingBoard[]) => { setBoards(b); localStorage.setItem('nn-shopping', JSON.stringify(b)) }
-  const toggleCollapse = (id: string) => setCollapsedGroups(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleCollapse = (id: string) => setCollapsedGroups(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); try { localStorage.setItem('nn-shopping-collapsed', JSON.stringify([...n])) } catch {} ; return n })
   const setSort = (m: 'manual' | 'alpha') => { setSortMode(m); try { localStorage.setItem('nn-shopping-sort', m) } catch {} }
   const board = boards.find(b => b.id === activeBoard) || boards[0]
   const groups = board?.groups || []
@@ -1059,9 +1059,13 @@ function WishlistTab() {
   const [newName, setNewName] = useState('')
   const [newCat, setNewCat] = useState('General')
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set())
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(() => { try { const s = localStorage.getItem('nn-wishlist-collapsed'); return new Set(s ? JSON.parse(s) : []) } catch { return new Set() } })
+  const [wishSort, setWishSort] = useState<'manual' | 'alpha'>(() => { try { return localStorage.getItem('nn-wishlist-sort') === 'manual' ? 'manual' : 'alpha' } catch { return 'alpha' } })
+  const dragWish = useRef<string | null>(null)
+  const [dragOverWish, setDragOverWish] = useState<string | null>(null)
   const cats = ['General', 'Tecnología', 'Ropa', 'Hogar', 'Juegos', 'Otros']
-  const toggleCat = (c: string) => setCollapsedCats(p => { const n = new Set(p); n.has(c) ? n.delete(c) : n.add(c); return n })
+  const toggleCat = (c: string) => setCollapsedCats(p => { const n = new Set(p); n.has(c) ? n.delete(c) : n.add(c); try { localStorage.setItem('nn-wishlist-collapsed', JSON.stringify([...n])) } catch {} ; return n })
+  const setWishSortMode = (m: 'manual' | 'alpha') => { setWishSort(m); try { localStorage.setItem('nn-wishlist-sort', m) } catch {} }
 
   const save = (w: WishItem[]) => { setItems(w); localStorage.setItem('nn-wishlist', JSON.stringify(w)) }
   const addNames = (names: string[]) => {
@@ -1081,8 +1085,18 @@ function WishlistTab() {
   const update = (id: string, u: Partial<WishItem>) => save(items.map(i => i.id === id ? { ...i, ...u } : i))
   const duplicate = (id: string) => { const it = items.find(i => i.id === id); if (!it) return; const idx = items.findIndex(i => i.id === id); const dup = { ...it, id: 'wish-' + Date.now(), name: it.name + ' (copia)' }; const next = [...items]; next.splice(idx + 1, 0, dup); save(next) }
 
-  const sorted = [...items].sort((a, b) => a.name.localeCompare(b.name, 'es'))
-  const grouped = cats.reduce<Record<string, WishItem[]>>((acc, c) => { acc[c] = sorted.filter(i => i.category === c); return acc }, {})
+  // Manual reorder of items (only in 'manual' sort mode); moves within the stored array.
+  const reorderWish = (targetId: string) => {
+    const from = dragWish.current
+    setDragOverWish(null); dragWish.current = null
+    if (!from || from === targetId) return
+    const fromIdx = items.findIndex(i => i.id === from)
+    const toIdx = items.findIndex(i => i.id === targetId)
+    if (fromIdx < 0 || toIdx < 0) return
+    const next = [...items]; const [m] = next.splice(fromIdx, 1); next.splice(toIdx, 0, m); save(next)
+  }
+  const ordered = wishSort === 'alpha' ? [...items].sort((a, b) => a.name.localeCompare(b.name, 'es')) : items
+  const grouped = cats.reduce<Record<string, WishItem[]>>((acc, c) => { acc[c] = ordered.filter(i => i.category === c); return acc }, {})
 
   return (
     <div className="wishlist-content">
@@ -1091,6 +1105,14 @@ function WishlistTab() {
         <select value={newCat} onChange={e => setNewCat(e.target.value)}>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>
         <button onClick={add} disabled={!newName.trim()}><Plus size={14} /></button>
       </div>
+      {items.length > 1 && (
+        <div className="wishlist-toolbar">
+          <div className="shopping-sort-toggle" title="Orden de los artículos">
+            <button className={wishSort === 'manual' ? 'active' : ''} onClick={() => setWishSortMode('manual')} title="Orden manual (arrastrá los artículos para reordenarlos)"><GripVertical size={12} /> Manual</button>
+            <button className={wishSort === 'alpha' ? 'active' : ''} onClick={() => setWishSortMode('alpha')} title="Orden alfabético">A-Z</button>
+          </div>
+        </div>
+      )}
       {cats.filter(c => grouped[c]?.length > 0).map(c => {
         const catCollapsed = collapsedCats.has(c)
         return (
@@ -1102,7 +1124,14 @@ function WishlistTab() {
             <span className="wishlist-banner-count">{grouped[c].length}</span>
           </div>
           {!catCollapsed && grouped[c].map(item => (
-            <div key={item.id} className={`wishlist-item ${item.done ? 'done' : ''}`}>
+            <div key={item.id}
+              className={`wishlist-item ${item.done ? 'done' : ''} ${dragOverWish === item.id ? 'drag-over' : ''}`}
+              onDragOver={wishSort === 'manual' ? (e => { e.preventDefault(); if (dragWish.current && dragWish.current !== item.id) setDragOverWish(item.id) }) : undefined}
+              onDrop={wishSort === 'manual' ? (() => reorderWish(item.id)) : undefined}
+            >
+              {wishSort === 'manual' && (
+                <span className="wishlist-grip" draggable onDragStart={() => { dragWish.current = item.id }} onDragEnd={() => { dragWish.current = null; setDragOverWish(null) }} title="Arrastrar para reordenar"><GripVertical size={13} /></span>
+              )}
               <button className={`shopping-check ${item.done ? 'checked' : ''}`} style={{ borderColor: wishCatColors[c], background: item.done ? wishCatColors[c] : 'transparent' }} onClick={() => toggle(item.id)}>{item.done && <Check size={10} />}</button>
               {editingId === item.id ? (
                 <input className="wishlist-edit-input" value={item.name} onChange={e => update(item.id, { name: e.target.value })} onBlur={() => setEditingId(null)} onKeyDown={e => e.key === 'Enter' && setEditingId(null)} autoFocus />

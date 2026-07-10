@@ -629,6 +629,11 @@
 .wishlist-add select { padding: 6px 10px; border: 1px solid var(--border); background: var(--bg-card); border-radius: 8px; font-size: 12px; color: var(--text-secondary); outline: none; }
 .wishlist-add button { display: flex; align-items: center; padding: 8px 12px; background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer; }
 .wishlist-add button:disabled { opacity: 0.4; }
+.wishlist-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.wishlist-grip { display: flex; align-items: center; color: var(--text-secondary); cursor: grab; opacity: 0.4; flex-shrink: 0; }
+.wishlist-grip:hover { opacity: 0.9; }
+.wishlist-grip:active { cursor: grabbing; }
+.wishlist-item.drag-over { box-shadow: inset 0 2px 0 var(--accent); }
 .wishlist-group { margin-bottom: 4px; }
 .wishlist-group-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
 .wishlist-group-title span { font-weight: 400; opacity: 0.6; }
