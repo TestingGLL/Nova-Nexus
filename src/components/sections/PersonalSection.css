@@ -468,9 +468,8 @@
 .routine-stats strong { color: var(--text-primary); }
 .routine-preview { padding: 8px 10px; background: var(--bg-card); border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; font-size: 10px; color: var(--text-secondary); line-height: 1.4; overflow: hidden; }
 
-.exercise-banner-lg { padding: 24px 20px; border-radius: 14px; margin-bottom: 16px; color: white; display: flex; flex-direction: column; align-items: center; gap: 8px; position: relative; }
+.exercise-banner-lg { padding: 28px 22px; min-height: 190px; border-radius: 14px; margin-bottom: 16px; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; position: relative; }
 .exercise-banner-lg.has-img { text-shadow: 0 1px 6px rgba(0,0,0,0.55); }
-.exercise-banner-lg.has-img .exercise-banner-name-input { background: rgba(0,0,0,0.25); }
 .exercise-banner-btn { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); border-radius: 7px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .exercise-banner-btn:hover { border-color: var(--accent); color: var(--accent); }
 .routine-banner.has-img { text-shadow: 0 1px 5px rgba(0,0,0,0.55); }
@@ -481,8 +480,15 @@
 .ebc-title { font-size: 12px; font-weight: 700; }
 .ebc-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
 .ebc-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.exercise-banner-name-input { border: none; background: rgba(255,255,255,0.15); border-radius: 8px; color: white; font-size: 20px; font-weight: 700; text-align: center; padding: 4px 12px; outline: none; }
-.exercise-banner-name-input::placeholder { color: rgba(255,255,255,0.6); }
+.ebc-field { display: flex; flex-direction: column; gap: 4px; }
+.ebc-name-input { border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; color: var(--text-primary); font-size: 13px; padding: 7px 10px; outline: none; font-family: inherit; }
+.ebc-name-input:focus { border-color: var(--accent); }
+.ebc-pos { display: flex; flex-direction: column; gap: 6px; }
+.ebc-slider { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.ebc-slider input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; }
+.ebc-reset { align-self: flex-start; padding: 4px 10px; border: 1px solid var(--border); background: none; border-radius: 7px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+.ebc-reset:hover { border-color: var(--accent); color: var(--accent); }
+.exercise-banner-name { font-size: 22px; font-weight: 800; margin: 0; text-align: center; }
 .exercise-banner-meta { display: flex; gap: 8px; font-size: 12px; opacity: 0.9; }
 .exercise-color-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .exercise-color-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; }

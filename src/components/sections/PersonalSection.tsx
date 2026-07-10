@@ -61,7 +61,7 @@ function WaterCounter() {
 }
 
 interface ExerciseData { name: string; sets: number; reps: string; rest: string; tip: string; mode?: 'reps' | 'time'; time?: string; youtube?: string }
-interface Routine { id: string; name: string; description: string; exercises: ExerciseData[]; color: string; emoji: string; weeks?: ExerciseData[][]; banner?: string }
+interface Routine { id: string; name: string; description: string; exercises: ExerciseData[]; color: string; emoji: string; weeks?: ExerciseData[][]; banner?: string; bannerPos?: { x: number; y: number } }
 
 // Notify HoyPanel (and Inicio) so it re-reads routines/week in real time.
 function notifyRoutines() { try { window.dispatchEvent(new CustomEvent('nn-routines-updated')) } catch {} }
@@ -93,11 +93,12 @@ function formatExerciseTime(raw?: string): string {
 const NEUTRAL_BANNER = 'linear-gradient(135deg, #64748b, #475569)'
 function bannerStyle(r: Routine): CSSProperties {
   if (r.banner) {
+    const pos = r.bannerPos ? `${r.bannerPos.x}% ${r.bannerPos.y}%` : 'center'
     return {
       backgroundImage: r.color
         ? `linear-gradient(135deg, ${r.color}55, ${r.color}aa), url(${r.banner})`
         : `url(${r.banner})`,
-      backgroundSize: 'cover', backgroundPosition: 'center',
+      backgroundSize: 'cover', backgroundPosition: pos,
     }
   }
   return { background: r.color ? `linear-gradient(135deg, ${r.color}, ${r.color}99)` : NEUTRAL_BANNER }
@@ -220,10 +221,23 @@ function ExercisePanel() {
           {bannerConfig && (
             <div className="exercise-banner-config" onClick={e => e.stopPropagation()}>
               <span className="ebc-title">Configuración del banner</span>
+              <label className="ebc-field">
+                <span className="ebc-label">Nombre (opcional)</span>
+                <input className="ebc-name-input" value={routine.name} placeholder="Sin nombre" onChange={e => updateRoutine(routine.id, { name: e.target.value })} />
+              </label>
+              <span className="ebc-label">Imagen</span>
               <div className="ebc-row">
-                <button className="exercise-banner-btn" onClick={() => bannerInputRef.current?.click()}><Plus size={13} /> {routine.banner ? 'Cambiar imagen' : 'Subir imagen'}</button>
-                {routine.banner && <button className="exercise-banner-btn" onClick={() => updateRoutine(routine.id, { banner: undefined })}><X size={13} /> Quitar imagen</button>}
+                <button className="exercise-banner-btn" onClick={() => bannerInputRef.current?.click()}><Plus size={13} /> {routine.banner ? 'Cambiar' : 'Subir'}</button>
+                {routine.banner && <button className="exercise-banner-btn" onClick={() => updateRoutine(routine.id, { banner: undefined, bannerPos: undefined })}><X size={13} /> Quitar</button>}
               </div>
+              {routine.banner && (
+                <div className="ebc-pos">
+                  <span className="ebc-label">Posición de la imagen</span>
+                  <label className="ebc-slider"><span>↔</span><input type="range" min={0} max={100} value={routine.bannerPos?.x ?? 50} onChange={e => updateRoutine(routine.id, { bannerPos: { x: Number(e.target.value), y: routine.bannerPos?.y ?? 50 } })} /></label>
+                  <label className="ebc-slider"><span>↕</span><input type="range" min={0} max={100} value={routine.bannerPos?.y ?? 50} onChange={e => updateRoutine(routine.id, { bannerPos: { x: routine.bannerPos?.x ?? 50, y: Number(e.target.value) } })} /></label>
+                  <button className="ebc-reset" onClick={() => updateRoutine(routine.id, { bannerPos: undefined })}>Centrar</button>
+                </div>
+              )}
               <span className="ebc-label">Color</span>
               <div className="exercise-color-row">
                 <button className={`exercise-color-dot none ${!routine.color ? 'active' : ''}`} onClick={() => updateRoutine(routine.id, { color: '' })} title="Sin color"><X size={11} /></button>
@@ -231,7 +245,7 @@ function ExercisePanel() {
               </div>
             </div>
           )}
-          <input className="exercise-banner-name-input" value={routine.name} placeholder="Nombre del panel (opcional)" onChange={e => updateRoutine(routine.id, { name: e.target.value })} />
+          {routine.name.trim() && <h2 className="exercise-banner-name">{routine.name}</h2>}
           <div className="exercise-banner-meta">
             <span>{exercisesOf(routine, week).length} ejercicios</span>
             <span>·</span>
@@ -297,7 +311,7 @@ function ExercisePanel() {
         <div key={r.id} className="routine-card" role="button" tabIndex={0} onClick={() => setActiveRoutine(r.id)}>
           <button className="routine-card-del" title="Eliminar panel" onClick={e => { e.stopPropagation(); askRemoveRoutine(r.id) }}><Trash2 size={13} /></button>
           <div className={`routine-banner ${r.banner ? 'has-img' : ''} ${!r.color ? 'no-color' : ''}`} style={bannerStyle(r)}>
-            <span className="routine-name">{r.name || 'Sin nombre'}</span>
+            {r.name.trim() && <span className="routine-name">{r.name}</span>}
           </div>
           <div className="routine-stats">
             <span><strong>{r.exercises.length}</strong> ejercicios</span>
@@ -344,7 +358,7 @@ function ExercisePanel() {
                   <span className="week-day-name">{d}</span>
                   <select value={rid} onChange={e => saveWeek({ ...weekPlan, [d]: e.target.value ? { rid: e.target.value, week: 0 } : '' })} style={rid ? { borderColor: rt?.color } : undefined}>
                     <option value="">Descanso</option>
-                    {routines.map(r => <option key={r.id} value={r.id}>{r.name || 'Sin nombre'}</option>)}
+                    {routines.map((r, i) => <option key={r.id} value={r.id}>{r.name.trim() || `Rutina ${i + 1}`}</option>)}
                   </select>
                   {rid && (
                     <select className="week-day-week" value={wk} onChange={e => saveWeek({ ...weekPlan, [d]: { rid, week: Number(e.target.value) } })} style={{ borderColor: rt?.color }} title="Semana del panel">
