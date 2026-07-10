@@ -91,15 +91,23 @@ function createWindow() {
       if (params.editFlags.canCut) menu.append(new MenuItem({ role: 'cut', label: 'Cortar' }));
       if (params.editFlags.canCopy) menu.append(new MenuItem({ role: 'copy', label: 'Copiar' }));
       if (params.editFlags.canPaste) {
-        // Tres variantes de pegado, consistentes en toda la app:
-        //  · Pegar / con formato de origen → mantiene el formato del origen (rich).
+        // Dos variantes, consistentes en toda la app:
+        //  · Pegar → pegado clásico (mantiene el formato del origen). Igual que Ctrl+V.
         //  · Pegar sin formato → texto plano (pasteAndMatchStyle descarta el formato).
-        // El atajo Ctrl+V sigue siendo el pegado clásico normal (role 'paste').
         menu.append(new MenuItem({ role: 'paste', label: 'Pegar' }));
-        menu.append(new MenuItem({ label: 'Pegar con formato de origen', click: () => win.webContents.paste() }));
         menu.append(new MenuItem({ role: 'pasteAndMatchStyle', label: 'Pegar sin formato' }));
       }
       if (params.isEditable) menu.append(new MenuItem({ role: 'selectAll', label: 'Seleccionar todo' }));
+      // Quitar formato de la selección (aplica al editor de textos; en campos de
+      // texto plano es un no-op inofensivo). execCommand dispara 'input', así que
+      // el editor persiste el cambio automáticamente.
+      if (params.isEditable && params.selectionText) {
+        menu.append(new MenuItem({ type: 'separator' }));
+        menu.append(new MenuItem({
+          label: 'Quitar formato',
+          click: () => { win.webContents.executeJavaScript("try{document.execCommand('removeFormat');document.execCommand('unlink');}catch(e){}"); },
+        }));
+      }
     }
     if (menu.items.length) menu.popup();
   });
