@@ -1,6 +1,6 @@
-import { Wifi } from 'lucide-react'
 import ControllerStatus from './ControllerStatus'
 import WaterChip from './WaterChip'
+import TransfersIcon from './TransfersIcon'
 import './TopBar.css'
 
 // Barra superior derecha: agrupa el mini-widget de agua, el acceso a Transferencias
@@ -17,7 +17,7 @@ export default function TopBar() {
   return (
     <div className="top-bar">
       <WaterChip />
-      <button className="topbar-shortcut" onClick={goTransfers} title="Transferencias (Software)"><Wifi size={16} /></button>
+      <button className="topbar-shortcut" onClick={goTransfers} title="Transferencias (Software)"><TransfersIcon size={16} /></button>
       <ControllerStatus />
     </div>
   )

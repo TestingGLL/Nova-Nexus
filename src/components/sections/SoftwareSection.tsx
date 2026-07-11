@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, ChevronDown, ChevronRight } from 'lucide-react'
 import { useToast } from '../Toast'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
+import TransfersIcon from '../TransfersIcon'
 import './SoftwareSection.css'
 
 const isDesktop = !!window.electronAPI?.isDesktop
@@ -389,7 +390,7 @@ function TransferenciasTab() {
     return (
       <div className="transfer-start-panel">
         <div className="card transfer-hero">
-          <Wifi size={36} className="transfer-hero-icon" />
+          <TransfersIcon size={36} className="transfer-hero-icon" />
           <h3>Transferencia por WiFi</h3>
           <p>Compartí archivos entre tu PC y tu celular. Ambos dispositivos deben estar en la misma red WiFi.</p>
           <button className="system-btn" onClick={start} disabled={starting}>
@@ -528,7 +529,7 @@ function TransferenciasTab() {
 const SOFT_TABS: { id: string; label: string; icon: React.ReactNode }[] = [
   { id: 'browser', label: 'Navegador', icon: <Globe size={13} /> },
   { id: 'dispositivos', label: 'Dispositivos', icon: <Bluetooth size={13} /> },
-  { id: 'transferencias', label: 'Transferencias', icon: <Wifi size={13} /> },
+  { id: 'transferencias', label: 'Transferencias', icon: <TransfersIcon size={13} /> },
   { id: 'papelera', label: 'Papelera', icon: <Trash2 size={13} /> },
   { id: 'appdata', label: 'AppData', icon: <FolderOpen size={13} /> },
 ]
