@@ -494,8 +494,8 @@ const repeatOptions = [
   { v: '1m', label: 'Cada mes' }, { v: '2m', label: 'Cada 2 meses' }, { v: '3m', label: 'Cada 3 meses' },
   { v: '3m+', label: '+3 meses' },
 ]
-// Veces por mes de cada frecuencia (para proyectar el gasto en un período).
-const repeatPerMonth: Record<string, number> = { '1w': 52 / 12, '2w': 26 / 12, '1m': 1, '2m': 1 / 2, '3m': 1 / 3, '3m+': 1 / 4 }
+// Cada cuántos meses ocurre cada frecuencia (para contar ocurrencias en un período).
+const repeatEveryMonths: Record<string, number> = { '1w': 12 / 52, '2w': 12 / 26, '1m': 1, '2m': 2, '3m': 3, '3m+': 4 }
 // Duración (en meses) de cada opción, usada como período de proyección.
 const periodMonths: Record<string, number> = { '1w': 0.25, '2w': 0.5, '1m': 1, '2m': 2, '3m': 3, '3m+': 4 }
 const quickAmounts = [1000, 5000, 8000, 10000]
@@ -551,7 +551,11 @@ function GastosPropiosView() {
   const projTotal = current.reduce((sum, e) => {
     const amt = e.amount || 0
     if (!e.repeat) return sum + amt
-    return sum + amt * (repeatPerMonth[e.repeat] || 0) * (periodMonths[projPeriod] || 1)
+    const every = repeatEveryMonths[e.repeat]
+    if (!every) return sum
+    // Ocurrencias enteras dentro del período: un gasto menos frecuente que el
+    // período NO se amortiza (p.ej. "cada 3 meses" cuenta 0 en "1 mes", no /3).
+    return sum + amt * Math.floor((periodMonths[projPeriod] || 0) / every)
   }, 0)
 
   return (
