@@ -122,10 +122,12 @@
 .day-routine-card { cursor: pointer; transition: transform 0.15s; }
 .day-routine-card:hover { transform: translateY(-2px); }
 .day-routine-day { font-size: 18px; font-weight: 700; color: var(--text-primary); text-transform: capitalize; margin: 8px 0; }
-.day-routine-info { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 10px; color: white; }
+.day-routine-banner { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-height: 82px; padding: 14px 16px; border-radius: 10px; color: white; }
+.day-routine-banner.has-img { text-shadow: 0 1px 5px rgba(0,0,0,0.55); }
+.day-routine-banner-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
 .day-routine-emoji { font-size: 28px; }
-.day-routine-name { display: block; font-size: 15px; font-weight: 700; }
-.day-routine-count { font-size: 11px; opacity: 0.9; }
+.day-routine-name { display: block; font-size: 15px; font-weight: 700; position: relative; z-index: 1; }
+.day-routine-count { font-size: 11px; opacity: 0.9; position: relative; z-index: 1; }
 .day-routine-empty { padding: 14px; border: 1px dashed var(--border); border-radius: 10px; font-size: 12px; color: var(--text-secondary); text-align: center; }
 .day-routine-hint { display: block; font-size: 10px; color: var(--text-secondary); opacity: 0.6; margin-top: 8px; text-align: right; }
 

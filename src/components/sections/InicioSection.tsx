@@ -506,19 +506,18 @@ function DayRoutineWidget() {
 
   return (
     <div className="card day-routine-card" onClick={openRoutine}>
-      <div className="card-title"><Dumbbell size={16} /> Rutina de hoy</div>
       <div className="day-routine-day">{dayName}</div>
       {routine ? (
         <>
-          <div className="day-routine-info" style={{ background: `linear-gradient(135deg, ${routine.color}, ${routine.color}aa)` }}>
-            <div><span className="day-routine-name">{routine.name}</span><span className="day-routine-count">{weekEx.length} ejercicios · Semana {week + 1}</span></div>
+          <div className={`day-routine-banner ${routine.banner ? 'has-img' : ''}`} style={routine.banner ? { background: '#1e293b' } : { background: `linear-gradient(135deg, ${routine.color || '#334155'}, ${(routine.color || '#334155')}99)` }}>
+            {routine.banner && <img className="day-routine-banner-img" src={routine.banner} alt="" style={{ objectPosition: `${routine.bannerPos?.x ?? 50}% ${routine.bannerPos?.y ?? 50}%`, transform: `scale(${(routine.bannerZoom ?? 100) / 100})` }} />}
+            {!routine.hideName && (routine.name || '').trim() && <span className="day-routine-name">{routine.name}</span>}
+            <span className="day-routine-count">{weekEx.length} ejercicios · Semana {week + 1}</span>
           </div>
           {weekEx.length > 0 && (
             <div className="day-routine-exs">
-              <span className="day-routine-exs-label">Ejercicios del día</span>
               {weekEx.map((e: any, i: number) => (
                 <button key={i} className="day-routine-ex" onClick={ev => { ev.stopPropagation(); openRoutine() }} title="Ir al ejercicio">
-                  <span className="day-routine-ex-dot" style={{ background: routine.color }} />
                   <span className="day-routine-ex-name">{e.name}</span>
                   <span className="day-routine-ex-meta">{e.sets}×{e.mode === 'time' ? (e.time || e.reps) : e.reps}</span>
                 </button>
@@ -529,7 +528,6 @@ function DayRoutineWidget() {
       ) : (
         <div className="day-routine-empty">Día de descanso · asigná una rutina en Salud</div>
       )}
-      <span className="day-routine-hint">Clic para abrir →</span>
     </div>
   )
 }
