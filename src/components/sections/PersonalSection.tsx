@@ -533,6 +533,12 @@ const CARD_COLORS = [
   '#1a1a2e', '#16213e', '#0f3460', '#1b1b2f', '#162447', '#0d1b2a', '#1f2833', '#212121',
   '#2d132c', '#3a0ca3', '#240046', '#10002b', '#03071e', '#1b263b', '#22223b', '#2b2d42',
   '#0b132b', '#1c2541', '#231942', '#1d3557',
+  // Verdes, marrones y teales oscuros
+  '#14281d', '#1b3a2a', '#0b3d2e', '#0f2f2e', '#08313a', '#123c3c', '#3e2723', '#4e342e', '#3b2f2f',
+  // Púrpuras, vinos y rojos oscuros
+  '#2c003e', '#3a1c71', '#42275a', '#2b1055', '#4a0e0e', '#3d0c11', '#4b1248', '#3c1361', '#5b1a2e',
+  // Azules y grises muy oscuros / casi negros
+  '#0f2027', '#141e30', '#101d42', '#0a0a0f', '#141414', '#1c1c28', '#20232a', '#23272e', '#12121c',
 ]
 
 // Titular por defecto de las tarjetas.
@@ -628,6 +634,13 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
   // Weekday index today, mapped to PY_DAYS (0 = Lunes).
   const todayIdx = (new Date().getDay() + 6) % 7
   const todayPromos = promos.filter(p => p.days.includes(todayIdx) && cardOf(p.cardId))
+  const FULL_DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+  // Próximos 7 días (desde mañana) con sus promociones, para la tabla-resumen.
+  const upcomingDays = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date(); date.setDate(date.getDate() + i + 1)
+    const idx = (date.getDay() + 6) % 7
+    return { offset: i + 1, date, idx, dayPromos: promos.filter(p => p.days.includes(idx) && cardOf(p.cardId)) }
+  })
   const matchesFilters = (p: PedidoPromo) =>
     (fApp === 'all' || (p.app || 'pedidosya') === fApp) &&
     (fDay === 'all' || p.days.includes(fDay)) &&
@@ -681,6 +694,35 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
             })}
           </div>
         )}
+      </div>
+
+      {/* Tabla-resumen de los descuentos de los próximos días */}
+      <div className="card py-upcoming">
+        <div className="py-upcoming-head"><CalendarClock size={15} /> Próximos días</div>
+        <div className="py-upcoming-table">
+          {upcomingDays.map(d => (
+            <div key={d.offset} className={`py-up-row ${d.dayPromos.length === 0 ? 'empty' : ''}`}>
+              <div className="py-up-day">
+                <span className="py-up-dayname">{d.offset === 1 ? 'Mañana' : FULL_DAYS[d.idx]}</span>
+                <span className="py-up-date">{d.date.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>
+              </div>
+              <div className="py-up-promos">
+                {d.dayPromos.length === 0
+                  ? <span className="py-up-empty">Sin promos</span>
+                  : d.dayPromos.map(p => {
+                    const app = PROMO_APPS[p.app || 'pedidosya']
+                    return (
+                      <span key={p.id} className="py-up-chip" style={{ borderColor: app.color }} title={`${p.discount}% · ${cardName(p.cardId)} · ${app.label}`}>
+                        <span className="py-up-disc" style={{ color: app.color }}>{p.discount}%</span>
+                        <span className="py-up-card">{cardName(p.cardId)}</span>
+                        <span className="py-up-app">{app.icon}</span>
+                      </span>
+                    )
+                  })}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className={`card pedidosya-add ${editingId ? 'editing' : ''}`}>

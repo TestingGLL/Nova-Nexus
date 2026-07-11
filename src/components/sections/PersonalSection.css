@@ -869,6 +869,23 @@
 .py-today-card { font-size: 12px; font-weight: 600; color: var(--text-primary); }
 .py-today-app { font-size: 11px; color: var(--text-secondary); }
 
+/* Tabla de próximos días */
+.py-upcoming { padding: 14px 16px !important; display: flex; flex-direction: column; gap: 10px; }
+.py-upcoming-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.py-upcoming-table { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.py-up-row { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: center; padding: 9px 12px; border-top: 1px solid var(--border-light); }
+.py-up-row:first-child { border-top: none; }
+.py-up-row.empty { opacity: 0.6; }
+.py-up-day { display: flex; flex-direction: column; gap: 1px; }
+.py-up-dayname { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.py-up-date { font-size: 10px; color: var(--text-secondary); text-transform: capitalize; }
+.py-up-promos { display: flex; flex-wrap: wrap; gap: 6px; }
+.py-up-empty { font-size: 11px; color: var(--text-secondary); font-style: italic; }
+.py-up-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px 3px 4px; border: 1px solid; border-left-width: 3px; border-radius: 8px; background: var(--bg-hover); }
+.py-up-disc { font-size: 13px; font-weight: 800; }
+.py-up-card { font-size: 11px; font-weight: 600; color: var(--text-primary); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.py-up-app { font-size: 12px; }
+
 /* Tarjetas: engranaje + menú, vista lista/grid, badge vence-pronto, ojito */
 .tarjetas-view-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .tarjetas-view-toggle button { display: inline-flex; align-items: center; padding: 6px 10px; border: none; background: none; color: var(--text-secondary); cursor: pointer; }
