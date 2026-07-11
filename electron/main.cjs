@@ -74,7 +74,14 @@ function createWindow() {
     });
   } catch {}
 
-  win.webContents.session.setSpellCheckerLanguages(['es']);
+  // Corrector ortográfico en español de Latinoamérica (con fallbacks según el
+  // diccionario disponible en esta build de Chromium).
+  try {
+    const avail = win.webContents.session.availableSpellCheckerLanguages || [];
+    const prefer = ['es-419', 'es-AR', 'es-MX', 'es-US', 'es-ES', 'es'];
+    const pick = prefer.find(l => avail.includes(l)) || 'es';
+    win.webContents.session.setSpellCheckerLanguages([pick]);
+  } catch { try { win.webContents.session.setSpellCheckerLanguages(['es']); } catch {} }
 
   // Right-click spelling suggestions (Español) + edit actions.
   win.webContents.on('context-menu', (_event, params) => {

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Palette, Highlighter, Smile, Type, ChevronDown, Eraser, CaseSensitive, CaseUpper, CaseLower, GripVertical, Plus, X } from 'lucide-react'
+import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Palette, Highlighter, Smile, Type, ChevronDown, Eraser, CaseSensitive, CaseUpper, CaseLower, GripVertical, Plus, X, Copy, CopyPlus, Trash2 } from 'lucide-react'
 import './RichTextEditor.css'
 
 // ===== Editor de Textos unificado de la app =====
@@ -12,6 +12,8 @@ import './RichTextEditor.css'
 export const RTE_TEXT_COLORS = ['#1d1d1f', '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b', '#ffffff']
 export const RTE_HIGHLIGHTS = ['#fff59d', '#c5e1a5', '#80deea', '#90caf9', '#f48fb1', '#ffcc80', '#e0e0e0']
 const RTE_EMOJIS = ['😀', '😅', '😍', '🥰', '😎', '🤔', '👍', '👏', '🙌', '🎉', '🔥', '✨', '⭐', '❤️', '💡', '✅', '❌', '⚠️', '📌', '📝', '📅', '⏰', '💪', '🚀', '🎯', '💰', '🛒', '🎨', '📦', '🌟', '🙏', '👀']
+// Colores claros / de bajo contraste para las líneas divisorias (hr).
+const HR_COLORS = ['#e5e7eb', '#d1d5db', '#cbd5e1', '#e2e8f0', '#fca5a5', '#fdba74', '#fde68a', '#bbf7d0', '#bfdbfe', '#ddd6fe', '#fbcfe8']
 
 interface Block { id: string; html: string }
 const BLOCK_LEVEL = /^\s*<(h[1-6]|ul|ol|blockquote|hr|details|div|p)/i
@@ -71,12 +73,16 @@ interface Props {
 
 // Un bloque: contentEditable que siembra su innerHTML solo al montar (por id) para
 // no perder el cursor; reporta cambios por onInput.
-function BlockRow({ block, placeholder, onInput, onEnter, onBackspaceEmpty, onDuplicate, onFocus, onDragStart, onDragEnd, onDragOver, onDrop, onRemove, onGripMenu, dragOver }: {
-  block: Block; placeholder?: string
+function BlockRow({ block, placeholder, selected, onInput, onEnter, onBackspaceEmpty, onDuplicate, onSelectAll, onToggleSelect, onClearSelect, onHrClick, onFocus, onDragStart, onDragEnd, onDragOver, onDrop, onRemove, onGripMenu, dragOver }: {
+  block: Block; placeholder?: string; selected: boolean
   onInput: (html: string) => void
   onEnter: () => void
   onBackspaceEmpty: () => void
   onDuplicate: () => void
+  onSelectAll: () => void
+  onToggleSelect: () => void
+  onClearSelect: () => void
+  onHrClick: (el: HTMLElement, x: number, y: number) => void
   onFocus: () => void
   onDragStart: () => void; onDragEnd: () => void; onDragOver: () => void; onDrop: () => void
   onRemove: () => void
@@ -98,6 +104,7 @@ function BlockRow({ block, placeholder, onInput, onEnter, onBackspaceEmpty, onDu
     onInput(ref.current?.innerHTML || '')
   }
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); onSelectAll(); return }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); onDuplicate(); return }
     if (e.key === 'Enter' && !e.shiftKey) {
       // Dentro de una lista, Enter sigue creando ítems (comportamiento nativo).
@@ -109,17 +116,25 @@ function BlockRow({ block, placeholder, onInput, onEnter, onBackspaceEmpty, onDu
       e.preventDefault(); onBackspaceEmpty()
     }
   }
-  // Clic sobre el triángulo de un encabezado desplegable → abre/cierra.
+  // Clic sobre una línea divisoria (hr) → menú de color/eliminar; sobre el triángulo
+  // de un encabezado desplegable → abre/cierra.
   const handleClick = (e: React.MouseEvent) => {
     const t = e.target as HTMLElement
+    if (t.tagName === 'HR') { e.preventDefault(); onHrClick(t, e.clientX, e.clientY); return }
     if (t.tagName === 'SUMMARY' && (e.nativeEvent as MouseEvent).offsetX < 20) {
       const d = t.parentElement as HTMLDetailsElement; d.open = !d.open; e.preventDefault()
     }
   }
+  // Ctrl/Cmd + clic → (des)selecciona el bloque (sin colocar el cursor); clic normal
+  // limpia la selección para editar con normalidad.
+  const handleRowMouseDown = (e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) { e.preventDefault(); onToggleSelect() }
+    else onClearSelect()
+  }
 
   return (
-    <div className={`rte-block-row ${dragOver ? 'drag-over' : ''}`} onDragOver={e => { e.preventDefault(); onDragOver() }} onDrop={onDrop}>
-      <span className="rte-block-grip" draggable onDragStart={onDragStart} onDragEnd={onDragEnd} onContextMenu={onGripMenu} title="Arrastrar para reordenar · clic derecho para convertir a encabezado"><GripVertical size={13} /></span>
+    <div className={`rte-block-row ${dragOver ? 'drag-over' : ''} ${selected ? 'selected' : ''}`} onMouseDown={handleRowMouseDown} onDragOver={e => { e.preventDefault(); onDragOver() }} onDrop={onDrop}>
+      <span className="rte-block-grip" draggable onMouseDown={e => e.stopPropagation()} onDragStart={onDragStart} onDragEnd={onDragEnd} onContextMenu={onGripMenu} title="Arrastrar para reordenar (mueve la selección) · clic derecho para convertir a encabezado"><GripVertical size={13} /></span>
       <div
         ref={ref}
         data-rte-block={block.id}
@@ -144,6 +159,8 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
   const [menu, setMenu] = useState<null | 'color' | 'highlight' | 'emoji' | 'heading' | 'case'>(null)
   const [ctxMenu, setCtxMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [hrMenu, setHrMenu] = useState<{ el: HTMLElement; x: number; y: number } | null>(null)
   const activeId = useRef<string | null>(null)
   const dragId = useRef<string | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -190,15 +207,71 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
     const nb: Block = { id: newBlockId(), html: blocks[idx].html }
     const next = [...blocks]; next.splice(idx + 1, 0, nb); commit(next)
   }
+  // Reordenar: mueve el bloque arrastrado o TODA la selección (si el arrastrado
+  // pertenece a ella) hasta la posición del bloque de destino.
   const reorder = (toId: string) => {
     const from = dragId.current
     setDragOverId(null); dragId.current = null
-    if (!from || from === toId) return
-    const fromIdx = blocks.findIndex(b => b.id === from)
-    const toIdx = blocks.findIndex(b => b.id === toId)
-    if (fromIdx < 0 || toIdx < 0) return
-    const next = [...blocks]; const [m] = next.splice(fromIdx, 1); next.splice(toIdx, 0, m); commit(next)
+    if (!from) return
+    const ids = (selected.has(from) && selected.size > 0) ? blocks.filter(b => selected.has(b.id)).map(b => b.id) : [from]
+    if (ids.includes(toId)) return
+    const moving = blocks.filter(b => ids.includes(b.id))
+    const rest = blocks.filter(b => !ids.includes(b.id))
+    const toIdx = rest.findIndex(b => b.id === toId)
+    if (toIdx < 0) return
+    commit([...rest.slice(0, toIdx), ...moving, ...rest.slice(toIdx)])
   }
+
+  // ---- Selección múltiple de bloques ----
+  const toggleSelect = (id: string) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const clearSelect = () => setSelected(s => (s.size ? new Set() : s))
+  const selectAll = () => setSelected(new Set(blocks.map(b => b.id)))
+  const duplicateSelected = () => {
+    const sel = blocks.filter(b => selected.has(b.id)); if (!sel.length) return
+    const lastIdx = Math.max(...sel.map(b => blocks.findIndex(x => x.id === b.id)))
+    const copies = sel.map(b => ({ id: newBlockId(), html: b.html }))
+    const next = [...blocks]; next.splice(lastIdx + 1, 0, ...copies); commit(next)
+    setSelected(new Set(copies.map(c => c.id)))
+  }
+  const deleteSelected = () => {
+    const next = blocks.filter(b => !selected.has(b.id))
+    commit(next.length ? next : [{ id: newBlockId(), html: '' }]); setSelected(new Set())
+  }
+  const copySelected = async () => {
+    const sel = blocks.filter(b => selected.has(b.id)); if (!sel.length) return
+    const htmlStr = blocksToHtml(sel)
+    const tmp = document.createElement('div'); tmp.innerHTML = htmlStr
+    const plain = tmp.innerText
+    try {
+      const CI = (window as any).ClipboardItem
+      if (navigator.clipboard && CI) await navigator.clipboard.write([new CI({ 'text/html': new Blob([htmlStr], { type: 'text/html' }), 'text/plain': new Blob([plain], { type: 'text/plain' }) })])
+      else await navigator.clipboard.writeText(plain)
+    } catch { try { await navigator.clipboard.writeText(plain) } catch {} }
+  }
+
+  // ---- Líneas divisorias (hr): color / eliminar ----
+  const persistHr = (el: HTMLElement) => { const bid = el.closest('[data-rte-block]')?.getAttribute('data-rte-block'); const bel = bid ? blockEl(bid) : null; if (bid && bel) updateBlock(bid, bel.innerHTML) }
+  const setHrColor = (c: string) => { if (!hrMenu) return; const el = hrMenu.el; el.style.setProperty('border-color', c); el.style.setProperty('background-color', c); el.style.setProperty('color', c); persistHr(el) }
+  const deleteHr = () => { if (!hrMenu) return; const el = hrMenu.el; const bid = el.closest('[data-rte-block]')?.getAttribute('data-rte-block'); el.remove(); const bel = bid ? blockEl(bid) : null; if (bid && bel) updateBlock(bid, bel.innerHTML); setHrMenu(null) }
+
+  // Atajos en modo selección de bloques (Ctrl+A/C/D, Delete, Escape), a nivel documento.
+  useEffect(() => {
+    if (selected.size === 0) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setSelected(new Set()); return }
+      // No interferir si el foco está en un campo editable (input/textarea/otro bloque).
+      const t = e.target as HTMLElement | null
+      if (t && (t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
+      const cmd = e.ctrlKey || e.metaKey
+      if (cmd && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); setSelected(new Set(blocks.map(b => b.id))) }
+      else if (cmd && (e.key === 'c' || e.key === 'C')) { e.preventDefault(); copySelected() }
+      else if (cmd && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); duplicateSelected() }
+      else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, blocks])
 
   // Comandos de la toolbar: se aplican al bloque enfocado y luego leemos su HTML.
   const exec = (cmd: string, val?: string) => {
@@ -300,6 +373,17 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
         {btn('Quitar formato', () => exec('removeFormat'), <Eraser size={14} />)}
       </div>
 
+      {selected.size > 0 && (
+        <div className="rte-selbar" onMouseDown={e => e.stopPropagation()}>
+          <span className="rte-selbar-count">{selected.size} bloque{selected.size > 1 ? 's' : ''} seleccionado{selected.size > 1 ? 's' : ''}</span>
+          <button onClick={duplicateSelected} title="Duplicar (Ctrl+D)"><CopyPlus size={13} /> Duplicar</button>
+          <button onClick={copySelected} title="Copiar (Ctrl+C)"><Copy size={13} /> Copiar</button>
+          <button className="rte-selbar-del" onClick={deleteSelected} title="Eliminar (Supr)"><Trash2 size={13} /> Eliminar</button>
+          <span className="rte-selbar-hint">Arrastrá para mover · Ctrl+clic para (des)seleccionar</span>
+          <button className="rte-selbar-close" onClick={() => setSelected(new Set())} title="Cancelar selección"><X size={13} /></button>
+        </div>
+      )}
+
       <div className="rte-blocks" ref={wrapRef} style={minHeight ? { minHeight } : undefined}>
         {blocks.map((b, i) => (
           <BlockRow
@@ -307,10 +391,15 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
             block={b}
             placeholder={i === 0 ? (placeholder || 'Escribí...') : undefined}
             dragOver={dragOverId === b.id}
+            selected={selected.has(b.id)}
             onInput={h => updateBlock(b.id, h)}
             onEnter={() => addAfter(b.id)}
             onBackspaceEmpty={() => removeBlock(b.id)}
             onDuplicate={() => duplicateBlock(b.id)}
+            onSelectAll={selectAll}
+            onToggleSelect={() => toggleSelect(b.id)}
+            onClearSelect={clearSelect}
+            onHrClick={(el, x, y) => setHrMenu({ el, x: Math.min(x, window.innerWidth - 210), y: Math.min(y, window.innerHeight - 180) })}
             onFocus={() => { activeId.current = b.id }}
             onRemove={() => removeBlock(b.id)}
             onGripMenu={e => { e.preventDefault(); setMenu(null); setCtxMenu({ id: b.id, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 300) }) }}
@@ -337,6 +426,19 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
             <button onClick={() => convertBlock(ctxMenu.id, 'd3')} className="rte-h3">▸ Encabezado desplegable 3</button>
             <div className="rte-ctx-sep" />
             <button onClick={() => convertBlock(ctxMenu.id, 'p')}>Texto normal</button>
+          </div>
+        </>
+      )}
+
+      {hrMenu && (
+        <>
+          <div className="rte-ctx-backdrop" onMouseDown={() => setHrMenu(null)} onContextMenu={e => { e.preventDefault(); setHrMenu(null) }} />
+          <div className="rte-hr-menu" style={{ top: hrMenu.y, left: hrMenu.x }} onMouseDown={e => e.stopPropagation()}>
+            <span className="rte-ctx-title">Línea divisoria</span>
+            <div className="rte-hr-colors">
+              {HR_COLORS.map(c => <button key={c} style={{ background: c }} title={c} onClick={() => setHrColor(c)} />)}
+            </div>
+            <button className="rte-hr-del" onClick={deleteHr}><Trash2 size={12} /> Eliminar línea</button>
           </div>
         </>
       )}
