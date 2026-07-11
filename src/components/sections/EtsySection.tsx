@@ -114,7 +114,7 @@ interface StoreData {
   presets?: PresetMsg[]; presetGroups?: PresetGroup[]
   creacionGroups?: CreacionGroup[]; creacionTags?: string[]
   generador?: PromptPanel[]; generadorGroups?: CreacionGroup[]; generadorTags?: string[]
-  seo?: SeoPanel[]; ideas?: string
+  seo?: SeoPanel[]; ideas?: string; followers?: number
 }
 
 const defaultStores: StoreData[] = [
@@ -1788,6 +1788,9 @@ function SeoTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData
   const commitEditTag = (pid: string, gid: string, idx: number, prev: string) => { mapGroup(pid, gid, g => ({ ...g, tags: g.tags.map((t, i) => i === idx ? (editTagVal.trim() || prev) : t) })); setEditingTag(null) }
   const copyGroup = (g: SeoGroup) => { navigator.clipboard.writeText(g.tags.map(t => formatTag(t, g.format, g.textCase)).join(', ')); setCopied(g.id); setTimeout(() => setCopied(null), 1500) }
   const toggle = (id: string) => setCollapsed(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  // Al cambiar formato/case, convertir los tags ya creados a ese formato.
+  const changeFormat = (pid: string, gid: string, format: SeoFormat) => mapGroup(pid, gid, g => ({ ...g, format, tags: g.tags.map(t => formatTag(t, format, g.textCase)) }))
+  const changeCase = (pid: string, gid: string, textCase: SeoCase) => mapGroup(pid, gid, g => ({ ...g, textCase, tags: g.tags.map(t => formatTag(t, g.format, textCase)) }))
 
   return (
     <div className="seo-tab">
@@ -1810,17 +1813,20 @@ function SeoTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData
           {pOpen && (
             <div className="seo-panel-body">
               {panel.groups.length === 0 && <p className="article-group-empty">Sin subgrupos. Agregá uno con el botón +.</p>}
-              {panel.groups.map(g => (
-                <div key={g.id} className="seo-group">
+              {panel.groups.map(g => {
+                const gOpen = !collapsed.has(g.id)
+                return (
+                <div key={g.id} className={`seo-group ${gOpen ? '' : 'collapsed'}`}>
                   <div className="seo-group-head">
+                    <button className="seo-collapse" onClick={() => toggle(g.id)} title={gOpen ? 'Minimizar subgrupo' : 'Expandir subgrupo'}>{gOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>
                     <input className="seo-group-name" value={g.name} onChange={e => setGroup(panel.id, g.id, { name: e.target.value })} placeholder="Subgrupo..." />
                     <span className="seo-group-count" title="Cantidad de tags"><Hash size={11} /> {g.tags.length}</span>
-                    <select className="seo-fmt" value={g.format} onChange={e => setGroup(panel.id, g.id, { format: Number(e.target.value) as SeoFormat })} title="Formato de separación de palabras clave">
+                    <select className="seo-fmt" value={g.format} onChange={e => changeFormat(panel.id, g.id, Number(e.target.value) as SeoFormat)} title="Formato de separación de palabras clave">
                       <option value={1}>palabra_palabra</option>
                       <option value={2}>palabra palabra</option>
                       <option value={3}>palabrapalabra</option>
                     </select>
-                    <select className="seo-case" value={g.textCase} onChange={e => setGroup(panel.id, g.id, { textCase: e.target.value as SeoCase })} title="Mayúsculas / minúsculas">
+                    <select className="seo-case" value={g.textCase} onChange={e => changeCase(panel.id, g.id, e.target.value as SeoCase)} title="Mayúsculas / minúsculas">
                       <option value="lower">minúsculas</option>
                       <option value="upper">MAYÚSCULAS</option>
                       <option value="sentence">Tipo oración</option>
@@ -1828,6 +1834,7 @@ function SeoTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData
                     <button className="preset-copy" onClick={() => copyGroup(g)} title="Copiar keywords (separadas por coma)">{copied === g.id ? <Check size={14} /> : <Copy size={14} />}</button>
                     <button className="preset-icon-btn del" onClick={() => removeGroup(panel.id, g.id)} title="Eliminar subgrupo"><Trash2 size={13} /></button>
                   </div>
+                  {gOpen && (<>
                   <div className="seo-tags">
                     {g.tags.map((t, i) => {
                       const key = `${g.id}:${i}`
@@ -1843,8 +1850,10 @@ function SeoTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData
                     {g.tags.length === 0 && <span className="seo-tags-empty">Sin tags todavía.</span>}
                   </div>
                   <input className="seo-tag-input" value={newTag[g.id] || ''} onChange={e => setNewTag(s => ({ ...s, [g.id]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTags(panel.id, g.id, newTag[g.id] || '') } }} onBlur={() => (newTag[g.id] || '').trim() && addTags(panel.id, g.id, newTag[g.id] || '')} placeholder="Escribí una keyword y Enter (o coma) para agregarla..." />
+                  </>)}
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -1911,7 +1920,7 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
   const [storeTab, setStoreTab] = useState<'informacion' | 'articles' | 'launches' | 'creaciones' | 'generador' | 'planificacion' | 'predeterminadas' | 'seo' | 'ideas' | 'clientes'>('informacion')
   const [showReviews, setShowReviews] = useState(false)
   const [showCountries, setShowCountries] = useState(false)
-  const [editStat, setEditStat] = useState<null | 'sales' | 'products'>(null)
+  const [editStat, setEditStat] = useState<null | 'sales' | 'products' | 'followers'>(null)
   const bannerInputRef = useRef<HTMLInputElement>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
 
@@ -2009,6 +2018,9 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
               <div className="stat-box" style={{ borderColor: store.accentColor }} title="Se calcula desde la pestaña Clientes"><Users size={18} style={{ color: store.accentColor }} /><span className="stat-number">{clientCount}</span><span className="stat-label">Clientes</span></div>
               <button type="button" className={`stat-box stat-box-btn ${showCountries ? 'active' : ''}`} style={{ borderColor: store.accentColor }} onClick={() => setShowCountries(v => !v)} title="Ver países de los clientes"><Globe size={18} style={{ color: store.accentColor }} /><span className="stat-number">{countryCounts.length}</span><span className="stat-label">Países {showCountries ? '▲' : '▼'}</span></button>
               <div className="stat-box" style={{ borderColor: store.accentColor }} title="Promedio de puntuación de las reseñas"><TrendingUp size={18} style={{ color: store.accentColor }} /><span className="stat-number">{rating}★</span><span className="stat-label">Rating</span></div>
+              {editStat === 'followers'
+                ? <div className="stat-box editing" style={{ borderColor: store.accentColor }}><UserPlus size={18} style={{ color: store.accentColor }} /><input className="stat-edit-input" type="number" min={0} autoFocus value={store.followers || 0} onChange={e => onUpdate({ ...store, followers: Number(e.target.value) })} onBlur={() => setEditStat(null)} onKeyDown={e => e.key === 'Enter' && setEditStat(null)} /><span className="stat-label">Seguidores</span></div>
+                : <button type="button" className="stat-box stat-box-btn" style={{ borderColor: store.accentColor }} onClick={() => setEditStat('followers')} title="Clic para editar"><UserPlus size={18} style={{ color: store.accentColor }} /><span className="stat-number">{store.followers || 0}</span><span className="stat-label">Seguidores ✎</span></button>}
             </div>
             {showCountries && (
               <div className="store-countries-list">
