@@ -511,7 +511,6 @@ function DayRoutineWidget() {
       {routine ? (
         <>
           <div className="day-routine-info" style={{ background: `linear-gradient(135deg, ${routine.color}, ${routine.color}aa)` }}>
-            <span className="day-routine-emoji">{routine.emoji}</span>
             <div><span className="day-routine-name">{routine.name}</span><span className="day-routine-count">{weekEx.length} ejercicios · Semana {week + 1}</span></div>
           </div>
           {weekEx.length > 0 && (

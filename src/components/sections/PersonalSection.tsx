@@ -89,8 +89,9 @@ function formatExerciseTime(raw?: string): string {
   const m = Math.floor(n / 60), s = n % 60
   return s === 0 ? `${m} min` : `${m} min ${s}s`
 }
-// Banner background. With a custom image the accent color is NOT applied (the image
-// shows as-is); without an image the accent color (or a neutral fallback) is used.
+// Banner background. With a custom image, no color overlay is applied over it (the
+// image shows clean) — the accent color is shown as a separate strip + stat numbers.
+// Without an image, the accent color (or a neutral fallback) fills the banner.
 const NEUTRAL_BANNER = 'linear-gradient(135deg, #64748b, #475569)'
 function bannerBg(r: Routine): CSSProperties {
   if (r.banner) return { background: '#1e293b' }
@@ -159,6 +160,8 @@ function ExercisePanel() {
   const dragPanel = useRef<string | null>(null)
   const [dragOverPanel, setDragOverPanel] = useState<string | null>(null)
   const bannerInputRef = useRef<HTMLInputElement>(null)
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingPersist = useRef<{ key: string; data: Routine[] } | null>(null)
   const confirm = useConfirm()
   const toggleExpand = (i: number) => setExpandedEx(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n })
   const openRoutine = (id: string) => { setActiveRoutine(id); setWeek(0); setBannerConfig(false); setExpandedEx(new Set()) }
@@ -202,7 +205,30 @@ function ExercisePanel() {
 
   const isStretch = showSection === 'estiramientos'
   const list = isStretch ? stretches : routines
-  const saveList = (l: Routine[]) => { if (isStretch) { setStretches(l); localStorage.setItem('nn-stretches', JSON.stringify(l)) } else { setRoutines(l); localStorage.setItem('nn-exercise-routines', JSON.stringify(l)) } notifyRoutines() }
+  // Persistencia con debounce: el estado de React se actualiza al instante (tipeo
+  // fluido) y el JSON.stringify + setItem pesados (banners en base64) se hacen una
+  // sola vez tras una pausa, en lugar de en cada tecla. Se descarga al desmontar/ocultar.
+  const flushPersist = () => {
+    if (persistTimer.current) { clearTimeout(persistTimer.current); persistTimer.current = null }
+    const p = pendingPersist.current; pendingPersist.current = null
+    if (p) { try { localStorage.setItem(p.key, JSON.stringify(p.data)) } catch {} notifyRoutines() }
+  }
+  const saveList = (l: Routine[]) => {
+    if (isStretch) setStretches(l); else setRoutines(l)
+    const key = isStretch ? 'nn-stretches' : 'nn-exercise-routines'
+    // If a different list still has a pending write, flush it first (single slot).
+    if (pendingPersist.current && pendingPersist.current.key !== key) flushPersist()
+    pendingPersist.current = { key, data: l }
+    if (persistTimer.current) clearTimeout(persistTimer.current)
+    persistTimer.current = setTimeout(flushPersist, 400)
+  }
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === 'hidden') flushPersist() }
+    window.addEventListener('pagehide', flushPersist)
+    document.addEventListener('visibilitychange', onHide)
+    return () => { flushPersist(); window.removeEventListener('pagehide', flushPersist); document.removeEventListener('visibilitychange', onHide) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const saveWeek = (w: Record<string, string | PlanEntry>) => { setWeekPlan(w); localStorage.setItem('nn-week-routine', JSON.stringify(w)); notifyRoutines() }
 
   // Exercises: a fixed 4 weeks. Stretches: a variable number of named sections.
@@ -294,6 +320,7 @@ function ExercisePanel() {
         <button className="exercise-back" onClick={() => setActiveRoutine(null)}><ArrowLeft size={16} /> Volver</button>
         <div className={`exercise-banner-lg ${routine.banner ? 'has-img' : ''} ${!routine.color ? 'no-color' : ''}`} style={bannerBg(routine)}>
           {routine.banner && <span className="banner-clip"><img className="routine-banner-img" src={routine.banner} alt="" style={bannerImgStyle(routine)} /></span>}
+          {routine.color && <span className="banner-accent" style={{ background: routine.color }} />}
           <input ref={bannerInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { onBannerFile(routine.id, e.target.files?.[0]); e.target.value = '' }} />
           <button className="exercise-banner-gear" onClick={() => setBannerConfig(v => !v)} title="Configurar banner"><Settings size={16} /></button>
           {bannerConfig && (
@@ -418,11 +445,12 @@ function ExercisePanel() {
           <button className="routine-card-del" title="Eliminar panel" onClick={e => { e.stopPropagation(); askRemoveRoutine(r.id) }}><Trash2 size={13} /></button>
           <div className={`routine-banner ${r.banner ? 'has-img' : ''} ${!r.color ? 'no-color' : ''}`} style={bannerBg(r)}>
             {r.banner && <span className="banner-clip"><img className="routine-banner-img" src={r.banner} alt="" style={bannerImgStyle(r)} /></span>}
+            {r.color && <span className="banner-accent" style={{ background: r.color }} />}
             {!r.hideName && r.name.trim() && <span className="routine-name">{r.name}</span>}
           </div>
           <div className="routine-stats">
-            <div className="routine-stat highlight"><span className="routine-stat-num">{weekCount}</span><span className="routine-stat-lbl">{isStretch ? (weekCount === 1 ? 'rutina' : 'rutinas') : (weekCount === 1 ? 'semana' : 'semanas')}</span></div>
-            <div className="routine-stat highlight"><span className="routine-stat-num">{exTotal}</span><span className="routine-stat-lbl">ejercicios</span></div>
+            <div className="routine-stat highlight"><span className="routine-stat-num" style={r.color ? { color: r.color } : undefined}>{weekCount}</span><span className="routine-stat-lbl">{isStretch ? (weekCount === 1 ? 'rutina' : 'rutinas') : (weekCount === 1 ? 'semana' : 'semanas')}</span></div>
+            <div className="routine-stat highlight"><span className="routine-stat-num" style={r.color ? { color: r.color } : undefined}>{exTotal}</span><span className="routine-stat-lbl">ejercicios</span></div>
             <div className="routine-stat"><span className="routine-stat-num">{setTotal}</span><span className="routine-stat-lbl">series</span></div>
           </div>
         </div>
@@ -1714,7 +1742,6 @@ function HoyPanel() {
       <div className="hoy-subdate">{now.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
       {routine ? (
         <div className="hoy-routine" style={{ background: `linear-gradient(135deg, ${routine.color}, ${routine.color}aa)` }}>
-          <span className="hoy-routine-emoji">{routine.emoji}</span>
           <div><span className="hoy-routine-name">{routine.name} — Semana {week + 1}</span><span className="hoy-routine-week">{weekEx.length} ejercicios</span></div>
         </div>
       ) : (
