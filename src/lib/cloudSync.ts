@@ -89,6 +89,12 @@ window.localStorage.removeItem = (key: string) => {
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => { if (pullDone) scheduleDrain(300); else void startCloudSync() })
   setInterval(() => { if (outboxSize() > 0) scheduleDrain(300) }, 30000)
+  // Flush pending changes ASAP when the app is closing/hidden (the outbox already
+  // persists them, so nothing is lost either way — this just uploads sooner).
+  const flush = () => { if (outboxSize() > 0) void drain() }
+  window.addEventListener('pagehide', flush)
+  window.addEventListener('beforeunload', flush)
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush() })
 }
 
 // Pull cloud data into localStorage on login. Keys with pending local changes

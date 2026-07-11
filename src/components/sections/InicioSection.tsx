@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
-import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy, Bot, Flag } from 'lucide-react'
+import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy, Bot, Flag, Tag } from 'lucide-react'
 import { APP_VERSION } from '../../App'
 import { loadNotifications } from '../../lib/notifications'
 import { subscribeMundial, getMundialSnapshot } from '../../lib/mundialStore'
@@ -719,7 +719,51 @@ function loadReminders(): ReminderItem[] { try { const s = localStorage.getItem(
 
 // ============ MAIN SECTION ============
 
-type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'assistant' | 'routine' | 'alerts' | 'holidays' | 'mundial'
+// ============ PROMOS DE HOY (desde Personal → Tarjetas → Promociones) ============
+type PromoApp = 'pedidosya' | 'rappi' | 'presencial'
+interface PromoData { id: string; cardId: string; days: number[]; discount: number; cap?: number; app?: PromoApp }
+interface CardLite { id: string; label?: string; bank?: string }
+const PROMO_APPS: Record<PromoApp, { label: string; icon: string; color: string }> = {
+  pedidosya: { label: 'Pedidos Ya', icon: '🛵', color: '#d9021b' },
+  rappi: { label: 'Rappi', icon: '🛍️', color: '#ff6b1a' },
+  presencial: { label: 'Presencial', icon: '🏪', color: '#0ea5e9' },
+}
+function loadJson<T>(key: string, fallback: T): T { try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback } catch { return fallback } }
+
+function PromosHoyWidget() {
+  const promos = loadJson<PromoData[]>('nn-pedidosya', [])
+  const cards = loadJson<CardLite[]>('nn-cards', [])
+  const todayIdx = (new Date().getDay() + 6) % 7 // 0 = Lunes
+  const dayName = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][todayIdx]
+  const cardName = (id: string) => { const c = cards.find(x => x.id === id); return c ? (c.label?.trim() || c.bank?.trim() || 'Tarjeta') : 'Tarjeta' }
+  const today = promos.filter(p => Array.isArray(p.days) && p.days.includes(todayIdx) && cards.some(c => c.id === p.cardId))
+  const go = () => { const el = document.querySelector('[data-section="personal"]') as HTMLButtonElement | null; el?.click() }
+  return (
+    <div className="widget promos-widget clickable" onClick={go} title="Ir a Personal → Tarjetas → Promociones">
+      <div className="widget-title"><Tag size={14} /> Promos de hoy <span className="promos-day">· {dayName}</span></div>
+      {today.length === 0 ? (
+        <p className="promos-empty">No hay promociones para hoy.</p>
+      ) : (
+        <div className="promos-list">
+          {today.map(p => {
+            const app = PROMO_APPS[p.app || 'pedidosya']
+            return (
+              <div key={p.id} className="promo-row" style={{ borderColor: app.color }}>
+                <span className="promo-disc" style={{ color: app.color }}>{p.discount}%</span>
+                <div className="promo-info">
+                  <span className="promo-card">{cardName(p.cardId)}</span>
+                  <span className="promo-app">{app.icon} {app.label}{p.cap ? ` · tope $${Number(p.cap).toLocaleString('es-AR')}` : ''}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'assistant' | 'routine' | 'alerts' | 'holidays' | 'promos' | 'mundial'
 const widgetRegistry: Record<WidgetId, { name: string; component: React.FC; icon: React.ReactNode; defaultSpan: number }> = {
   timer: { name: 'Temporizador', component: TimerWidget, icon: <Timer size={14} />, defaultSpan: 1 },
   weather: { name: 'Clima', component: WeatherWidget, icon: <CloudSun size={14} />, defaultSpan: 1 },
@@ -730,6 +774,7 @@ const widgetRegistry: Record<WidgetId, { name: string; component: React.FC; icon
   routine: { name: 'Rutina de hoy', component: DayRoutineWidget, icon: <Dumbbell size={14} />, defaultSpan: 1 },
   alerts: { name: 'Próximas alertas', component: NextAlertsWidget, icon: <Bell size={14} />, defaultSpan: 1 },
   holidays: { name: 'Feriados de Argentina', component: HolidaysWidget, icon: <Flag size={14} />, defaultSpan: 1 },
+  promos: { name: 'Promos de hoy', component: PromosHoyWidget, icon: <Tag size={14} />, defaultSpan: 1 },
   mundial: { name: 'Mundial 2026', component: MundialWidget, icon: <Trophy size={14} />, defaultSpan: 3 },
 }
 
@@ -746,7 +791,7 @@ const spanCols = (s: number) => Math.max(2, Math.round(s * 2))
 const defaultBlocks: LayoutBlock[] = [
   { key: newKey(), span: 1, widgets: ['routine'] }, { key: newKey(), span: 1, widgets: ['alerts'] }, { key: newKey(), span: 1, widgets: ['quote'] },
   { key: newKey(), span: 1, widgets: ['chat'] }, { key: newKey(), span: 2, widgets: ['assistant'] }, { key: newKey(), span: 1, widgets: ['timer'] }, { key: newKey(), span: 1, widgets: ['weather'] }, { key: newKey(), span: 1, widgets: ['calendar'] },
-  { key: newKey(), span: 1, widgets: ['holidays'] },
+  { key: newKey(), span: 1, widgets: ['holidays'] }, { key: newKey(), span: 1, widgets: ['promos'] },
   { key: newKey(), span: 3, widgets: ['mundial'] },
 ]
 
