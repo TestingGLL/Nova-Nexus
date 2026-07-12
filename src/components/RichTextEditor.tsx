@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, Palette, Highlighter, Smile, Type, ChevronDown, Eraser, CaseSensitive, CaseUpper, CaseLower, GripVertical, Plus, X, Copy, CopyPlus, Trash2 } from 'lucide-react'
+import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, ListChecks, Palette, Highlighter, Smile, Type, ChevronDown, Eraser, CaseSensitive, CaseUpper, CaseLower, GripVertical, Plus, X, Copy, CopyPlus, Trash2 } from 'lucide-react'
 import './RichTextEditor.css'
 
 // ===== Editor de Textos unificado de la app =====
@@ -12,8 +12,8 @@ import './RichTextEditor.css'
 export const RTE_TEXT_COLORS = ['#1d1d1f', '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b', '#ffffff']
 export const RTE_HIGHLIGHTS = ['#fff59d', '#c5e1a5', '#80deea', '#90caf9', '#f48fb1', '#ffcc80', '#e0e0e0']
 const RTE_EMOJIS = ['😀', '😅', '😍', '🥰', '😎', '🤔', '👍', '👏', '🙌', '🎉', '🔥', '✨', '⭐', '❤️', '💡', '✅', '❌', '⚠️', '📌', '📝', '📅', '⏰', '💪', '🚀', '🎯', '💰', '🛒', '🎨', '📦', '🌟', '🙏', '👀']
-// Colores claros / de bajo contraste para las líneas divisorias (hr).
-const HR_COLORS = ['#e5e7eb', '#d1d5db', '#cbd5e1', '#e2e8f0', '#fca5a5', '#fdba74', '#fde68a', '#bbf7d0', '#bfdbfe', '#ddd6fe', '#fbcfe8']
+// Colores muy suaves / de bajo contraste para las líneas divisorias (hr).
+const HR_COLORS = ['#f1f3f5', '#e9ecef', '#eef1f4', '#f3f6f9', '#fdeaea', '#fdf0e3', '#fef6dd', '#eaf7ee', '#eaf1fd', '#f1edfb', '#fcecf4']
 
 interface Block { id: string; html: string }
 const BLOCK_LEVEL = /^\s*<(h[1-6]|ul|ol|blockquote|hr|details|div|p)/i
@@ -121,6 +121,15 @@ function BlockRow({ block, placeholder, selected, onInput, onEnter, onBackspaceE
   const handleClick = (e: React.MouseEvent) => {
     const t = e.target as HTMLElement
     if (t.tagName === 'HR') { e.preventDefault(); onHrClick(t, e.clientX, e.clientY); return }
+    // Clic sobre la casilla de un ítem de checklist (zona izquierda) → marcar/desmarcar.
+    const li = t.closest('.rte-checklist li') as HTMLElement | null
+    if (li && (e.nativeEvent as MouseEvent).offsetX < 24) {
+      e.preventDefault()
+      const checked = li.getAttribute('data-checked') === 'true'
+      li.setAttribute('data-checked', checked ? 'false' : 'true')
+      onInput(ref.current?.innerHTML || '')
+      return
+    }
     if (t.tagName === 'SUMMARY' && (e.nativeEvent as MouseEvent).offsetX < 20) {
       const d = t.parentElement as HTMLDetailsElement; d.open = !d.open; e.preventDefault()
     }
@@ -190,17 +199,24 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
   }
   // Convierte un bloque a encabezado (h1/h2/h3), encabezado desplegable (d1/d2/d3)
   // o texto normal (p), preservando el contenido interno.
-  const convertBlock = (id: string, kind: 'h1' | 'h2' | 'h3' | 'p' | 'd1' | 'd2' | 'd3') => {
+  const convertBlock = (id: string, kind: 'h1' | 'h2' | 'h3' | 'p' | 'd1' | 'd2' | 'd3' | 'check') => {
     const el = blockEl(id)
     const cur = el ? el.innerHTML : (blocks.find(b => b.id === id)?.html || '')
     const inner = unwrap(cur)
     let html: string
     if (kind === 'p') html = inner || '<br>'
+    else if (kind === 'check') html = `<ul class="rte-checklist"><li data-checked="false">${inner || '<br>'}</li></ul>`
     else if (kind[0] === 'h') html = `<${kind}>${inner || '<br>'}</${kind}>`
     else html = `<details class="rte-det-${kind[1]}" open><summary>${inner || 'Encabezado'}</summary><div><br></div></details>`
     if (el) el.innerHTML = html
     updateBlock(id, html)
     setCtxMenu(null)
+  }
+  // Convierte el bloque activo (o el último) en una checklist. Sirve tanto para
+  // agregar una casilla nueva como para convertir un texto existente en verificable.
+  const insertChecklist = () => {
+    const id = activeId.current || blocks[blocks.length - 1]?.id
+    if (id) convertBlock(id, 'check')
   }
   const duplicateBlock = (id: string) => {
     const idx = blocks.findIndex(b => b.id === id); if (idx < 0) return
@@ -333,6 +349,7 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
         <span className="rte-sep" />
         {btn('Lista con viñetas', () => exec('insertUnorderedList'), <List size={14} />)}
         {btn('Lista numerada', () => exec('insertOrderedList'), <ListOrdered size={14} />)}
+        {btn('Checklist (casilla verificable)', insertChecklist, <ListChecks size={14} />)}
         <span className="rte-sep" />
         <div className="rte-menu-wrap">
           {btn('Color de texto', () => setMenu(menu === 'color' ? null : 'color'), <Palette size={14} />, menu === 'color')}
@@ -402,7 +419,13 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
             onHrClick={(el, x, y) => setHrMenu({ el, x: Math.min(x, window.innerWidth - 210), y: Math.min(y, window.innerHeight - 180) })}
             onFocus={() => { activeId.current = b.id }}
             onRemove={() => removeBlock(b.id)}
-            onGripMenu={e => { e.preventDefault(); setMenu(null); setCtxMenu({ id: b.id, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 300) }) }}
+            onGripMenu={e => {
+              e.preventDefault(); setMenu(null); setCtxMenu(null); setHrMenu(null)
+              // Si el bloque es una línea divisoria, el clic derecho en el grip abre el menú de color.
+              const hr = blockEl(b.id)?.querySelector('hr') as HTMLElement | null
+              if (hr) { setHrMenu({ el: hr, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 180) }); return }
+              setCtxMenu({ id: b.id, x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 300) })
+            }}
             onDragStart={() => { dragId.current = b.id }}
             onDragEnd={() => { dragId.current = null; setDragOverId(null) }}
             onDragOver={() => setDragOverId(b.id)}
@@ -425,6 +448,7 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
             <button onClick={() => convertBlock(ctxMenu.id, 'd2')} className="rte-h2">▸ Encabezado desplegable 2</button>
             <button onClick={() => convertBlock(ctxMenu.id, 'd3')} className="rte-h3">▸ Encabezado desplegable 3</button>
             <div className="rte-ctx-sep" />
+            <button onClick={() => convertBlock(ctxMenu.id, 'check')}><ListChecks size={13} /> Casilla verificable</button>
             <button onClick={() => convertBlock(ctxMenu.id, 'p')}>Texto normal</button>
           </div>
         </>

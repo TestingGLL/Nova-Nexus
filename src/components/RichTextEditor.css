@@ -45,9 +45,17 @@
 .rte-block ul, .rte-block ol { margin: 4px 0; padding-left: 24px; }
 .rte-block li { margin: 2px 0; }
 .rte-block a { color: var(--accent); }
-.rte-block hr.rte-hr { border: none; border-top: 1px solid #d1d5db; margin: 10px 0; }
+.rte-block hr.rte-hr { border: none; border-top: 1px solid #eceef1; margin: 10px 0; }
 .rte-block hr { cursor: pointer; border-radius: 2px; transition: box-shadow 0.15s; }
 .rte-block hr:hover { box-shadow: 0 0 0 2px var(--accent-soft); }
+/* Checklist (casillas verificables): clic en la zona izquierda del ítem marca/desmarca */
+.rte-block ul.rte-checklist { list-style: none; padding-left: 2px; margin: 6px 0; }
+.rte-block ul.rte-checklist li { position: relative; padding-left: 26px; margin: 3px 0; }
+.rte-block ul.rte-checklist li::before { content: ''; position: absolute; left: 0; top: 2px; width: 16px; height: 16px; box-sizing: border-box; border: 1.5px solid var(--border); border-radius: 4px; cursor: pointer; transition: all 0.12s; }
+.rte-block ul.rte-checklist li:hover::before { border-color: var(--accent); }
+.rte-block ul.rte-checklist li[data-checked="true"]::before { background: var(--accent); border-color: var(--accent); }
+.rte-block ul.rte-checklist li[data-checked="true"]::after { content: '✓'; position: absolute; left: 3px; top: 0; font-size: 12px; font-weight: 800; color: #fff; pointer-events: none; }
+.rte-block ul.rte-checklist li[data-checked="true"] { color: var(--text-secondary); text-decoration: line-through; }
 /* Bloque seleccionado (selección múltiple) */
 .rte-block-row.selected { background: var(--accent-soft); border-color: var(--accent); }
 .rte-block details { border-left: 2px solid var(--accent); padding: 2px 0 2px 10px; margin: 4px 0; }
