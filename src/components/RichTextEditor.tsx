@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, ListChecks, Palette, Highlighter, Smile, Type, ChevronDown, Eraser, CaseSensitive, CaseUpper, CaseLower, GripVertical, Plus, X, Copy, CopyPlus, Trash2 } from 'lucide-react'
+import { notify } from './Toast'
 import './RichTextEditor.css'
 
 // ===== Editor de Textos unificado de la app =====
@@ -262,7 +263,8 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
       const CI = (window as any).ClipboardItem
       if (navigator.clipboard && CI) await navigator.clipboard.write([new CI({ 'text/html': new Blob([htmlStr], { type: 'text/html' }), 'text/plain': new Blob([plain], { type: 'text/plain' }) })])
       else await navigator.clipboard.writeText(plain)
-    } catch { try { await navigator.clipboard.writeText(plain) } catch {} }
+      notify()?.success('Copiado')
+    } catch { try { await navigator.clipboard.writeText(plain); notify()?.success('Copiado') } catch {} }
   }
 
   // ---- Líneas divisorias (hr): color / eliminar ----

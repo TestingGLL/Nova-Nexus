@@ -780,7 +780,8 @@ const widgetRegistry: Record<WidgetId, { name: string; component: React.FC; icon
 interface LayoutBlock { key: string; span: number; widgets: WidgetId[] }
 let blockSeq = 0
 const newKey = () => 'blk-' + (blockSeq++) + '-' + Math.random().toString(36).slice(2, 5)
-const MAX_PER_BLOCK = 3
+// Apilamiento vertical sin límite (Infinity). Los anchos horizontales se mantienen.
+const MAX_PER_BLOCK = Infinity
 // Half-step widths on a 6-column grid: 1x→2, 1.5x→3, 2x→4, 2.5x→5, 3x→6 columns.
 const SPAN_STEPS = [1, 1.5, 2, 2.5, 3]
 const spanCols = (s: number) => Math.max(2, Math.round(s * 2))

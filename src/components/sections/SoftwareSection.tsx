@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react'
 import { useToast } from '../Toast'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
+import { copyToClipboard } from '../../lib/clipboard'
 import TransfersIcon from '../TransfersIcon'
 import './SoftwareSection.css'
 
@@ -505,7 +506,7 @@ function TransferenciasTab() {
                   <div className="transfer-msg-info">
                     <span className="transfer-text-content">{entry.text}</span>
                     <span className="transfer-msg-meta">
-                      <button className="transfer-copy-btn" onClick={() => navigator.clipboard.writeText(entry.text || '')}>Copiar</button>
+                      <button className="transfer-copy-btn" onClick={() => copyToClipboard(entry.text || '')}>Copiar</button>
                       {chatTime(entry.ts)}
                     </span>
                   </div>
@@ -519,7 +520,7 @@ function TransferenciasTab() {
                     <div className="transfer-msg-info">
                       <span className="transfer-text-content">{entry.file.text}</span>
                       <span className="transfer-msg-meta">
-                        <button className="transfer-copy-btn" onClick={() => navigator.clipboard.writeText(entry.file.text || '')}>Copiar</button>
+                        <button className="transfer-copy-btn" onClick={() => copyToClipboard(entry.file.text || '')}>Copiar</button>
                         {chatTime(entry.ts)}
                       </span>
                     </div>

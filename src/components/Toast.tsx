@@ -26,6 +26,11 @@ export function useToast(): ToastContextValue {
   return ctx
 }
 
+// Puente a nivel de módulo: permite disparar toasts desde código no-React
+// (utilidades como el portapapeles). Lo setea el ToastProvider al montarse.
+let toastBridge: ToastContextValue | null = null
+export function notify(): ToastContextValue | null { return toastBridge }
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const wasOffline = useRef(false)
@@ -56,7 +61,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       info: (msg: string) => push('info', msg),
       warning: (msg: string) => push('warning', msg),
     }
+    toastBridge = api.current
   }, [push])
+
+  // Disponible desde el primer render para código no-React.
+  toastBridge = api.current
 
   useEffect(() => {
     const onOffline = () => {

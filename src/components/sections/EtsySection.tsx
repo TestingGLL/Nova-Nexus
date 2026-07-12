@@ -4,6 +4,7 @@ import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
 import ColorInput from '../ColorInput'
 import RichTextEditor from '../RichTextEditor'
+import { copyToClipboard } from '../../lib/clipboard'
 import './EtsySection.css'
 
 // ============ TYPES ============
@@ -212,7 +213,7 @@ function BrandPanel({ store, onUpdate }: { store: StoreData; onUpdate: (s: Store
     if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(h)) setColor(i, h)
   }
   const onHexBlur = (i: number) => setHexDraft(d => { const n = { ...d }; delete n[i]; return n })
-  const copyHex = (i: number, c: string) => { try { navigator.clipboard.writeText(c) } catch {}; setCopiedHex(i); setTimeout(() => setCopiedHex(null), 1200) }
+  const copyHex = (i: number, c: string) => { copyToClipboard(c); setCopiedHex(i); setTimeout(() => setCopiedHex(null), 1200) }
 
   const fonts = brand.fonts || []
   const addFont = () => { if (fonts.length < 3) update({ fonts: [...fonts, ''] }) }
@@ -776,7 +777,7 @@ function CreacionesPanel({ panel, save, panels, groups }: { panel: PromptPanel; 
 
   const activePrompt = activeSub === '__main' ? null : panel.prompts.find(p => p.id === activeSub)
   const currentText = activeSub === '__main' ? (panel.mainPrompt || '') : (activePrompt?.text || '')
-  const copyCurrent = () => { if (!currentText.trim()) return; navigator.clipboard.writeText(currentText); setCopied(true); setTimeout(() => setCopied(false), 1500) }
+  const copyCurrent = () => { if (!currentText.trim()) return; copyToClipboard(currentText); setCopied(true); setTimeout(() => setCopied(false), 1500) }
 
   // Etiqueta de cada subprompt en las pestañas: su título manual o el número.
   const subLabel = (pr: { title?: string }, i: number) => (pr.title || '').trim() || `#${i + 1}`
@@ -1658,7 +1659,7 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
   const toggleMsg = (id: string) => setCollapsedMsgs(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const msgLang = (id: string) => lang[id] || 'en' // default: inglés
   // Copia solo el cuerpo del mensaje (sin el título).
-  const copyMsg = (m: PresetMsg) => { const l = msgLang(m.id); const d = l === 'en' ? m.descEn : m.descEs; navigator.clipboard.writeText((d || '').trim()); setCopied(m.id); setTimeout(() => setCopied(null), 1500) }
+  const copyMsg = (m: PresetMsg) => { const l = msgLang(m.id); const d = l === 'en' ? m.descEn : m.descEs; copyToClipboard((d || '').trim()); setCopied(m.id); setTimeout(() => setCopied(null), 1500) }
 
   const renderMsg = (m: PresetMsg) => {
     const l = msgLang(m.id); const editing = editId === m.id
@@ -1761,7 +1762,7 @@ function SeoTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData
   }
   const removeTag = (pid: string, gid: string, idx: number) => mapGroup(pid, gid, g => ({ ...g, tags: g.tags.filter((_, i) => i !== idx) }))
   const commitEditTag = (pid: string, gid: string, idx: number, prev: string) => { mapGroup(pid, gid, g => ({ ...g, tags: g.tags.map((t, i) => i === idx ? (editTagVal.trim() || prev) : t) })); setEditingTag(null) }
-  const copyGroup = (g: SeoGroup) => { navigator.clipboard.writeText(g.tags.map(t => formatTag(t, g.format, g.textCase)).join(', ')); setCopied(g.id); setTimeout(() => setCopied(null), 1500) }
+  const copyGroup = (g: SeoGroup) => { copyToClipboard(g.tags.map(t => formatTag(t, g.format, g.textCase)).join(', ')); setCopied(g.id); setTimeout(() => setCopied(null), 1500) }
   const toggle = (id: string) => setCollapsed(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   // Al cambiar formato/case, convertir los tags ya creados a ese formato.
   const changeFormat = (pid: string, gid: string, format: SeoFormat) => mapGroup(pid, gid, g => ({ ...g, format, tags: g.tags.map(t => formatTag(t, format, g.textCase)) }))

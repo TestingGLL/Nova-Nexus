@@ -66,7 +66,8 @@
 .rte-block details.rte-det-3 > summary { font-size: 15px; }
 
 /* Menú contextual del grip: convertir bloque a encabezado */
-.rte-ctx-backdrop { position: fixed; inset: 0; z-index: 60; }
+.rte-ctx-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.28); animation: rteBackdropIn 0.12s ease; }
+@keyframes rteBackdropIn { from { background: rgba(0,0,0,0); } to { background: rgba(0,0,0,0.28); } }
 .rte-ctx-menu { position: fixed; z-index: 61; min-width: 220px; display: flex; flex-direction: column; gap: 1px; padding: 5px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.22); }
 .rte-ctx-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); padding: 4px 10px 6px; }
 .rte-ctx-menu button { text-align: left; padding: 7px 10px; border: none; background: none; color: var(--text-primary); border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; }

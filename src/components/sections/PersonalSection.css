@@ -903,7 +903,7 @@
 .tarjeta-card-v2 .tarjeta-v2-menu button * { color: var(--text-primary); }
 .tarjeta-card-v2 .tarjeta-v2-menu button:hover { background: var(--bg-hover); }
 .tarjeta-card-v2 .tarjeta-v2-menu button.danger, .tarjeta-card-v2 .tarjeta-v2-menu button.danger * { color: #ef4444; }
-.tarjeta-menu-backdrop { position: fixed; inset: 0; z-index: 10; }
+.tarjeta-menu-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0,0,0,0.28); animation: menuBackdropIn 0.12s ease; }
 .tarjeta-v2-edit-field.bank { text-transform: uppercase; }
 .tarjeta-v2-done { display: flex; align-items: center; justify-content: center; gap: 5px; padding: 7px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.14); color: #fff !important; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .tarjeta-v2-done:hover { background: rgba(255,255,255,0.24); }
@@ -922,7 +922,8 @@
 .bloque-fmt-menu button { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: none; background: none; color: var(--text-primary); font-size: 13px; text-align: left; cursor: pointer; border-radius: 6px; font-family: inherit; }
 .bloque-fmt-menu button:hover { background: var(--bg-hover); color: var(--accent); }
 .bloque-fmt-sep { height: 1px; background: var(--border); margin: 4px 0; }
-.bloque-fmt-backdrop { position: fixed; inset: 0; z-index: 20; }
+.bloque-fmt-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,0.28); animation: menuBackdropIn 0.12s ease; }
+@keyframes menuBackdropIn { from { background: rgba(0,0,0,0); } to { background: rgba(0,0,0,0.28); } }
 
 /* ===== Spec Personal: ejercicio (modo/YouTube), boards de listas, páginas de anotaciones, contactos ===== */
 

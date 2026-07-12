@@ -7,6 +7,7 @@ import ColorInput from '../ColorInput'
 import RichTextEditor from '../RichTextEditor'
 import { useConfirm } from '../ConfirmDialog'
 import { useSecurity, SecurityGate } from '../../lib/security'
+import { copyToClipboard } from '../../lib/clipboard'
 import './PersonalSection.css'
 
 // ============ SALUD ============
@@ -803,7 +804,7 @@ function TarjetasTab() {
   const confirm = useConfirm()
   const save = (c: CardData[]) => { setCards(c); localStorage.setItem('nn-cards', JSON.stringify(c)) }
   const setView = (m: 'list' | 'grid') => { setViewMode(m); try { localStorage.setItem('nn-cards-view', m) } catch {} }
-  const copyText = (text: string, field: string) => { navigator.clipboard.writeText(text.replace(/\D/g, '')); setCopied(field); setTimeout(() => setCopied(null), 1500) }
+  const copyText = (text: string, field: string) => { copyToClipboard(text.replace(/\D/g, '')); setCopied(field); setTimeout(() => setCopied(null), 1500) }
   const tryUnlock = () => { if (password === 'A5/911') { setUnlocked(true); setError(false) } else { setError(true) } }
   const addCard = () => { const id = 'card-' + Date.now(); save([...cards, { id, label: '', bank: '', type: 'visa', number: '', holder: DEFAULT_HOLDER, expiry: '', cvv: '', color: CARD_COLORS[cards.length % CARD_COLORS.length] }]); setEditingCard(id); setMenuCard(null) }
   const updateCard = (id: string, updates: Partial<CardData>) => save(cards.map(c => c.id === id ? { ...c, ...updates } : c))
@@ -1197,7 +1198,7 @@ function ListaComprasTab() {
       .filter(g => g.items.some(i => !i.done))
       .map(g => `${g.name}:\n` + g.items.filter(i => !i.done).map(i => `  - ${i.text}`).join('\n'))
       .join('\n\n')
-    try { navigator.clipboard.writeText(text) } catch {}
+    copyToClipboard(text, 'Resumen copiado')
   }
 
   return (
