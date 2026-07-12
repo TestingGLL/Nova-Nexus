@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, EyeOff, Tag, Sparkles, Plus, X, Volume2, Settings, Lock, GripVertical, Type, CheckCircle2, XCircle, Loader, Activity, Shield, KeyRound, BookOpen, Target } from 'lucide-react'
+import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, EyeOff, Tag, Plus, X, Volume2, Settings, Lock, GripVertical, Type, CheckCircle2, XCircle, Loader, Activity, Shield, KeyRound, BookOpen, Target } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { getSoundsEnabled, setSoundsEnabled, getSoundsVolume, setSoundsVolume, sfx } from '../../lib/sounds'
@@ -94,10 +94,6 @@ interface AlertConfig { anticipationMinutes: number; desktopNotifications: boole
 function loadAlertConfig(): AlertConfig { try { const s = localStorage.getItem('nn-alertas-config'); if (s) { const c = JSON.parse(s); return { anticipationMinutes: c.anticipationMinutes ?? 30, desktopNotifications: c.desktopNotifications ?? true, upcomingDays: c.upcomingDays ?? 3, observationDays: c.observationDays ?? 7 } } } catch {}; return { anticipationMinutes: 30, desktopNotifications: true, upcomingDays: 3, observationDays: 7 } }
 function saveAlertConfig(c: AlertConfig) { localStorage.setItem('nn-alertas-config', JSON.stringify(c)) }
 
-interface WordGroup { name: string; words: string[] }
-function loadWordGroups(): WordGroup[] { try { const s = localStorage.getItem('nn-prompt-groups'); return s ? JSON.parse(s) : [{ name: 'Colores', words: ['rojo', 'azul', 'verde', 'amarillo'] }] } catch { return [] } }
-function saveWordGroups(g: WordGroup[]) { localStorage.setItem('nn-prompt-groups', JSON.stringify(g)) }
-
 interface CustomCategories { precios: string[]; compras: string[] }
 function loadCategories(): CustomCategories { try { const s = localStorage.getItem('nn-custom-categories'); if (s) return JSON.parse(s) } catch {}; return { precios: ['Bebidas', 'Alimentos', 'Higiene', 'Limpieza'], compras: ['General', 'Tecnología', 'Ropa', 'Hogar', 'Juegos'] } }
 function saveCategories(c: CustomCategories) { localStorage.setItem('nn-custom-categories', JSON.stringify(c)) }
@@ -108,7 +104,7 @@ function saveNoteTags(t: string[]) { localStorage.setItem('nn-note-tags', JSON.s
 type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'assistant' | 'routine' | 'alerts' | 'holidays' | 'mundial'
 const widgetNames: Record<WidgetId, string> = { timer: 'Temporizador', weather: 'Clima', calendar: 'Calendario', quote: 'Frase del día', chat: 'Chat rápido', assistant: 'Asistente de la app', routine: 'Rutina de hoy', alerts: 'Próximas alertas', holidays: 'Feriados de Argentina', mundial: 'Mundial 2026' }
 
-type ConfigTab = 'personalizacion' | 'paneles' | 'adicionales' | 'prompts' | 'usuario' | 'alertas' | 'sistema'
+type ConfigTab = 'personalizacion' | 'paneles' | 'adicionales' | 'usuario' | 'alertas' | 'sistema'
 
 const LOCKABLE_SECTIONS: { key: string; label: string }[] = [
   { key: 'personal', label: 'Personal' }, { key: 'finanzas', label: 'Finanzas' }, { key: 'etsy', label: 'Tiendas Etsy' },
@@ -121,7 +117,6 @@ const CFG_TABS: { id: ConfigTab; label: string; icon: React.ReactNode }[] = [
   { id: 'personalizacion', label: 'Personalización', icon: <Palette size={13} /> },
   { id: 'paneles', label: 'Paneles', icon: <Layout size={13} /> },
   { id: 'adicionales', label: 'Adicionales', icon: <Tag size={13} /> },
-  { id: 'prompts', label: 'Prompts', icon: <Sparkles size={13} /> },
   { id: 'usuario', label: 'Usuario', icon: <UserCircle size={13} /> },
   { id: 'alertas', label: 'Alertas', icon: <Bell size={13} /> },
   { id: 'sistema', label: 'Sistema', icon: <Settings size={13} /> },
@@ -142,11 +137,8 @@ export default function ConfiguracionSection() {
   const [hiddenWidgets, setHiddenWidgets] = useState<Set<string>>(() => {
     try { const s = localStorage.getItem('nn-hidden-widgets'); return s ? new Set(JSON.parse(s)) : new Set() } catch { return new Set() }
   })
-  const [wordGroups, setWordGroups] = useState<WordGroup[]>(loadWordGroups)
   const [categories, setCategories] = useState<CustomCategories>(loadCategories)
   const [noteTags, setNoteTags] = useState<string[]>(loadNoteTags)
-  const [newWG, setNewWG] = useState('')
-  const [newWord, setNewWord] = useState<Record<string, string>>({})
   const [newTag, setNewTag] = useState('')
   const [newCat, setNewCat] = useState<Record<'precios' | 'compras', string>>({ precios: '', compras: '' })
   const [soundsOn, setSoundsOn] = useState(getSoundsEnabled())
@@ -159,7 +151,6 @@ export default function ConfiguracionSection() {
   const [newProjLabel, setNewProjLabel] = useState('')
   const [newProjColor, setNewProjColor] = useState('#8b5cf6')
 
-  const updWordGroups = (g: WordGroup[]) => { setWordGroups(g); saveWordGroups(g) }
   const updCategories = (c: CustomCategories) => { setCategories(c); saveCategories(c) }
   const updNoteTags = (t: string[]) => { setNoteTags(t); saveNoteTags(t) }
   const updSecurity = (u: Partial<SecurityConfig>) => { const c = { ...security, ...u }; setSecurity(c); saveSecurity(c) }
@@ -528,33 +519,6 @@ export default function ConfiguracionSection() {
         </>
       )}
 
-      {tab === 'prompts' && (
-        <div className="card config-card">
-          <div className="card-title"><Sparkles size={16} /> Grupos de palabras</div>
-          <p className="config-desc">Grupos reutilizables para el reemplazo rápido en los prompts de Tiendas Etsy → Creaciones. Se sincronizan automáticamente.</p>
-          {wordGroups.map((g, gi) => (
-            <div key={gi} className="cfg-wg">
-              <div className="cfg-wg-head">
-                <input className="cfg-wg-name" value={g.name} onChange={e => updWordGroups(wordGroups.map((x, i) => i === gi ? { ...x, name: e.target.value } : x))} />
-                <button className="cfg-wg-del" onClick={() => updWordGroups(wordGroups.filter((_, i) => i !== gi))}><X size={12} /></button>
-              </div>
-              <div className="cfg-chips">
-                {g.words.map(w => (
-                  <span key={w} className="cfg-chip">{w}<button onClick={() => updWordGroups(wordGroups.map((x, i) => i === gi ? { ...x, words: x.words.filter(y => y !== w) } : x))}><X size={10} /></button></span>
-                ))}
-              </div>
-              <div className="cfg-add-row">
-                <input value={newWord[g.name] || ''} onChange={e => setNewWord({ ...newWord, [g.name]: e.target.value })} placeholder="Nueva palabra..." onKeyDown={e => { const v = (newWord[g.name] || '').trim(); if (e.key === 'Enter' && v) { updWordGroups(wordGroups.map((x, i) => i === gi ? { ...x, words: [...x.words, v] } : x)); setNewWord({ ...newWord, [g.name]: '' }) } }} />
-                <button onClick={() => { const v = (newWord[g.name] || '').trim(); if (v) { updWordGroups(wordGroups.map((x, i) => i === gi ? { ...x, words: [...x.words, v] } : x)); setNewWord({ ...newWord, [g.name]: '' }) } }}><Plus size={14} /></button>
-              </div>
-            </div>
-          ))}
-          <div className="cfg-add-row">
-            <input value={newWG} onChange={e => setNewWG(e.target.value)} placeholder="Nuevo grupo (ej: Colores)..." onKeyDown={e => { if (e.key === 'Enter' && newWG.trim()) { updWordGroups([...wordGroups, { name: newWG.trim(), words: [] }]); setNewWG('') } }} />
-            <button onClick={() => { if (newWG.trim()) { updWordGroups([...wordGroups, { name: newWG.trim(), words: [] }]); setNewWG('') } }}><Plus size={14} /> Grupo</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

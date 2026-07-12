@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, Replace, UserPlus, RotateCcw, Copy, Minus, Languages, Hash, Lightbulb } from 'lucide-react'
+import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, UserPlus, RotateCcw, Copy, Minus, Languages, Hash, Lightbulb, Paperclip } from 'lucide-react'
 import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
 import ColorInput from '../ColorInput'
@@ -62,9 +62,10 @@ interface BrandInfoField { id: string; title: string; body: string }
 interface BrandInfo { slogan: string; sloganEn?: string; brandColors: string[]; notes: string; fonts?: string[]; infoFields?: BrandInfoField[] }
 interface PresetMsg { id: string; groupId?: string; titleEs: string; titleEn: string; descEs: string; descEn: string }
 interface PresetGroup { id: string; name: string; color?: string }
-interface PromptPanel { id: string; title: string; description: string; group?: string; groupId?: string; mainPrompt?: string; prompts: { id: string; text: string; variables: string[] }[] }
-// Grupo de Creaciones: entidad con título, descripción, ícono cuadrado de color y tag.
-interface CreacionGroup { id: string; name: string; description?: string; color?: string; icon?: string; tag?: string }
+interface PromptPanel { id: string; title: string; description: string; group?: string; groupId?: string; mainPrompt?: string; prompts: { id: string; text: string; variables: string[]; title?: string }[] }
+// Grupo de Creaciones: entidad con título, descripción, color y tag. `parentId` permite
+// anidar subgrupos dentro de otro grupo. (`icon` es legado y ya no se usa en la UI.)
+interface CreacionGroup { id: string; name: string; description?: string; color?: string; icon?: string; tag?: string; parentId?: string }
 const CREACION_GROUP_COLORS = ['#8b5cf6', '#3b82f6', '#ec4899', '#f97316', '#22c55e', '#06b6d4', '#eab308', '#ef4444']
 // Migra los grupos-string legacy (panel.group) a entidades CreacionGroup con id.
 function migrateCreaciones(s: any): { creaciones: PromptPanel[]; creacionGroups: CreacionGroup[]; creacionTags: string[] } {
@@ -87,7 +88,8 @@ function migrateCreaciones(s: any): { creaciones: PromptPanel[]; creacionGroups:
 type SeoFormat = 1 | 2 | 3   // 1: palabra_palabra · 2: palabra palabra · 3: palabrapalabra
 type SeoCase = 'lower' | 'upper' | 'sentence'
 interface SeoGroup { id: string; name: string; format: SeoFormat; textCase: SeoCase; tags: string[] }
-interface SeoPanel { id: string; name: string; groups: SeoGroup[] }
+interface SeoPanel { id: string; name: string; groups: SeoGroup[]; color?: string }
+const SEO_PANEL_COLOR = '#8b5cf6'  // color por defecto del punto identificador del panel
 function seoWords(raw: string): string[] { return (raw || '').trim().split(/[_\s-]+/).filter(Boolean) }
 function formatTag(raw: string, format: SeoFormat, textCase: SeoCase): string {
   const words = seoWords(raw).map(w => w.toLowerCase())
@@ -98,8 +100,6 @@ function formatTag(raw: string, format: SeoFormat, textCase: SeoCase): string {
   return out
 }
 
-interface WordGroup { name: string; words: string[] }
-function loadWordGroups(): WordGroup[] { try { const s = localStorage.getItem('nn-prompt-groups'); return s ? JSON.parse(s) : [] } catch { return [] } }
 interface IncomeEntry { id: string; amount: number; date: string; note: string }
 interface StoreData {
   id: string; name: string; description: string; products: number; status: string
@@ -766,26 +766,20 @@ function LaunchesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
 function CreacionesPanel({ panel, save, panels, groups }: { panel: PromptPanel; save: (p: PromptPanel[]) => void; panels: PromptPanel[]; groups: CreacionGroup[] }) {
   const [expanded, setExpanded] = useState(false)
   const [activeSub, setActiveSub] = useState<string>('__main')
-  const [replaceFrom, setReplaceFrom] = useState('')
-  const [replaceTo, setReplaceTo] = useState('')
-  const [wordMenu, setWordMenu] = useState<number | null>(null)
-  const wordGroups = loadWordGroups()
-
-  // Map each group word (lowercased) → its sibling options, for click-to-replace.
-  const wordGroupMap: Record<string, string[]> = {}
-  for (const g of wordGroups) for (const w of g.words) wordGroupMap[w.toLowerCase()] = g.words
+  const [copied, setCopied] = useState(false)
 
   const updatePanel = (u: Partial<PromptPanel>) => save(panels.map(p => p.id === panel.id ? { ...p, ...u } : p))
-  const addSub = () => { const sub = { id: 'pr-' + Date.now(), text: '', variables: [] }; updatePanel({ prompts: [...panel.prompts, sub] }); setActiveSub(sub.id) }
-  const updateSub = (id: string, text: string) => updatePanel({ prompts: panel.prompts.map(pr => pr.id === id ? { ...pr, text } : pr) })
+  const addSub = () => { const sub = { id: 'pr-' + Date.now(), text: '', variables: [], title: '' }; updatePanel({ prompts: [...panel.prompts, sub] }); setActiveSub(sub.id) }
+  const updateSub = (id: string, u: Partial<{ text: string; title: string }>) => updatePanel({ prompts: panel.prompts.map(pr => pr.id === id ? { ...pr, ...u } : pr) })
   const removeSub = (id: string) => { updatePanel({ prompts: panel.prompts.filter(pr => pr.id !== id) }); setActiveSub('__main') }
   const removePanel = () => save(panels.filter(p => p.id !== panel.id))
 
-  // Replace across main + all secondary prompts.
-  const doReplace = (from: string, to: string) => {
-    if (!from) return
-    updatePanel({ mainPrompt: (panel.mainPrompt || '').replaceAll(from, to), prompts: panel.prompts.map(pr => ({ ...pr, text: pr.text.replaceAll(from, to) })) })
-  }
+  const activePrompt = activeSub === '__main' ? null : panel.prompts.find(p => p.id === activeSub)
+  const currentText = activeSub === '__main' ? (panel.mainPrompt || '') : (activePrompt?.text || '')
+  const copyCurrent = () => { if (!currentText.trim()) return; navigator.clipboard.writeText(currentText); setCopied(true); setTimeout(() => setCopied(false), 1500) }
+
+  // Etiqueta de cada subprompt en las pestañas: su título manual o el número.
+  const subLabel = (pr: { title?: string }, i: number) => (pr.title || '').trim() || `#${i + 1}`
 
   return (
     <div className="card creacion-panel">
@@ -801,122 +795,86 @@ function CreacionesPanel({ panel, save, panels, groups }: { panel: PromptPanel; 
           <label className="creacion-group-select"><Layers size={12} /> Grupo
             <select value={panel.groupId || ''} onChange={e => updatePanel({ groupId: e.target.value || undefined })}>
               <option value="">Sin grupo</option>
-              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              {groups.map(g => <option key={g.id} value={g.id}>{groupPathLabel(g, groups)}</option>)}
             </select>
           </label>
 
           <div className="creacion-subtabs">
             <button className={activeSub === '__main' ? 'active' : ''} onClick={() => setActiveSub('__main')}>Principal</button>
             {panel.prompts.map((pr, i) => (
-              <button key={pr.id} className={activeSub === pr.id ? 'active' : ''} onClick={() => setActiveSub(pr.id)}>#{i + 1}</button>
+              <button key={pr.id} className={activeSub === pr.id ? 'active' : ''} onClick={() => setActiveSub(pr.id)} title={subLabel(pr, i)}>{subLabel(pr, i)}</button>
             ))}
             <button className="creacion-subtab-add" onClick={addSub}><Plus size={11} /></button>
           </div>
 
-          {activeSub === '__main' ? (
-            <textarea className="creacion-main-prompt" value={panel.mainPrompt || ''} onChange={e => updatePanel({ mainPrompt: e.target.value })} placeholder="Prompt principal..." rows={4} />
-          ) : (
-            <div className="creacion-prompt">
-              <textarea value={panel.prompts.find(p => p.id === activeSub)?.text || ''} onChange={e => updateSub(activeSub, e.target.value)} placeholder="Prompt secundario..." rows={4} />
-              <button className="creacion-prompt-del" onClick={() => removeSub(activeSub)}><Trash2 size={11} /></button>
-            </div>
+          {activePrompt && (
+            <input className="creacion-prompt-title" value={activePrompt.title || ''} onChange={e => updateSub(activePrompt.id, { title: e.target.value })} placeholder="Título del prompt (opcional)..." />
           )}
 
-          {(() => {
-            const currentText = activeSub === '__main' ? (panel.mainPrompt || '') : (panel.prompts.find(p => p.id === activeSub)?.text || '')
-            const setCurrentText = (t: string) => activeSub === '__main' ? updatePanel({ mainPrompt: t }) : updateSub(activeSub, t)
-            const tokens = currentText.split(/(\s+)/)
-            const replaceToken = (idx: number, w: string) => { const t = [...tokens]; t[idx] = w; setCurrentText(t.join('')); setWordMenu(null) }
-            if (!currentText.trim() || wordGroups.length === 0) return null
-            return (
-              <div className="creacion-interactive">
-                <span className="creacion-wg-label">Clic en una palabra de un grupo para reemplazarla:</span>
-                <div className="creacion-tokens">
-                  {tokens.map((tok, i) => {
-                    if (/^\s+$/.test(tok)) return <span key={i}>{tok}</span>
-                    const opts = wordGroupMap[tok.toLowerCase()]
-                    if (!opts) return <span key={i} className="creacion-token-plain">{tok}</span>
-                    return (
-                      <span key={i} className="creacion-token-wrap">
-                        <button className="creacion-token" onClick={() => setWordMenu(wordMenu === i ? null : i)}>{tok}</button>
-                        {wordMenu === i && (
-                          <span className="creacion-token-menu">
-                            {opts.filter(o => o.toLowerCase() !== tok.toLowerCase()).map(o => (
-                              <button key={o} onClick={() => replaceToken(i, o)}>{o}</button>
-                            ))}
-                          </span>
-                        )}
-                      </span>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })()}
-
-          <div className="creacion-replace">
-            <Replace size={12} />
-            <input value={replaceFrom} onChange={e => setReplaceFrom(e.target.value)} placeholder="Buscar..." />
-            <input value={replaceTo} onChange={e => setReplaceTo(e.target.value)} placeholder="Reemplazar por..." />
-            <button onClick={() => doReplace(replaceFrom, replaceTo)} disabled={!replaceFrom.trim()}>Reemplazar</button>
+          <div className="creacion-prompt-box">
+            {activeSub === '__main' ? (
+              <textarea className="creacion-main-prompt" value={panel.mainPrompt || ''} onChange={e => updatePanel({ mainPrompt: e.target.value })} placeholder="Prompt principal..." rows={4} />
+            ) : (
+              <textarea className="creacion-main-prompt" value={activePrompt?.text || ''} onChange={e => updateSub(activeSub, { text: e.target.value })} placeholder="Prompt secundario..." rows={4} />
+            )}
+            <div className="creacion-prompt-actions">
+              <button className="creacion-prompt-copy" onClick={copyCurrent} disabled={!currentText.trim()} title="Copiar prompt">{copied ? <Check size={13} /> : <Copy size={13} />}{copied ? 'Copiado' : 'Copiar'}</button>
+              {activePrompt && <button className="creacion-prompt-del" onClick={() => removeSub(activeSub)} title="Eliminar este prompt"><Trash2 size={12} /></button>}
+            </div>
           </div>
-          {wordGroups.length > 0 && (
-            <div className="creacion-word-groups">
-              <span className="creacion-wg-label">Grupos de palabras:</span>
-              {wordGroups.map(g => (
-                <div key={g.name} className="creacion-wg">
-                  <span className="creacion-wg-name">{g.name}</span>
-                  {g.words.map(w => (
-                    <button key={w} className="creacion-wg-word" onClick={() => { if (replaceFrom) doReplace(replaceFrom, w); else setReplaceTo(w) }}>{w}</button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>
   )
 }
 
-// Tarjeta de un grupo de Creaciones: ícono cuadrado de color, título, descripción,
-// tag, edición completa y los paneles que contiene.
-function CreacionGroupCard({ group, tags, groups, groupPanels, save, panels, onUpdateGroup, onRemoveGroup, onDuplicateGroup, onAddTag }: {
-  group: CreacionGroup; tags: string[]; groups: CreacionGroup[]; groupPanels: PromptPanel[]
+// Etiqueta jerárquica de un grupo/subgrupo para los selectores: «Padre › Sub».
+function groupPathLabel(g: CreacionGroup, groups: CreacionGroup[]): string {
+  const parent = g.parentId ? groups.find(x => x.id === g.parentId) : undefined
+  return parent ? `${parent.name} › ${g.name}` : g.name
+}
+
+// Tarjeta de un grupo de Creaciones: punto de color, título, tag, edición y los
+// paneles que contiene. Renderiza recursivamente sus subgrupos (`depth` = nivel).
+function CreacionGroupCard({ group, tags, groups, save, panels, onUpdateGroup, onRemoveGroup, onDuplicateGroup, onAddTag, onAddSubgroup, depth = 0 }: {
+  group: CreacionGroup; tags: string[]; groups: CreacionGroup[]
   save: (p: PromptPanel[]) => void; panels: PromptPanel[]
-  onUpdateGroup: (u: Partial<CreacionGroup>) => void; onRemoveGroup: () => void; onDuplicateGroup: () => void; onAddTag: (t: string) => void
+  onUpdateGroup: (id: string, u: Partial<CreacionGroup>) => void
+  onRemoveGroup: (id: string) => void; onDuplicateGroup: (id: string) => void; onAddTag: (t: string) => void
+  onAddSubgroup: (parentId: string) => void; depth?: number
 }) {
   const [open, setOpen] = useState(true)
   const [editing, setEditing] = useState(false)
   const [newTag, setNewTag] = useState('')
   const color = group.color || CREACION_GROUP_COLORS[0]
+  const groupPanels = panels.filter(p => p.groupId === group.id)
+  const subgroups = groups.filter(g => g.parentId === group.id).sort((a, b) => byName(a.name, b.name))
   const addPanel = () => save([...panels, { id: 'cp-' + Date.now(), title: 'Nuevo panel', description: '', mainPrompt: '', prompts: [], groupId: group.id }])
-  const commitNewTag = () => { const t = newTag.trim(); if (!t) return; onAddTag(t); onUpdateGroup({ tag: t }); setNewTag('') }
+  const commitNewTag = () => { const t = newTag.trim(); if (!t) return; onAddTag(t); onUpdateGroup(group.id, { tag: t }); setNewTag('') }
   return (
-    <div className="creacion-group card">
+    <div className={`creacion-group card ${depth > 0 ? 'creacion-subgroup' : ''}`}>
       <div className="creacion-group-head">
         <button className="creacion-group-toggle" onClick={() => setOpen(o => !o)} title={open ? 'Minimizar' : 'Expandir'}>{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
-        <span className="creacion-group-icon" style={{ background: color }}>{group.icon || ''}</span>
+        <span className="creacion-group-dot" style={{ background: color }} />
         <span className="creacion-group-name">{group.name}</span>
         {group.tag && <span className="creacion-group-tag"><Tag size={10} /> {group.tag}</span>}
-        <span className="creacion-group-count">{groupPanels.length}</span>
+        <span className="creacion-group-count">{groupPanels.length}{subgroups.length > 0 ? ` · ${subgroups.length} sub` : ''}</span>
         <button className="preset-icon-btn" onClick={() => setEditing(e => !e)} title="Editar grupo">{editing ? <Check size={13} /> : <Edit3 size={13} />}</button>
-        <button className="preset-icon-btn" onClick={onDuplicateGroup} title="Duplicar grupo"><Copy size={13} /></button>
-        <button className="preset-icon-btn del" onClick={onRemoveGroup} title="Eliminar grupo"><Trash2 size={13} /></button>
+        <button className="preset-icon-btn" onClick={() => onDuplicateGroup(group.id)} title="Duplicar grupo"><Copy size={13} /></button>
+        <button className="preset-icon-btn del" onClick={() => onRemoveGroup(group.id)} title="Eliminar grupo"><Trash2 size={13} /></button>
       </div>
       {editing && (
         <div className="creacion-group-edit">
-          <label className="modal-field"><span><Type size={12} /> Título</span><input value={group.name} onChange={e => onUpdateGroup({ name: e.target.value })} placeholder="Título del grupo" /></label>
-          <div className="modal-field"><span><Palette size={12} /> Ícono y color</span>
+          <label className="modal-field"><span><Type size={12} /> Título</span><input value={group.name} onChange={e => onUpdateGroup(group.id, { name: e.target.value })} placeholder="Título del grupo" /></label>
+          <div className="modal-field"><span><Palette size={12} /> Color</span>
             <div className="creacion-group-icon-row">
-              <span className="creacion-group-icon lg" style={{ background: color }}>{group.icon || ''}</span>
-              <input className="creacion-group-emoji" value={group.icon || ''} onChange={e => onUpdateGroup({ icon: e.target.value })} placeholder="Emoji" maxLength={2} />
-              <ColorInput value={color} onChange={c => onUpdateGroup({ color: c })} />
+              <span className="creacion-group-dot lg" style={{ background: color }} />
+              <ColorInput value={color} onChange={c => onUpdateGroup(group.id, { color: c })} />
             </div>
           </div>
           <div className="modal-field"><span><Tag size={12} /> Etiqueta</span>
             <div className="creacion-group-tag-row">
-              <select value={group.tag || ''} onChange={e => onUpdateGroup({ tag: e.target.value || undefined })}>
+              <select value={group.tag || ''} onChange={e => onUpdateGroup(group.id, { tag: e.target.value || undefined })}>
                 <option value="">Sin etiqueta</option>
                 {tags.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -929,7 +887,13 @@ function CreacionGroupCard({ group, tags, groups, groupPanels, save, panels, onU
       {open && (
         <div className="creacion-group-panels">
           {groupPanels.map(panel => <CreacionesPanel key={panel.id} panel={panel} save={save} panels={panels} groups={groups} />)}
-          <button className="articles-add-btn-secondary creacion-add-in-group" onClick={addPanel}><Plus size={13} /> Nuevo panel en este grupo</button>
+          {subgroups.map(sg => (
+            <CreacionGroupCard key={sg.id} group={sg} tags={tags} groups={groups} save={save} panels={panels} onUpdateGroup={onUpdateGroup} onRemoveGroup={onRemoveGroup} onDuplicateGroup={onDuplicateGroup} onAddTag={onAddTag} onAddSubgroup={onAddSubgroup} depth={depth + 1} />
+          ))}
+          <div className="creacion-group-actions">
+            <button className="articles-add-btn-secondary creacion-add-in-group" onClick={addPanel}><Plus size={13} /> Nuevo panel</button>
+            {depth === 0 && <button className="articles-add-btn-secondary creacion-add-in-group" onClick={() => onAddSubgroup(group.id)}><Layers size={13} /> Nuevo subgrupo</button>}
+          </div>
         </div>
       )}
     </div>
@@ -951,7 +915,6 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [ngName, setNgName] = useState('')
   const [ngColor, setNgColor] = useState(CREACION_GROUP_COLORS[0])
-  const [ngIcon, setNgIcon] = useState('')
   const [ngTag, setNgTag] = useState('')       // etiqueta existente elegida
   const [ngNewTag, setNgNewTag] = useState('')  // etiqueta nueva escrita
   const confirm = useConfirm()
@@ -966,16 +929,27 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
     const typed = ngNewTag.trim()
     const tag = typed || ngTag || undefined
     const newTags = typed && !tags.includes(typed) ? [...tags, typed] : tags
-    const g: CreacionGroup = { id: 'cg-' + Date.now(), name: ngName.trim(), color: ngColor, icon: ngIcon.trim() || undefined, tag }
+    const g: CreacionGroup = { id: 'cg-' + Date.now(), name: ngName.trim(), color: ngColor, tag }
     onUpdate({ ...store, [fields.groups]: [...groups, g], [fields.tags]: newTags })
-    setNgName(''); setNgColor(CREACION_GROUP_COLORS[0]); setNgIcon(''); setNgTag(''); setNgNewTag(''); setShowNewGroup(false)
+    setNgName(''); setNgColor(CREACION_GROUP_COLORS[0]); setNgTag(''); setNgNewTag(''); setShowNewGroup(false)
+  }
+  // Crea un subgrupo dentro de `parentId`, listo para renombrar.
+  const addSubgroup = (parentId: string) => {
+    const parent = groups.find(g => g.id === parentId)
+    const g: CreacionGroup = { id: 'cg-' + Date.now(), name: 'Nuevo subgrupo', color: parent?.color || CREACION_GROUP_COLORS[0], parentId }
+    saveGroups([...groups, g])
   }
   const updateGroup = (id: string, u: Partial<CreacionGroup>) => saveGroups(groups.map(g => g.id === id ? { ...g, ...u } : g))
   const removeGroup = async (id: string) => {
     const g = groups.find(x => x.id === id)
-    if (!await confirm({ title: 'Eliminar grupo', message: `¿Eliminar el grupo «${g?.name || ''}»? Sus paneles no se borran: quedan en «Sin grupo».`, confirmLabel: 'Eliminar grupo' })) return
+    if (!await confirm({ title: 'Eliminar grupo', message: `¿Eliminar el grupo «${g?.name || ''}»? Sus paneles quedan en «Sin grupo» y sus subgrupos pasan a nivel superior.`, confirmLabel: 'Eliminar grupo' })) return
     // Un solo onUpdate: dos llamadas separadas se pisaban entre sí (el grupo revivía).
-    onUpdate({ ...store, [fields.groups]: groups.filter(x => x.id !== id), [fields.panels]: panels.map(p => p.groupId === id ? { ...p, groupId: undefined } : p) })
+    // Los subgrupos hijos se promueven a nivel superior (parentId = undefined).
+    onUpdate({
+      ...store,
+      [fields.groups]: groups.filter(x => x.id !== id).map(x => x.parentId === id ? { ...x, parentId: undefined } : x),
+      [fields.panels]: panels.map(p => p.groupId === id ? { ...p, groupId: undefined } : p),
+    })
   }
   const duplicateGroup = (id: string) => {
     const g = groups.find(x => x.id === id); if (!g) return
@@ -989,7 +963,8 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
     onUpdate({ ...store, [fields.groups]: [...groups, ng], [fields.panels]: [...panels, ...dupPanels] })
   }
 
-  const groupsAlpha = [...groups].sort((a, b) => byName(a.name, b.name))
+  // Solo grupos de nivel superior; los subgrupos los renderiza cada tarjeta padre.
+  const topGroups = [...groups].filter(g => !g.parentId || !groups.some(x => x.id === g.parentId)).sort((a, b) => byName(a.name, b.name))
   const ungrouped = panels.filter(p => !p.groupId || !groups.some(g => g.id === p.groupId))
 
   return (
@@ -1003,8 +978,7 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
         <div className="card creaciones-new-group">
           <input value={ngName} onChange={e => setNgName(e.target.value)} placeholder="Título del grupo..." autoFocus />
           <div className="creacion-group-icon-row">
-            <span className="creacion-group-icon lg" style={{ background: ngColor }}>{ngIcon}</span>
-            <input className="creacion-group-emoji" value={ngIcon} onChange={e => setNgIcon(e.target.value)} placeholder="Emoji" maxLength={2} />
+            <span className="creacion-group-dot lg" style={{ background: ngColor }} />
             <ColorInput value={ngColor} onChange={setNgColor} />
           </div>
           <div className="creacion-group-tag-row">
@@ -1018,8 +992,8 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
         </div>
       )}
       {panels.length === 0 && groups.length === 0 && !showNew && !showNewGroup && <div className="articles-empty"><Sparkles size={24} /><p>Registrá tus prompts de creación</p></div>}
-      {groupsAlpha.map(g => (
-        <CreacionGroupCard key={g.id} group={g} tags={tags} groups={groups} groupPanels={panels.filter(p => p.groupId === g.id)} save={save} panels={panels} onUpdateGroup={u => updateGroup(g.id, u)} onRemoveGroup={() => removeGroup(g.id)} onDuplicateGroup={() => duplicateGroup(g.id)} onAddTag={addTagToPool} />
+      {topGroups.map(g => (
+        <CreacionGroupCard key={g.id} group={g} tags={tags} groups={groups} save={save} panels={panels} onUpdateGroup={updateGroup} onRemoveGroup={removeGroup} onDuplicateGroup={duplicateGroup} onAddTag={addTagToPool} onAddSubgroup={addSubgroup} />
       ))}
       {ungrouped.length > 0 && (
         <div className="creacion-group-section">
@@ -1683,7 +1657,8 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
   const toggleGroup = (id: string) => setCollapsedGroups(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const toggleMsg = (id: string) => setCollapsedMsgs(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const msgLang = (id: string) => lang[id] || 'en' // default: inglés
-  const copyMsg = (m: PresetMsg) => { const l = msgLang(m.id); const t = l === 'en' ? m.titleEn : m.titleEs; const d = l === 'en' ? m.descEn : m.descEs; navigator.clipboard.writeText(`${t}\n\n${d}`.trim()); setCopied(m.id); setTimeout(() => setCopied(null), 1500) }
+  // Copia solo el cuerpo del mensaje (sin el título).
+  const copyMsg = (m: PresetMsg) => { const l = msgLang(m.id); const d = l === 'en' ? m.descEn : m.descEs; navigator.clipboard.writeText((d || '').trim()); setCopied(m.id); setTimeout(() => setCopied(null), 1500) }
 
   const renderMsg = (m: PresetMsg) => {
     const l = msgLang(m.id); const editing = editId === m.id
@@ -1702,7 +1677,7 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
           </span>
           <button className="preset-copy" onClick={() => copyMsg(m)} title="Copiar mensaje">{copied === m.id ? <Check size={14} /> : <Copy size={14} />}</button>
           <button className="preset-icon-btn" onClick={() => { setEditId(editing ? null : m.id); if (!editing) setCollapsedMsgs(s => { const n = new Set(s); n.delete(m.id); return n }) }} title={editing ? 'Listo' : 'Editar'}>{editing ? <Check size={14} /> : <Edit3 size={14} />}</button>
-          <button className="preset-icon-btn" onClick={() => dupMsg(m.id)} title="Duplicar"><Copy size={13} /></button>
+          <button className="preset-icon-btn" onClick={() => dupMsg(m.id)} title="Duplicar"><Paperclip size={13} /></button>
           <select className="preset-move" value={m.groupId || ''} onChange={e => updateMsg(m.id, { groupId: e.target.value || undefined })} title="Mover a grupo"><option value="">Sin grupo</option>{pgroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
           <button className="preset-icon-btn del" onClick={() => removeMsg(m.id)} title="Eliminar"><Trash2 size={13} /></button>
         </div>
@@ -1805,6 +1780,7 @@ function SeoTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: StoreData
         <div key={panel.id} className="seo-panel card">
           <div className="seo-panel-head">
             <button className="seo-collapse" onClick={() => toggle(panel.id)} title={pOpen ? 'Minimizar' : 'Expandir'}>{pOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
+            <ColorInput className="seo-panel-dot" swatchOnly value={panel.color || SEO_PANEL_COLOR} onChange={c => mapPanel(panel.id, p => ({ ...p, color: c }))} title="Color del panel" />
             <input className="seo-panel-name" value={panel.name} onChange={e => mapPanel(panel.id, p => ({ ...p, name: e.target.value }))} placeholder="Nombre del panel..." />
             <span className="seo-panel-count">{panel.groups.length} subgrupos</span>
             <button className="preset-icon-btn" onClick={() => addGroup(panel.id)} title="Agregar subgrupo"><Plus size={14} /></button>
