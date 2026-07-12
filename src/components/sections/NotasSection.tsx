@@ -195,6 +195,17 @@ export default function NotasSection() {
 
   const current = notes.find(n => n.id === activeNote)
 
+  // Al entrar sin ninguna nota, mostrar solo un botón grande de «Añadir nota».
+  if (notes.length === 0) {
+    return (
+      <div className="notas-section notas-empty-state">
+        <button className="notas-empty-add" onClick={addNote}>
+          <Plus size={30} /> Añadir nota
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="notas-section">
       <div className="notas-sidebar">
@@ -268,7 +279,8 @@ export default function NotasSection() {
             <div
               key={n.id}
               className={`nota-item ${activeNote === n.id ? 'active' : ''} ${dragNoteId === n.id ? 'dragging' : ''}`}
-              onClick={() => setActiveNote(n.id)}
+              onDoubleClick={() => setActiveNote(n.id)}
+              title="Doble clic para abrir la nota"
               draggable
               onDragStart={() => setDragNoteId(n.id)}
               onDragEnd={() => { setDragNoteId(null); setDropFolder(null) }}

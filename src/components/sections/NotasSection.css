@@ -4,6 +4,17 @@
   height: calc(100vh / var(--ui-zoom, 1) - 120px);
   margin: -28px -32px;
 }
+/* Estado vacío: solo un botón grande de «Añadir nota» centrado. */
+.notas-empty-state { align-items: center; justify-content: center; }
+.notas-empty-add {
+  display: inline-flex; align-items: center; gap: 12px;
+  padding: 22px 40px; border: none; border-radius: 16px;
+  background: var(--accent); color: #fff;
+  font-size: 20px; font-weight: 700; font-family: inherit; cursor: pointer;
+  box-shadow: 0 10px 30px var(--accent-soft); transition: transform 0.15s, box-shadow 0.15s;
+}
+.notas-empty-add:hover { transform: translateY(-2px); box-shadow: 0 14px 38px var(--accent-soft); }
+.notas-empty-add:active { transform: translateY(0); }
 
 /* ─── Sidebar ─── */
 .notas-sidebar {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, ChevronDown, ChevronRight } from 'lucide-react'
+import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react'
 import { useToast } from '../Toast'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import TransfersIcon from '../TransfersIcon'
@@ -261,6 +261,8 @@ function AppDataTab() {
 
 interface SharedFile { id: string; name: string; size: number }
 interface ReceivedFile { name?: string; size?: number; ts: number; type?: string; text?: string }
+// Entrada del chat único: un texto enviado desde la PC, o un archivo/texto recibido del celular.
+type ChatEntry = { id: string; dir: 'sent'; ts: number; text: string } | { id: string; dir: 'received'; ts: number; file: ReceivedFile }
 
 function fmt(bytes: number) {
   if (bytes < 1024) return bytes + ' B'
@@ -283,6 +285,8 @@ function TransferenciasTab() {
   const [pcText, setPcText] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [receivedOpen, setReceivedOpen] = useState(true)
+  const [qrOpen, setQrOpen] = useState(false)               // modal del QR ampliado
+  const [chatFilter, setChatFilter] = useState<'all' | 'received' | 'sent'>('all')  // filtro del chat único
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const sendText = async () => {
@@ -385,6 +389,15 @@ function TransferenciasTab() {
   }, [running])
 
   const fileExt = (name: string) => { const dot = name.lastIndexOf('.'); return dot >= 0 ? name.slice(dot + 1).toUpperCase() : '' }
+  const chatTime = (ts: number) => new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+
+  // Chat único: mezcla enviados (texto desde la PC) y recibidos (archivos/textos del
+  // celular) en una sola conversación ordenada por hora; el filtro sólo cambia la vista.
+  const chat: ChatEntry[] = [
+    ...pcMessages.map(m => ({ id: 's-' + m.id, dir: 'sent' as const, ts: m.ts, text: m.text })),
+    ...received.map((f, i) => ({ id: 'r-' + i + '-' + f.ts, dir: 'received' as const, ts: f.ts, file: f })),
+  ].sort((a, b) => a.ts - b.ts)
+  const visibleChat = chatFilter === 'all' ? chat : chat.filter(e => e.dir === chatFilter)
 
   if (!running && !starting) {
     return (
@@ -431,7 +444,12 @@ function TransferenciasTab() {
       <div className="transfer-grid">
         <div className="card transfer-qr-card">
           <h4><QrCode size={14} /> Escaneá con tu celular</h4>
-          {qrDataUrl && <img src={qrDataUrl} alt="QR" className="transfer-qr-img" />}
+          {qrDataUrl && (
+            <button className="transfer-qr-btn" onClick={() => setQrOpen(true)} title="Ampliar el código QR">
+              <img src={qrDataUrl} alt="QR" className="transfer-qr-img" />
+              <span className="transfer-qr-zoom"><Maximize2 size={13} /> Ampliar</span>
+            </button>
+          )}
           <span className="transfer-url">{ip}:{port}</span>
           <p className="transfer-hint">Abrí la cámara de tu Android y escaneá el código.</p>
         </div>
@@ -456,23 +474,6 @@ function TransferenciasTab() {
             <input value={pcText} onChange={e => setPcText(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendText()} placeholder="Enviar texto al celular…" />
             <button className="system-btn-sm" onClick={sendText} disabled={!pcText.trim()}><Send size={12} /> Enviar</button>
           </div>
-          {pcMessages.length > 0 && (
-            <div className="transfer-sent-list">
-              {pcMessages.map(m => (
-                <div key={m.id} className="transfer-msg sent">
-                  <div className="transfer-msg-bubble transfer-msg-text">
-                    <div className="transfer-msg-info">
-                      <span className="transfer-text-content">{m.text}</span>
-                      <span className="transfer-msg-meta">
-                        <button className="transfer-copy-btn" onClick={() => navigator.clipboard.writeText(m.text)}>Copiar</button>
-                        {new Date(m.ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
@@ -480,7 +481,7 @@ function TransferenciasTab() {
         <div className="transfer-card-head">
           <button className="transfer-received-toggle" onClick={() => setReceivedOpen(o => !o)}>
             {receivedOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            <h4>📥 Recibidos ({received.length})</h4>
+            <h4><MessageSquare size={14} /> Chat ({chat.length})</h4>
           </button>
           <div className="transfer-received-actions">
             {received.some(f => f.type !== 'text') && <button className="system-btn-sm" onClick={downloadAll}><Download size={12} /> Descargar todos</button>}
@@ -488,38 +489,70 @@ function TransferenciasTab() {
             <button className="system-btn-sm danger" onClick={clearHistory}><Trash2 size={12} /> Borrar historial</button>
           </div>
         </div>
-        {receivedOpen && received.length === 0 && <p className="transfer-empty">Los archivos del celular aparecen acá. Se limpian automáticamente a las 2 horas.</p>}
+        {receivedOpen && (
+          <div className="transfer-chat-filter">
+            <button className={chatFilter === 'all' ? 'active' : ''} onClick={() => setChatFilter('all')}>Todos</button>
+            <button className={chatFilter === 'received' ? 'active' : ''} onClick={() => setChatFilter('received')}>Recibidos</button>
+            <button className={chatFilter === 'sent' ? 'active' : ''} onClick={() => setChatFilter('sent')}>Enviados</button>
+          </div>
+        )}
+        {receivedOpen && visibleChat.length === 0 && <p className="transfer-empty">{chat.length === 0 ? 'Todavía no hay mensajes. Los textos y archivos enviados y recibidos aparecen acá; se limpian a las 2 horas.' : 'Sin mensajes para este filtro.'}</p>}
         {receivedOpen && <div className="transfer-file-list transfer-chat-style">
-          {received.map((f, i) => (
-            <div key={i} className="transfer-msg received">
-              {f.type === 'text' ? (
+          {visibleChat.map(entry => (
+            entry.dir === 'sent' ? (
+              <div key={entry.id} className="transfer-msg sent">
                 <div className="transfer-msg-bubble transfer-msg-text">
-                  <MessageSquare size={13} className="transfer-received-icon" />
                   <div className="transfer-msg-info">
-                    <span className="transfer-text-content">{f.text}</span>
+                    <span className="transfer-text-content">{entry.text}</span>
                     <span className="transfer-msg-meta">
-                      <button className="transfer-copy-btn" onClick={() => navigator.clipboard.writeText(f.text || '')}>Copiar</button>
-                      {new Date(f.ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                      <button className="transfer-copy-btn" onClick={() => navigator.clipboard.writeText(entry.text || '')}>Copiar</button>
+                      {chatTime(entry.ts)}
                     </span>
                   </div>
                 </div>
-              ) : (
-                <div className="transfer-msg-bubble">
-                  <Download size={13} className="transfer-received-icon" />
-                  <div className="transfer-msg-info">
-                    <span className="transfer-file-name">{f.name}</span>
-                    <span className="transfer-msg-meta">
-                      {fileExt(f.name || '') && <span className="transfer-file-ext-sm">{fileExt(f.name || '')}</span>}
-                      {fmt(f.size || 0)} · {new Date(f.ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+              </div>
+            ) : (
+              <div key={entry.id} className="transfer-msg received">
+                {entry.file.type === 'text' ? (
+                  <div className="transfer-msg-bubble transfer-msg-text">
+                    <MessageSquare size={13} className="transfer-received-icon" />
+                    <div className="transfer-msg-info">
+                      <span className="transfer-text-content">{entry.file.text}</span>
+                      <span className="transfer-msg-meta">
+                        <button className="transfer-copy-btn" onClick={() => navigator.clipboard.writeText(entry.file.text || '')}>Copiar</button>
+                        {chatTime(entry.ts)}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                ) : (
+                  <div className="transfer-msg-bubble">
+                    <Download size={13} className="transfer-received-icon" />
+                    <div className="transfer-msg-info">
+                      <span className="transfer-file-name">{entry.file.name}</span>
+                      <span className="transfer-msg-meta">
+                        {fileExt(entry.file.name || '') && <span className="transfer-file-ext-sm">{fileExt(entry.file.name || '')}</span>}
+                        {fmt(entry.file.size || 0)} · {chatTime(entry.ts)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
           ))}
         </div>}
         {receivedOpen && dir && <p className="transfer-dir">Guardado en: <code>{dir}</code></p>}
       </div>
+
+      {qrOpen && qrDataUrl && (
+        <div className="transfer-qr-modal" onClick={() => setQrOpen(false)}>
+          <div className="transfer-qr-modal-box" onClick={e => e.stopPropagation()}>
+            <button className="transfer-qr-modal-close" onClick={() => setQrOpen(false)} title="Cerrar"><X size={18} /></button>
+            <img src={qrDataUrl} alt="QR" className="transfer-qr-modal-img" />
+            <span className="transfer-qr-modal-url">{ip}:{port}</span>
+            <p className="transfer-hint">Abrí la cámara de tu Android y escaneá el código.</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -107,9 +107,27 @@
 .transfer-grid { display: grid; grid-template-columns: auto 1fr; gap: 14px; }
 .transfer-qr-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 22px !important; }
 .transfer-qr-card h4 { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0; color: var(--text-primary); }
-.transfer-qr-img { width: 180px; height: 180px; border-radius: 10px; }
+.transfer-qr-img { width: 180px; height: 180px; border-radius: 10px; display: block; }
 .transfer-url { font-size: 12px; color: var(--text-secondary); font-family: 'Consolas', monospace; }
 .transfer-hint { font-size: 11px; color: var(--text-secondary); text-align: center; line-height: 1.5; margin: 0; max-width: 200px; }
+/* QR como botón: al pasar el mouse muestra el hint de ampliar */
+.transfer-qr-btn { position: relative; padding: 0; border: none; background: none; cursor: pointer; border-radius: 10px; line-height: 0; }
+.transfer-qr-btn:hover .transfer-qr-img { filter: brightness(0.85); }
+.transfer-qr-zoom { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 5px; border-radius: 10px; background: rgba(0,0,0,0.45); color: #fff; font-size: 12px; font-weight: 600; opacity: 0; transition: opacity 0.15s; }
+.transfer-qr-btn:hover .transfer-qr-zoom { opacity: 1; }
+/* Modal del QR ampliado: oscurece el fondo */
+@keyframes transferFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.transfer-qr-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); animation: transferFadeIn 0.15s ease; }
+.transfer-qr-modal-box { position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 28px 32px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,0.4); }
+.transfer-qr-modal-img { width: min(70vw, 340px); height: min(70vw, 340px); border-radius: 12px; background: #fff; padding: 10px; box-sizing: border-box; }
+.transfer-qr-modal-url { font-size: 15px; font-weight: 600; color: var(--text-primary); font-family: 'Consolas', monospace; }
+.transfer-qr-modal-close { position: absolute; top: 10px; right: 10px; display: inline-flex; padding: 6px; border: none; background: var(--bg-hover); color: var(--text-secondary); border-radius: 8px; cursor: pointer; }
+.transfer-qr-modal-close:hover { color: var(--text-primary); background: var(--bg-active); }
+/* Filtro del chat único */
+.transfer-chat-filter { display: flex; gap: 6px; margin-bottom: 10px; }
+.transfer-chat-filter button { padding: 4px 12px; border: 1px solid var(--border); background: none; border-radius: 20px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-family: inherit; transition: all 0.15s; }
+.transfer-chat-filter button:hover { border-color: var(--accent); color: var(--accent); }
+.transfer-chat-filter button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 .transfer-shared-card, .transfer-received-card { padding: 16px !important; }
 .transfer-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
