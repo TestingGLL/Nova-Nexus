@@ -225,6 +225,7 @@
 .cfg-chip button:hover { opacity: 1; color: #ef4444; }
 .cfg-add-row { display: flex; gap: 8px; }
 .cfg-add-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); outline: none; }
+.cfg-add-row input.cfg-icon-input { flex: 0 0 auto; width: 52px; text-align: center; font-size: 16px; }
 .cfg-add-row input:focus { border-color: var(--accent); }
 .cfg-add-row button { display: flex; align-items: center; gap: 5px; padding: 8px 14px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; }
 .cfg-add-row button:hover { background: var(--accent); color: white; }

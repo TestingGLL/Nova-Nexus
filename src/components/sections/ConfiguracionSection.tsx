@@ -8,6 +8,7 @@ import { supabase, supabaseEnabled } from '../../lib/supabase'
 import { hasPendingSync } from '../../lib/cloudSync'
 import { loadSecurity, saveSecurity, DEFAULT_SECURITY_PASSWORD, type SecurityConfig } from '../../lib/security'
 import { BUILTIN_PROJECT_LABELS, loadCustomProjectLabels, saveCustomProjectLabels, type ProjectLabel } from '../../lib/projectLabels'
+import { loadPromoApps, savePromoApps, isDefaultPromoApp, type PromoAppDef } from '../../lib/promoApps'
 import ColorInput from '../ColorInput'
 import { APP_VERSION } from '../../App'
 import './ConfiguracionSection.css'
@@ -150,6 +151,8 @@ export default function ConfiguracionSection() {
   const [projectLabels, setProjectLabels] = useState<ProjectLabel[]>(loadCustomProjectLabels)
   const [newProjLabel, setNewProjLabel] = useState('')
   const [newProjColor, setNewProjColor] = useState('#8b5cf6')
+  const [promoApps, setPromoApps] = useState<PromoAppDef[]>(loadPromoApps)
+  const [newPromoApp, setNewPromoApp] = useState<{ label: string; icon: string; color: string }>({ label: '', icon: '', color: '#8b5cf6' })
 
   const updCategories = (c: CustomCategories) => { setCategories(c); saveCategories(c) }
   const updNoteTags = (t: string[]) => { setNoteTags(t); saveNoteTags(t) }
@@ -157,6 +160,13 @@ export default function ConfiguracionSection() {
   const toggleSecSection = (key: string) => { const on = security.lockedSections.includes(key); updSecurity({ lockedSections: on ? security.lockedSections.filter(k => k !== key) : [...security.lockedSections, key] }) }
   const updProjectLabels = (l: ProjectLabel[]) => { setProjectLabels(l); saveCustomProjectLabels(l) }
   const addProjectLabel = () => { const t = newProjLabel.trim(); if (!t) return; updProjectLabels([...projectLabels, { id: 'pl-' + Date.now(), label: t, color: newProjColor }]); setNewProjLabel('') }
+  const updPromoApps = (a: PromoAppDef[]) => { setPromoApps(a); savePromoApps(a) }
+  const addPromoApp = () => {
+    const label = newPromoApp.label.trim(); if (!label) return
+    const id = 'app-' + Date.now()
+    updPromoApps([...promoApps, { id, label, icon: newPromoApp.icon.trim() || '🏷️', color: newPromoApp.color }])
+    setNewPromoApp({ label: '', icon: '', color: '#8b5cf6' })
+  }
 
   const updateProfile = (u: Partial<ProfileData>) => { const p = { ...profile, ...u }; setProfile(p); saveProfile(p) }
   const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -410,6 +420,25 @@ export default function ConfiguracionSection() {
               <ColorInput value={newProjColor} onChange={setNewProjColor} title="Color de la etiqueta" />
               <input value={newProjLabel} onChange={e => setNewProjLabel(e.target.value)} placeholder="Nueva etiqueta de proyecto..." onKeyDown={e => e.key === 'Enter' && addProjectLabel()} />
               <button onClick={addProjectLabel}><Plus size={14} /></button>
+            </div>
+          </div>
+
+          <div className="card config-card">
+            <div className="card-title"><Tag size={16} /> Aplicaciones de Promociones</div>
+            <p className="config-desc">Opciones del campo «Aplicación» en Personal → Tarjetas → Promociones. Las predeterminadas no se pueden quitar.</p>
+            <div className="cfg-chips">
+              {promoApps.map(a => (
+                <span key={a.id} className="cfg-chip" style={{ borderColor: a.color, color: a.color }}>
+                  <span className="proj-label-dot" style={{ background: a.color }} />{a.icon} {a.label}
+                  {!isDefaultPromoApp(a.id) && <button onClick={() => updPromoApps(promoApps.filter(x => x.id !== a.id))}><X size={10} /></button>}
+                </span>
+              ))}
+            </div>
+            <div className="cfg-add-row">
+              <ColorInput value={newPromoApp.color} onChange={c => setNewPromoApp(s => ({ ...s, color: c }))} title="Color de la aplicación" />
+              <input className="cfg-icon-input" value={newPromoApp.icon} onChange={e => setNewPromoApp(s => ({ ...s, icon: e.target.value }))} placeholder="🏷️" maxLength={2} title="Emoji (opcional)" />
+              <input value={newPromoApp.label} onChange={e => setNewPromoApp(s => ({ ...s, label: e.target.value }))} placeholder="Nueva aplicación (ej: MODO)..." onKeyDown={e => e.key === 'Enter' && addPromoApp()} />
+              <button onClick={addPromoApp}><Plus size={14} /></button>
             </div>
           </div>
         </>

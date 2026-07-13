@@ -8,6 +8,7 @@ import RichTextEditor from '../RichTextEditor'
 import { useConfirm } from '../ConfirmDialog'
 import { useSecurity, SecurityGate } from '../../lib/security'
 import { copyToClipboard } from '../../lib/clipboard'
+import { loadPromoApps, findPromoApp } from '../../lib/promoApps'
 import './PersonalSection.css'
 
 // ============ SALUD ============
@@ -580,16 +581,12 @@ function isExpiringSoon(expiry: string): boolean {
   return exp >= now && exp <= cutoff
 }
 
-// ---- Promociones por tarjeta (Pedidos Ya / Rappi / Presencial) ----
-type PromoApp = 'pedidosya' | 'rappi' | 'presencial'
+// ---- Promociones por tarjeta (aplicación configurable: Pedidos Ya / Rappi / Presencial / …) ----
+// `app` guarda el id de una PromoAppDef (ver lib/promoApps.ts); las opciones se editan en Config.
+type PromoApp = string
 interface PedidoPromo { id: string; cardId: string; days: number[]; discount: number; cap: number; freq: 'mensual' | 'semanal' | 'unica'; app?: PromoApp }
 const PY_DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const PY_FREQ: Record<PedidoPromo['freq'], string> = { mensual: 'Mensual', semanal: 'Semanal', unica: 'Única compra' }
-const PROMO_APPS: Record<PromoApp, { label: string; icon: string; color: string }> = {
-  pedidosya: { label: 'Pedidos Ya', icon: '🛵', color: '#d9021b' },
-  rappi: { label: 'Rappi', icon: '🛍️', color: '#ff6b1a' },
-  presencial: { label: 'Presencial', icon: '🏪', color: '#0ea5e9' },
-}
 function loadPromos(): PedidoPromo[] { try { const s = localStorage.getItem('nn-pedidosya'); return s ? JSON.parse(s) : [] } catch { return [] } }
 
 function PedidosYaTab({ cards }: { cards: CardData[] }) {
@@ -599,11 +596,13 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
   const [discount, setDiscount] = useState('')
   const [cap, setCap] = useState('')
   const [freq, setFreq] = useState<PedidoPromo['freq']>('mensual')
-  const [app, setApp] = useState<PromoApp>('pedidosya')
+  const [promoApps] = useState(loadPromoApps)
+  const [app, setApp] = useState<PromoApp>(promoApps[0]?.id || 'pedidosya')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [fApp, setFApp] = useState<'all' | PromoApp>('all')
   const [fDay, setFDay] = useState<'all' | number>('all')
   const [fCard, setFCard] = useState<'all' | string>('all')
+  const [detail, setDetail] = useState<PedidoPromo | null>(null)  // promoción abierta en el menú emergente
   const confirm = useConfirm()
 
   const save = (p: PedidoPromo[]) => { setPromos(p); localStorage.setItem('nn-pedidosya', JSON.stringify(p)) }
@@ -648,10 +647,10 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
     (fCard === 'all' || p.cardId === fCard)
 
   const renderPromo = (p: PedidoPromo) => {
-    const appInfo = PROMO_APPS[p.app || 'pedidosya']
+    const appInfo = findPromoApp(promoApps, p.app)
     const spend = spendForCap(p.discount, p.cap)
     return (
-      <div key={p.id} className={`py-promo ${editingId === p.id ? 'editing' : ''}`}>
+      <div key={p.id} className={`py-promo ${editingId === p.id ? 'editing' : ''}`} onClick={() => setDetail(p)} title="Ver detalle de la promoción" role="button">
         <span className="py-promo-discount">{p.discount}%</span>
         <div className="py-promo-info">
           <span className="py-promo-days">{p.days.map(d => PY_DAYS[d]).join(' · ')}</span>
@@ -662,8 +661,8 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
           {spend > 0 && <span className="py-promo-spend">💳 Gastá {money(spend)} para llegar al tope</span>}
         </div>
         <div className="py-promo-actions">
-          <button className="py-promo-edit" onClick={() => startEdit(p)} title="Editar promoción"><Edit3 size={13} /></button>
-          <button className="py-promo-del" onClick={() => remove(p.id)} title="Eliminar"><Trash2 size={13} /></button>
+          <button className="py-promo-edit" onClick={e => { e.stopPropagation(); startEdit(p) }} title="Editar promoción"><Edit3 size={13} /></button>
+          <button className="py-promo-del" onClick={e => { e.stopPropagation(); remove(p.id) }} title="Eliminar"><Trash2 size={13} /></button>
         </div>
       </div>
     )
@@ -684,9 +683,9 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
         ) : (
           <div className="py-today-list">
             {todayPromos.map(p => {
-              const appInfo = PROMO_APPS[p.app || 'pedidosya']
+              const appInfo = findPromoApp(promoApps, p.app)
               return (
-                <div key={p.id} className="py-today-chip" style={{ borderColor: appInfo.color }}>
+                <div key={p.id} className="py-today-chip" style={{ borderColor: appInfo.color, cursor: 'pointer' }} onClick={() => setDetail(p)} title="Ver detalle de la promoción">
                   <span className="py-today-disc" style={{ color: appInfo.color }}>{p.discount}%</span>
                   <span className="py-today-card">{cardName(p.cardId)}</span>
                   <span className="py-today-app">{appInfo.icon} {appInfo.label}</span>
@@ -711,9 +710,9 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
                 {d.dayPromos.length === 0
                   ? <span className="py-up-empty">Sin promos</span>
                   : d.dayPromos.map(p => {
-                    const app = PROMO_APPS[p.app || 'pedidosya']
+                    const app = findPromoApp(promoApps, p.app)
                     return (
-                      <span key={p.id} className="py-up-chip" style={{ borderColor: app.color }} title={`${p.discount}% · ${cardName(p.cardId)} · ${app.label}`}>
+                      <span key={p.id} className="py-up-chip" style={{ borderColor: app.color, cursor: 'pointer' }} onClick={() => setDetail(p)} title={`${p.discount}% · ${cardName(p.cardId)} · ${app.label}`}>
                         <span className="py-up-disc" style={{ color: app.color }}>{p.discount}%</span>
                         <span className="py-up-card">{cardName(p.cardId)}</span>
                         <span className="py-up-app">{app.icon}</span>
@@ -729,7 +728,7 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
       <div className={`card pedidosya-add ${editingId ? 'editing' : ''}`}>
         <div className="card-title">🏷️ {editingId ? 'Editar promoción' : 'Nueva promoción'}</div>
         <div className="py-add-grid">
-          <label className="py-field"><span>Aplicación</span><select value={app} onChange={e => setApp(e.target.value as PromoApp)}>{(Object.keys(PROMO_APPS) as PromoApp[]).map(a => <option key={a} value={a}>{PROMO_APPS[a].icon} {PROMO_APPS[a].label}</option>)}</select></label>
+          <label className="py-field"><span>Aplicación</span><select value={app} onChange={e => setApp(e.target.value)}>{promoApps.map(a => <option key={a.id} value={a.id}>{a.icon} {a.label}</option>)}</select></label>
           <label className="py-field"><span>Tarjeta</span><select value={cardId} onChange={e => setCardId(e.target.value)}>{cards.map(c => <option key={c.id} value={c.id}>{c.label?.trim() || c.bank?.trim() || 'Tarjeta'}</option>)}</select></label>
           <label className="py-field"><span>Descuento %</span><input type="number" value={discount} onChange={e => setDiscount(e.target.value)} placeholder="30" /></label>
           <label className="py-field"><span>Tope de reintegro</span><input type="number" value={cap} onChange={e => setCap(e.target.value)} placeholder="$ (opcional)" /></label>
@@ -747,9 +746,9 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
 
       {promos.length > 0 && (
         <div className="py-filters">
-          <select value={fApp} onChange={e => setFApp(e.target.value as 'all' | PromoApp)}>
+          <select value={fApp} onChange={e => setFApp(e.target.value)}>
             <option value="all">Toda aplicación</option>
-            {(Object.keys(PROMO_APPS) as PromoApp[]).map(a => <option key={a} value={a}>{PROMO_APPS[a].icon} {PROMO_APPS[a].label}</option>)}
+            {promoApps.map(a => <option key={a.id} value={a.id}>{a.icon} {a.label}</option>)}
           </select>
           <select value={fDay} onChange={e => setFDay(e.target.value === 'all' ? 'all' : Number(e.target.value))}>
             <option value="all">Todo día</option>
@@ -782,6 +781,35 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
           </div>
         )}
       </div>
+
+      {detail && (() => {
+        const p = detail
+        const appInfo = findPromoApp(promoApps, p.app)
+        const spend = spendForCap(p.discount, p.cap)
+        return (
+          <div className="promo-detail-backdrop" onClick={() => setDetail(null)}>
+            <div className="promo-detail-modal card" onClick={e => e.stopPropagation()}>
+              <div className="promo-detail-head" style={{ background: `linear-gradient(135deg, ${appInfo.color}, ${appInfo.color}cc)` }}>
+                <span className="promo-detail-app">{appInfo.icon} {appInfo.label}</span>
+                <span className="promo-detail-disc">{p.discount}%</span>
+                <button className="promo-detail-close" onClick={() => setDetail(null)} title="Cerrar"><X size={16} /></button>
+              </div>
+              <div className="promo-detail-body">
+                <div className="promo-detail-row"><span>Tarjeta</span><strong>{cardName(p.cardId)}</strong></div>
+                <div className="promo-detail-row"><span>Descuento</span><strong>{p.discount}%</strong></div>
+                <div className="promo-detail-row"><span>Días</span><strong>{p.days.length ? p.days.map(d => FULL_DAYS[d]).join(', ') : '—'}</strong></div>
+                <div className="promo-detail-row"><span>Tope de reintegro</span><strong>{p.cap > 0 ? money(p.cap) : 'Sin tope'}</strong></div>
+                <div className="promo-detail-row"><span>Frecuencia</span><strong>{PY_FREQ[p.freq]}</strong></div>
+                {spend > 0 && <div className="promo-detail-spend">💳 Gastá <strong>{money(spend)}</strong> para llegar al tope de reintegro.</div>}
+              </div>
+              <div className="promo-detail-actions">
+                <button className="py-promo-edit" onClick={() => { startEdit(p); setDetail(null) }}><Edit3 size={13} /> Editar</button>
+                <button className="py-promo-del" onClick={() => { setDetail(null); remove(p.id) }}><Trash2 size={13} /> Eliminar</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -1241,23 +1269,27 @@ function ListaComprasTab() {
       </div>
 
       {showResumen && (
-        <div className="card shopping-resumen">
-          <div className="shopping-resumen-head">
-            <ClipboardList size={16} />
-            <strong>Resumen de pendientes</strong>
-            <span className="shopping-resumen-total">{totalItems - doneItems} por comprar</span>
-            <button className="shopping-resumen-copy" onClick={copyResumen} disabled={totalItems - doneItems === 0}><Copy size={12} /> Copiar</button>
-            <button className="shopping-resumen-close" onClick={() => setShowResumen(false)}><X size={14} /></button>
-          </div>
-          {groups.filter(g => g.items.some(i => !i.done)).map(g => (
-            <div key={g.id} className="shopping-resumen-list">
-              <span className="shopping-resumen-list-name" style={{ color: g.color }}><span className="shopping-resumen-dot" style={{ background: g.color }} />{g.name} <em>({g.items.filter(i => !i.done).length})</em></span>
-              <div className="shopping-resumen-items">
-                {g.items.filter(i => !i.done).map(i => <span key={i.id} className="shopping-resumen-item">{i.text}</span>)}
-              </div>
+        <div className="shopping-resumen-backdrop" onClick={() => setShowResumen(false)}>
+          <div className="card shopping-resumen" onClick={e => e.stopPropagation()}>
+            <div className="shopping-resumen-head">
+              <ClipboardList size={16} />
+              <strong>Resumen de pendientes</strong>
+              <span className="shopping-resumen-total">{totalItems - doneItems} por comprar</span>
+              <button className="shopping-resumen-copy" onClick={copyResumen} disabled={totalItems - doneItems === 0}><Copy size={12} /> Copiar</button>
+              <button className="shopping-resumen-close" onClick={() => setShowResumen(false)}><X size={14} /></button>
             </div>
-          ))}
-          {totalItems - doneItems === 0 && <div className="shopping-resumen-empty">¡Todo comprado! No hay ítems pendientes.</div>}
+            <div className="shopping-resumen-scroll">
+              {groups.filter(g => g.items.some(i => !i.done)).map(g => (
+                <div key={g.id} className="shopping-resumen-list">
+                  <span className="shopping-resumen-list-name" style={{ color: g.color }}><span className="shopping-resumen-dot" style={{ background: g.color }} />{g.name} <em>({g.items.filter(i => !i.done).length})</em></span>
+                  <div className="shopping-resumen-items">
+                    {g.items.filter(i => !i.done).map(i => <span key={i.id} className="shopping-resumen-item">{i.text}</span>)}
+                  </div>
+                </div>
+              ))}
+              {totalItems - doneItems === 0 && <div className="shopping-resumen-empty">¡Todo comprado! No hay ítems pendientes.</div>}
+            </div>
+          </div>
         </div>
       )}
 
