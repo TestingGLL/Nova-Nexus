@@ -9,6 +9,8 @@ import { useConfirm } from '../ConfirmDialog'
 import { useSecurity, SecurityGate } from '../../lib/security'
 import { copyToClipboard } from '../../lib/clipboard'
 import { loadPromoApps, findPromoApp } from '../../lib/promoApps'
+import { isCardEnvelope, encryptVerified, decryptVault, newVaultKey, saveCardIndex, loadCardIndex, type CardIndexEntry } from '../../lib/cardVault'
+import { notify } from '../Toast'
 import './PersonalSection.css'
 
 // ============ SALUD ============
@@ -589,7 +591,7 @@ const PY_DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const PY_FREQ: Record<PedidoPromo['freq'], string> = { mensual: 'Mensual', semanal: 'Semanal', unica: 'Única compra' }
 function loadPromos(): PedidoPromo[] { try { const s = localStorage.getItem('nn-pedidosya'); return s ? JSON.parse(s) : [] } catch { return [] } }
 
-function PedidosYaTab({ cards }: { cards: CardData[] }) {
+function PedidosYaTab({ cards }: { cards: CardIndexEntry[] }) {
   const [promos, setPromos] = useState<PedidoPromo[]>(loadPromos)
   const [cardId, setCardId] = useState(cards[0]?.id || '')
   const [days, setDays] = useState<number[]>([])
@@ -815,11 +817,15 @@ function PedidosYaTab({ cards }: { cards: CardData[] }) {
 }
 
 function TarjetasTab() {
-  const [unlocked, setUnlocked] = useState(false)
+  // Estado del "vault" cifrado: 'loading' (leyendo), 'setup' (aún sin cifrar → crear
+  // contraseña), 'locked' (cifrado → pedir contraseña), 'unlocked' (clave en memoria).
+  const [vaultMode, setVaultMode] = useState<'loading' | 'setup' | 'locked' | 'unlocked'>('loading')
   const [subtab, setSubtab] = useState<'tarjetas' | 'pedidosya'>('tarjetas')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState(false)
-  const [cards, setCards] = useState<CardData[]>(() => { try { const s = localStorage.getItem('nn-cards'); return s ? JSON.parse(s) : [] } catch { return [] } })
+  const [password2, setPassword2] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [cards, setCards] = useState<CardData[]>([])
   const [copied, setCopied] = useState<string | null>(null)
   const [showCvv, setShowCvv] = useState<Record<string, boolean>>({})
   const [search, setSearch] = useState('')
@@ -830,10 +836,71 @@ function TarjetasTab() {
   const [editingCard, setEditingCard] = useState<string | null>(null)
   const [menuCard, setMenuCard] = useState<string | null>(null)
   const confirm = useConfirm()
-  const save = (c: CardData[]) => { setCards(c); localStorage.setItem('nn-cards', JSON.stringify(c)) }
+  const vaultKey = useRef<CryptoKey | null>(null)
+  const vaultSalt = useRef<Uint8Array | null>(null)
+  const legacyPlain = useRef<CardData[]>([])   // tarjetas legacy en texto plano, a cifrar en el setup
+  const unlocked = vaultMode === 'unlocked'
+
+  // Al montar, determinar si nn-cards ya está cifrado (locked) o todavía no (setup).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('nn-cards')
+      const parsed = raw ? JSON.parse(raw) : null
+      if (isCardEnvelope(parsed)) setVaultMode('locked')
+      else { legacyPlain.current = Array.isArray(parsed) ? parsed : []; setVaultMode('setup') }
+    } catch { legacyPlain.current = []; setVaultMode('setup') }
+  }, [])
+
+  // Índice no sensible (id/nombre/color) para Promociones y widgets sin descifrar.
+  const cardIndex: CardIndexEntry[] = unlocked ? cards.map(c => ({ id: c.id, label: c.label, bank: c.bank, color: c.color })) : loadCardIndex()
+
+  // Cifra (con verificación round-trip) y escribe el envelope + el índice.
+  const persist = async (c: CardData[]) => {
+    if (!vaultKey.current || !vaultSalt.current) throw new Error('Vault bloqueado')
+    const env = await encryptVerified(c, vaultKey.current, vaultSalt.current)
+    localStorage.setItem('nn-cards', JSON.stringify(env))
+    saveCardIndex(c)
+  }
+  const save = (c: CardData[]) => { setCards(c); void persist(c).catch(() => notify()?.error('No se pudo guardar la tarjeta cifrada')) }
   const setView = (m: 'list' | 'grid') => { setViewMode(m); try { localStorage.setItem('nn-cards-view', m) } catch {} }
   const copyText = (text: string, field: string) => { copyToClipboard(text.replace(/\D/g, '')); setCopied(field); setTimeout(() => setCopied(null), 1500) }
-  const tryUnlock = () => { if (password === 'A5/911') { setUnlocked(true); setError(false) } else { setError(true) } }
+
+  // Primer cifrado: crea la contraseña y cifra las tarjetas legacy (si las había).
+  const doSetup = async () => {
+    if (password.length < 4) { setError('La contraseña debe tener al menos 4 caracteres.'); return }
+    if (password !== password2) { setError('Las contraseñas no coinciden.'); return }
+    setBusy(true)
+    try {
+      const { key, salt } = await newVaultKey(password)
+      const env = await encryptVerified(legacyPlain.current, key, salt)
+      localStorage.setItem('nn-cards', JSON.stringify(env)); saveCardIndex(legacyPlain.current)
+      vaultKey.current = key; vaultSalt.current = salt
+      setCards(legacyPlain.current); setPassword(''); setPassword2(''); setError(''); setVaultMode('unlocked')
+    } catch { setError('No se pudo configurar el cifrado. Probá de nuevo.') }
+    setBusy(false)
+  }
+  // Desbloqueo: descifra con la contraseña; deja la clave en memoria para guardar.
+  const doUnlock = async () => {
+    setBusy(true)
+    try {
+      const raw = localStorage.getItem('nn-cards'); const env = raw ? JSON.parse(raw) : null
+      if (!isCardEnvelope(env)) { legacyPlain.current = Array.isArray(env) ? env : []; setVaultMode('setup'); setBusy(false); return }
+      const { data, key, salt } = await decryptVault<CardData[]>(env, password)
+      const list = Array.isArray(data) ? data : []
+      vaultKey.current = key; vaultSalt.current = salt
+      setCards(list); saveCardIndex(list)
+      setPassword(''); setError(''); setVaultMode('unlocked')
+    } catch { setError('Contraseña incorrecta.') }
+    setBusy(false)
+  }
+  // Escape ante contraseña olvidada: borrar todo y empezar de nuevo (irreversible).
+  const resetVault = async () => {
+    if (!await confirm({ title: 'Borrar tarjetas cifradas', message: 'Si olvidaste la contraseña, la única opción es borrar TODAS las tarjetas y volver a empezar. Esta acción no se puede deshacer.', confirmLabel: 'Borrar todo' })) return
+    localStorage.removeItem('nn-cards'); localStorage.removeItem('nn-cards-index')
+    legacyPlain.current = []; vaultKey.current = null; vaultSalt.current = null
+    setCards([]); setPassword(''); setPassword2(''); setError(''); setVaultMode('setup')
+  }
+
   const addCard = () => { const id = 'card-' + Date.now(); save([...cards, { id, label: '', bank: '', type: 'visa', number: '', holder: DEFAULT_HOLDER, expiry: '', cvv: '', color: CARD_COLORS[cards.length % CARD_COLORS.length] }]); setEditingCard(id); setMenuCard(null) }
   const updateCard = (id: string, updates: Partial<CardData>) => save(cards.map(c => c.id === id ? { ...c, ...updates } : c))
   const removeCard = async (id: string) => {
@@ -843,7 +910,38 @@ function TarjetasTab() {
     save(cards.filter(c => c.id !== id))
   }
 
-  const lockScreen = (<div className="tarjetas-lock"><Lock size={32} /><p>Ingresá la contraseña para acceder</p><div className="tarjetas-lock-form"><div className="tarjetas-lock-input"><input type={showPassword ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); setError(false) }} onKeyDown={e => e.key === 'Enter' && tryUnlock()} placeholder="Contraseña" /><button type="button" className="tarjetas-lock-eye" onClick={() => setShowPassword(v => !v)} title={showPassword ? 'Ocultar' : 'Mostrar'}>{showPassword ? <EyeOff size={15} /> : <Eye size={15} />}</button></div><button onClick={tryUnlock}>Ingresar</button></div>{error && <span className="tarjetas-error">Contraseña incorrecta</span>}</div>)
+  const gateScreen = (
+    <div className="tarjetas-lock">
+      <Lock size={32} />
+      {vaultMode === 'loading' ? <p>Cargando…</p> : vaultMode === 'setup' ? (
+        <>
+          <p>Protegé tus tarjetas con una contraseña</p>
+          <span className="tarjetas-lock-sub">Tus datos se guardan cifrados (AES-GCM). Guardá bien esta contraseña: si la olvidás, no se pueden recuperar.</span>
+          <div className="tarjetas-lock-form">
+            <div className="tarjetas-lock-input">
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); setError('') }} placeholder="Nueva contraseña" />
+              <button type="button" className="tarjetas-lock-eye" onClick={() => setShowPassword(v => !v)} title={showPassword ? 'Ocultar' : 'Mostrar'}>{showPassword ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+            </div>
+            <input className="tarjetas-lock-pw2" type={showPassword ? 'text' : 'password'} value={password2} onChange={e => { setPassword2(e.target.value); setError('') }} onKeyDown={e => e.key === 'Enter' && !busy && doSetup()} placeholder="Repetir contraseña" />
+            <button onClick={doSetup} disabled={busy}>{busy ? 'Cifrando…' : 'Proteger'}</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p>Ingresá la contraseña para acceder</p>
+          <div className="tarjetas-lock-form">
+            <div className="tarjetas-lock-input">
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); setError('') }} onKeyDown={e => e.key === 'Enter' && !busy && doUnlock()} placeholder="Contraseña" autoFocus />
+              <button type="button" className="tarjetas-lock-eye" onClick={() => setShowPassword(v => !v)} title={showPassword ? 'Ocultar' : 'Mostrar'}>{showPassword ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+            </div>
+            <button onClick={doUnlock} disabled={busy}>{busy ? 'Abriendo…' : 'Ingresar'}</button>
+          </div>
+          <button className="tarjetas-lock-reset" onClick={resetVault}>¿Olvidaste la contraseña? Borrar y empezar de nuevo</button>
+        </>
+      )}
+      {error && <span className="tarjetas-error">{error}</span>}
+    </div>
+  )
 
   const filtered = cards.filter(c => {
     if (expiringSoon && !isExpiringSoon(c.expiry)) return false
@@ -863,7 +961,7 @@ function TarjetasTab() {
         <button className={subtab === 'tarjetas' ? 'active' : ''} onClick={() => setSubtab('tarjetas')}><CreditCard size={13} /> Tarjetas {!unlocked && <Lock size={11} />}</button>
         <button className={subtab === 'pedidosya' ? 'active' : ''} onClick={() => setSubtab('pedidosya')}>🏷️ Promociones</button>
       </div>
-      {subtab === 'pedidosya' ? <PedidosYaTab cards={cards} /> : !unlocked ? lockScreen : (
+      {subtab === 'pedidosya' ? <PedidosYaTab cards={cardIndex} /> : !unlocked ? gateScreen : (
       <>
       <div className="tarjetas-toolbar">
         <div className="tarjetas-search"><Search size={14} /><input placeholder="Buscar por nombre, banco o últimos dígitos..." value={search} onChange={e => setSearch(e.target.value)} /></div>

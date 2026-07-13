@@ -175,10 +175,14 @@
 
 /* Tarjetas */
 .tarjetas-lock { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 48px 0; color: var(--text-secondary); }
-.tarjetas-lock-form { display: flex; gap: 8px; }
+.tarjetas-lock-form { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .tarjetas-lock-form input { padding: 8px 14px; border: 1px solid var(--border); background: var(--bg-card); border-radius: 8px; font-size: 13px; color: var(--text-primary); font-family: inherit; width: 160px; }
 .tarjetas-lock-form input:focus { outline: none; border-color: var(--accent); }
 .tarjetas-lock-form button { padding: 8px 18px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.tarjetas-lock-form button:disabled { opacity: 0.6; cursor: default; }
+.tarjetas-lock-sub { font-size: 12px; max-width: 380px; text-align: center; line-height: 1.5; opacity: 0.85; }
+.tarjetas-lock-reset { background: none; border: none; color: var(--text-secondary); font-size: 12px; cursor: pointer; text-decoration: underline; opacity: 0.75; padding: 0; font-family: inherit; }
+.tarjetas-lock-reset:hover { opacity: 1; color: #ef4444; }
 .tarjetas-error { font-size: 12px; color: #ef4444; }
 
 .tarjetas-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }

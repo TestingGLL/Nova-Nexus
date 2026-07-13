@@ -6,6 +6,7 @@ import { subscribeMundial, getMundialSnapshot } from '../../lib/mundialStore'
 import { subscribeTimer, getTimerSnapshot, toggleTimer, resetTimer, setTimerTotal } from '../../lib/timerStore'
 import ColorInput from '../ColorInput'
 import { upcomingHolidays } from '../../lib/holidays'
+import { loadCardIndex } from '../../lib/cardVault'
 import './InicioSection.css'
 
 // ============ ANIMATED CLOCK ============
@@ -253,7 +254,7 @@ function dynamicAnswer(q: string): string | null {
   const countIntent = q.includes('cuant') || q.includes('cantidad') || q.includes('cuenta')
 
   if (countIntent && q.includes('nota')) { const n = load<any[]>('nn-notas', []).length; return n ? `Tenés ${plural(n, 'nota guardada', 'notas guardadas')} en la sección Notas.` : 'Todavía no tenés notas. Creá la primera en la sección Notas con «Añadir nota».' }
-  if (countIntent && q.includes('tarjeta')) { const n = load<any[]>('nn-cards', []).length; return n ? `Tenés ${plural(n, 'tarjeta guardada', 'tarjetas guardadas')} en Personal → Tarjetas.` : 'No tenés tarjetas cargadas. Agregá una en Personal → Tarjetas.' }
+  if (countIntent && q.includes('tarjeta')) { const n = loadCardIndex().length; return n ? `Tenés ${plural(n, 'tarjeta guardada', 'tarjetas guardadas')} en Personal → Tarjetas.` : 'No tenés tarjetas cargadas. Agregá una en Personal → Tarjetas.' }
   if (countIntent && q.includes('proyecto')) { const n = load<any[]>('nn-projects', []).length; return n ? `Tenés ${plural(n, 'proyecto', 'proyectos')} en la sección Proyectos.` : 'No tenés proyectos. Creá uno en la sección Proyectos.' }
 
   // Pendientes (recordatorios sin completar)
@@ -267,7 +268,7 @@ function dynamicAnswer(q: string): string | null {
   // Promociones de hoy
   if (q.includes('promo') && (q.includes('hoy') || q.includes('activa'))) {
     const promos = load<any[]>('nn-pedidosya', [])
-    const cards = load<any[]>('nn-cards', [])
+    const cards = loadCardIndex()
     const todayIdx = (new Date().getDay() + 6) % 7
     const today = promos.filter((p: any) => Array.isArray(p.days) && p.days.includes(todayIdx) && cards.some((c: any) => c.id === p.cardId))
     return today.length
@@ -771,7 +772,6 @@ function loadReminders(): ReminderItem[] { try { const s = localStorage.getItem(
 // ============ PROMOS DE HOY (desde Personal → Tarjetas → Promociones) ============
 type PromoApp = 'pedidosya' | 'rappi' | 'presencial'
 interface PromoData { id: string; cardId: string; days: number[]; discount: number; cap?: number; app?: PromoApp }
-interface CardLite { id: string; label?: string; bank?: string }
 const PROMO_APPS: Record<PromoApp, { label: string; icon: string; color: string }> = {
   pedidosya: { label: 'Pedidos Ya', icon: '🛵', color: '#d9021b' },
   rappi: { label: 'Rappi', icon: '🛍️', color: '#ff6b1a' },
@@ -781,7 +781,7 @@ function loadJson<T>(key: string, fallback: T): T { try { const s = localStorage
 
 function PromosHoyWidget() {
   const promos = loadJson<PromoData[]>('nn-pedidosya', [])
-  const cards = loadJson<CardLite[]>('nn-cards', [])
+  const cards = loadCardIndex()
   const todayIdx = (new Date().getDay() + 6) % 7 // 0 = Lunes
   const dayName = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][todayIdx]
   const cardName = (id: string) => { const c = cards.find(x => x.id === id); return c ? (c.label?.trim() || c.bank?.trim() || 'Tarjeta') : 'Tarjeta' }
