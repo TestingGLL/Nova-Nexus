@@ -84,6 +84,41 @@ async function migrateField(key: string, field: string, folder: string) {
   if (isDataUrl(obj[field])) { const url = await migrateDataUrl(obj[field], folder); if (url) { obj[field] = url; localStorage.setItem(key, JSON.stringify(obj)) } }
 }
 
+// ---- Diagnóstico (para el panel "Estado del sistema") ----
+
+// Mismos targets que migra migrateImagesToStorage(): [clave, campos, ¿es array?].
+const IMAGE_TARGETS: [key: string, fields: string[], isArray: boolean][] = [
+  ['nn-profile', ['avatar'], false],
+  ['nn-etsy-stores', ['bannerImage', 'logoImage'], true],
+  ['nn-exercise-routines', ['banner'], true],
+  ['nn-stretches', ['banner'], true],
+]
+
+export interface ImageMigrationStatus {
+  cloud: number    // imágenes ya subidas (URL http)
+  pending: number  // imágenes todavía como data URL (pesan en localStorage)
+  total: number    // total de imágenes con contenido (cloud + pending)
+}
+
+// Recorre las mismas claves/campos que la migración y cuenta cuántas imágenes
+// están en la nube (http) vs. pendientes (data URL). No hace red: sólo lee localStorage.
+export function getImageMigrationStatus(): ImageMigrationStatus {
+  let cloud = 0, pending = 0
+  const tally = (v: unknown) => {
+    if (typeof v !== 'string' || !v) return
+    if (v.startsWith('data:image')) pending++
+    else if (/^https?:\/\//.test(v)) cloud++
+  }
+  for (const [key, fields, isArray] of IMAGE_TARGETS) {
+    let parsed: any
+    try { parsed = JSON.parse(localStorage.getItem(key) || 'null') } catch { continue }
+    if (!parsed) continue
+    if (isArray) { if (Array.isArray(parsed)) for (const item of parsed) for (const f of fields) tally(item?.[f]) }
+    else if (typeof parsed === 'object') for (const f of fields) tally(parsed[f])
+  }
+  return { cloud, pending, total: cloud + pending }
+}
+
 // Migra en segundo plano las imágenes ya guardadas como data URL a Storage.
 // Idempotente (sólo toca valores data:). Si no hay sesión/bucket/políticas, no hace nada.
 export async function migrateImagesToStorage(): Promise<void> {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, EyeOff, Tag, Plus, X, Volume2, Settings, Lock, GripVertical, Type, CheckCircle2, XCircle, Loader, Activity, Shield, KeyRound, BookOpen, Target } from 'lucide-react'
+import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, EyeOff, Tag, Plus, X, Volume2, Settings, Lock, GripVertical, Type, CheckCircle2, XCircle, Loader, Activity, Shield, KeyRound, BookOpen, Target, Image as ImageIcon, CloudUpload } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { getSoundsEnabled, setSoundsEnabled, getSoundsVolume, setSoundsVolume, sfx } from '../../lib/sounds'
@@ -9,7 +9,7 @@ import { hasPendingSync } from '../../lib/cloudSync'
 import { loadSecurity, saveSecurity, DEFAULT_SECURITY_PASSWORD, type SecurityConfig } from '../../lib/security'
 import { BUILTIN_PROJECT_LABELS, loadCustomProjectLabels, saveCustomProjectLabels, type ProjectLabel } from '../../lib/projectLabels'
 import { loadPromoApps, savePromoApps, isDefaultPromoApp, type PromoAppDef } from '../../lib/promoApps'
-import { uploadImage } from '../../lib/imageStore'
+import { uploadImage, migrateImagesToStorage, getImageMigrationStatus, type ImageMigrationStatus } from '../../lib/imageStore'
 import ColorInput from '../ColorInput'
 import { APP_VERSION } from '../../App'
 import './ConfiguracionSection.css'
@@ -66,6 +66,55 @@ function SistemaEstado() {
         <EstadoRow label="Servidor de transferencia" stat={transfer.stat} text={transfer.text} />
         <EstadoRow label="Dólar blue" stat={dolar.stat} text={dolar.text} />
         <EstadoRow label="Resultados Mundial" stat={mundial.stat} text={mundial.text} />
+      </div>
+    </div>
+  )
+}
+
+function ImagenesEstado() {
+  const [status, setStatus] = useState<ImageMigrationStatus>(() => getImageMigrationStatus())
+  const [running, setRunning] = useState(false)
+  const [msg, setMsg] = useState<{ stat: Stat; text: string } | null>(null)
+
+  const supaSession = supabaseEnabled && !!supabase
+  const online = typeof navigator !== 'undefined' ? navigator.onLine : true
+
+  const refresh = () => setStatus(getImageMigrationStatus())
+
+  const runMigration = async () => {
+    setRunning(true); setMsg({ stat: 'checking', text: 'Migrando imágenes a la nube…' })
+    try {
+      await migrateImagesToStorage()
+      const after = getImageMigrationStatus()
+      setStatus(after)
+      if (after.pending === 0) setMsg({ stat: 'ok', text: 'Listo: todas las imágenes están en la nube.' })
+      else setMsg({ stat: 'warn', text: `Quedaron ${after.pending} pendiente(s). Revisá sesión y conexión, y reintentá.` })
+    } catch {
+      setMsg({ stat: 'bad', text: 'No se pudo migrar. Revisá tu conexión e inicio de sesión.' })
+    } finally { setRunning(false) }
+  }
+
+  const overall: Stat = !supaSession ? 'warn' : status.total === 0 ? 'ok' : status.pending === 0 ? 'ok' : 'warn'
+  const overallText = !supaSession ? 'Nube no configurada'
+    : status.total === 0 ? 'Sin imágenes cargadas'
+    : status.pending === 0 ? `Todo en la nube · ${status.cloud} imagen(es)`
+    : `${status.pending} pendiente(s) de subir`
+
+  return (
+    <div className="card config-card">
+      <div className="card-title"><ImageIcon size={16} /> Imágenes en la nube</div>
+      <p className="config-desc">Avatar, banners de Etsy y de rutinas se guardan en Supabase Storage (no como texto pesado en el dispositivo). Acá ves cuántas ya subieron.</p>
+      <div className="estado-list">
+        <EstadoRow label="Estado general" stat={overall} text={overallText} />
+        <EstadoRow label="En la nube (URL)" stat={status.cloud > 0 ? 'ok' : 'warn'} text={`${status.cloud} imagen(es)`} />
+        <EstadoRow label="Pendientes (en el dispositivo)" stat={status.pending === 0 ? 'ok' : 'warn'} text={status.pending === 0 ? 'Ninguna' : `${status.pending} por subir`} />
+      </div>
+      {msg && <div className={`estado-msg ${msg.stat}`}>{msg.text}</div>}
+      <div className="estado-actions">
+        <button className="reset-btn" onClick={refresh} disabled={running}><RotateCcw size={14} /> Volver a chequear</button>
+        <button className="reset-btn" onClick={runMigration} disabled={running || !supaSession || !online || status.pending === 0}>
+          <CloudUpload size={14} className={running ? 'estado-spin' : ''} /> {running ? 'Migrando…' : 'Migrar ahora'}
+        </button>
       </div>
     </div>
   )
@@ -446,6 +495,8 @@ export default function ConfiguracionSection() {
       {tab === 'sistema' && (
         <>
           <SistemaEstado />
+
+          <ImagenesEstado />
 
           <div className="card config-card">
             <div className="card-title"><Shield size={16} /> Seguridad</div>
