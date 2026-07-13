@@ -5,6 +5,7 @@ import { useConfirm } from '../ConfirmDialog'
 import ColorInput from '../ColorInput'
 import RichTextEditor from '../RichTextEditor'
 import { copyToClipboard } from '../../lib/clipboard'
+import { uploadImage } from '../../lib/imageStore'
 import './EtsySection.css'
 
 // ============ TYPES ============
@@ -1902,8 +1903,8 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
   const logoInputRef = useRef<HTMLInputElement>(null)
 
   const save = () => { onUpdate(draft); setEditing(false) }
-  const handleBannerImage = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setDraft({ ...draft, bannerImage: reader.result as string }); reader.readAsDataURL(file); e.target.value = '' }
-  const handleLogoImage = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setDraft({ ...draft, logoImage: reader.result as string }); reader.readAsDataURL(file); e.target.value = '' }
+  const handleBannerImage = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; e.target.value = ''; if (!file) return; const url = await uploadImage(file, 'etsy-banner'); setDraft(d => ({ ...d, bannerImage: url })) }
+  const handleLogoImage = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; e.target.value = ''; if (!file) return; const url = await uploadImage(file, 'etsy-logo'); setDraft(d => ({ ...d, logoImage: url })) }
 
   const rating = storeRating(store)
   const clientCount = (store.clientList || []).length

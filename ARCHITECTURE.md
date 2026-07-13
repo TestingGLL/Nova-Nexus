@@ -101,7 +101,10 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 ### Personal / Salud
 | Clave | Contenido |
 |---|---|
-| `nn-cards` / `nn-cards-view` | Tarjetas (protegidas por contraseña) / vista `list`|`grid` |
+| `nn-cards` / `nn-cards-view` | Tarjetas **cifradas** (AES-GCM, envelope; ver `lib/cardVault.ts`) / vista `list`|`grid` |
+| `nn-cards-index` | Índice NO sensible de tarjetas (id/nombre/color) para mostrar nombres sin descifrar |
+| `nn-promo-apps` | Opciones del campo «Aplicación» de Promociones (ver `lib/promoApps.ts`) |
+| `nn-images` (bucket) | Imágenes en Supabase Storage; en localStorage se guarda solo la URL (ver `lib/imageStore.ts` y `SUPABASE_STORAGE.md`) |
 | `nn-shopping` / `nn-custom-categories` | Listas de compras / categorías |
 | `nn-shopping-sort` / `nn-shopping-collapsed` | Orden de las listas (`manual`/`alpha`) / listas contraídas |
 | `nn-wishlist` | Compras / wishlist |

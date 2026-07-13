@@ -10,6 +10,7 @@ import { useSecurity, SecurityGate } from '../../lib/security'
 import { copyToClipboard } from '../../lib/clipboard'
 import { loadPromoApps, findPromoApp } from '../../lib/promoApps'
 import { isCardEnvelope, encryptVerified, decryptVault, newVaultKey, saveCardIndex, loadCardIndex, type CardIndexEntry } from '../../lib/cardVault'
+import { uploadImage } from '../../lib/imageStore'
 import { notify } from '../Toast'
 import './PersonalSection.css'
 
@@ -289,11 +290,9 @@ function ExercisePanel() {
   }
 
   const updateRoutine = (id: string, u: Partial<Routine>) => saveList(list.map(r => r.id === id ? { ...r, ...u } : r))
-  const onBannerFile = (rid: string, file?: File | null) => {
+  const onBannerFile = async (rid: string, file?: File | null) => {
     if (!file) { return }
-    const reader = new FileReader()
-    reader.onload = () => updateRoutine(rid, { banner: String(reader.result) })
-    reader.readAsDataURL(file)
+    updateRoutine(rid, { banner: await uploadImage(file, 'routine') })
   }
   const updateExercise = (rid: string, idx: number, u: Partial<ExerciseData>) => { const r = list.find(x => x.id === rid); if (!r) return; setWeekExercises(rid, week, exercisesOf(r, week).map((e, i) => i === idx ? { ...e, ...u } : e)) }
   const addExercise = (rid: string) => { const r = list.find(x => x.id === rid); if (!r) return; setWeekExercises(rid, week, [...exercisesOf(r, week), { name: 'Nuevo ejercicio', sets: 3, reps: '12', rest: '60s', tip: '', mode: 'reps' }]) }

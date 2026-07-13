@@ -9,6 +9,7 @@ import { hasPendingSync } from '../../lib/cloudSync'
 import { loadSecurity, saveSecurity, DEFAULT_SECURITY_PASSWORD, type SecurityConfig } from '../../lib/security'
 import { BUILTIN_PROJECT_LABELS, loadCustomProjectLabels, saveCustomProjectLabels, type ProjectLabel } from '../../lib/projectLabels'
 import { loadPromoApps, savePromoApps, isDefaultPromoApp, type PromoAppDef } from '../../lib/promoApps'
+import { uploadImage } from '../../lib/imageStore'
 import ColorInput from '../ColorInput'
 import { APP_VERSION } from '../../App'
 import './ConfiguracionSection.css'
@@ -169,11 +170,9 @@ export default function ConfiguracionSection() {
   }
 
   const updateProfile = (u: Partial<ProfileData>) => { const p = { ...profile, ...u }; setProfile(p); saveProfile(p) }
-  const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => updateProfile({ avatar: reader.result as string })
-    reader.readAsDataURL(file)
+    updateProfile({ avatar: await uploadImage(file, 'avatar') })
   }
   const updateAlertConfig = (u: Partial<AlertConfig>) => { const c = { ...alertConfig, ...u }; setAlertConfig(c); saveAlertConfig(c) }
   const toggleWidget = (id: string) => {
