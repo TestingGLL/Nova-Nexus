@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
-import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy, Bot, Flag, Tag } from 'lucide-react'
-import { APP_VERSION } from '../../App'
+import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy, Flag, Tag } from 'lucide-react'
 import { loadNotifications } from '../../lib/notifications'
 import { subscribeMundial, getMundialSnapshot } from '../../lib/mundialStore'
 import { subscribeTimer, getTimerSnapshot, toggleTimer, resetTimer, setTimerTotal } from '../../lib/timerStore'
@@ -196,141 +195,8 @@ function QuickChat() {
   )
 }
 
-// ============ APP ASSISTANT (chat de ayuda sobre la app) ============
-
+// Búsqueda insensible a acentos/mayúsculas (usada por el buscador de Inicio).
 const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-
-interface KbEntry { k: string[]; a: string }
-// Base de conocimiento de la app: cada entrada tiene palabras clave y una respuesta exacta.
-const KB: KbEntry[] = [
-  { k: ['hola', 'buenas', 'hey', 'hello', 'buen dia'], a: '¡Hola! 👋 Soy el asistente de Nova Nexus. Preguntame cómo usar una sección o dónde configurar algo.' },
-  { k: ['gracias', 'genial', 'perfecto', 'buenisimo'], a: '¡De nada! 🙂 Cualquier otra duda sobre la app, preguntame.' },
-  { k: ['ayuda', 'que podes hacer', 'que puedo preguntar', 'opciones', 'help', 'para que servis'], a: 'Puedo explicarte cualquier parte de Nova Nexus: sus 12 secciones (Inicio, Personal, Finanzas, Etsy, Software, Edición, Notas, Proyectos, Extras, Alertas, Configuración) y funciones como tarjetas, contraseñas/seguridad, sincronización a la nube, criptomonedas, alquiler, rutinas, transferencia por WiFi y más. Preguntame por lo que necesites.' },
-  { k: ['que es nova nexus', 'que es esta app', 'de que se trata', 'para que sirve la app', 'que es la app'], a: 'Nova Nexus es una app de escritorio "todo en uno" que reúne tu vida personal y profesional: finanzas, tiendas Etsy, salud, notas, proyectos, edición, alertas y más. Todos tus datos se guardan localmente y se sincronizan a la nube.' },
-  { k: ['secciones', 'cuantas secciones', 'que secciones', 'menu', 'barra lateral'], a: 'Las secciones son: Inicio, Personal, Finanzas, Etsy, Proyectos, Software, Edición, Notas, Extras, Alertas y Configuración. Podés reordenarlas arrastrándolas en la barra lateral.' },
-  { k: ['sincroniza', 'nube', 'sincronizacion', 'se guarda', 'supabase', 'se pierden', 'respaldo', 'otro dispositivo'], a: 'Todo lo que cargás se guarda automáticamente y se sincroniza a la nube (Supabase). Funciona offline: los cambios se suben cuando hay conexión. Al iniciar sesión en otro dispositivo, baja tu información.' },
-  { k: ['version', 'que version', 'actualizado'], a: `Estás usando Nova Nexus v${APP_VERSION}. La versión se muestra abajo a la derecha de la app.` },
-  { k: ['contraseña', 'password', 'seguridad', 'bloquear', 'proteger', 'pin', 'clave'], a: 'La contraseña se maneja en Configuración → Sistema → Seguridad. Podés proteger toda la app, secciones puntuales, o el Diario y los Objetivos. Todo viene desactivado por defecto y la contraseña por defecto es M1-E6-G96.' },
-  { k: ['tarjeta', 'tarjetas', 'pedidos ya', 'pedidosya'], a: 'En Personal → Tarjetas guardás tus tarjetas (protegidas por contraseña) y en su subpestaña "Pedidos Ya" cargás las promos por tarjeta. Tocá "Agregar tarjeta" para sumar una.' },
-  { k: ['contacto', 'contactos', 'agenda', 'telefono de'], a: 'En Personal → Contactos podés agregar contactos con nombre, teléfono, correo, dirección y notas. Se pueden editar, eliminar y duplicar.' },
-  { k: ['lista de compras', 'listas', 'compras del super', 'super', 'shopping'], a: 'En Personal → Listas organizás varias listas dentro de pestañas. Creá una pestaña, agregá listas y sumá ítems con su categoría.' },
-  { k: ['ejercicio', 'rutina', 'salud', 'gimnasio', 'entrenar', 'creador de rutinas'], a: 'En Personal → Salud tenés el Creador de Rutinas: asignás una rutina a cada día y semana. En Inicio, el widget "Rutina de hoy" muestra los ejercicios del día y al hacer clic te lleva a ese ejercicio. Cada ejercicio permite reps o tiempo y un link de YouTube.' },
-  { k: ['agua', 'vasos', 'hidratacion'], a: 'El contador de agua está en Personal → Salud. Tocá el vaso para sumar; se reinicia cada día.' },
-  { k: ['anotaciones', 'bloques', 'notion'], a: 'En Personal → Anotaciones escribís en páginas estilo Notion (con formato rico). Podés crear varias páginas y renombrarlas.' },
-  { k: ['diario', 'journal', 'pensamientos'], a: 'El Diario está en Personal → Diario, organizado por capítulos. Podés protegerlo con contraseña desde Configuración → Seguridad.' },
-  { k: ['objetivo', 'objetivos', 'metas', 'goals'], a: 'En Personal → Objetivos cargás metas con progreso. Se pueden editar, clonar, eliminar y agrupar por categoría; hay un progreso global.' },
-  { k: ['ingreso', 'ingresos', 'sueldo', 'cobro', 'cuanto gano'], a: 'En Finanzas → Ingresos cargás ingresos en pesos o dólares, y podés asociar una pestaña (Gastos propios, Alquiler o Gastos en USD) para descontarla y ver el neto.' },
-  { k: ['alquiler', 'renta', 'cierre de mes', 'servicios', 'expensas'], a: 'En Finanzas → Alquiler gestionás alquiler y servicios (con historial de aumentos), el dashboard de alimentos, mantenimiento y "Cierre de mes" (que archiva el mes y arranca uno nuevo; también se cierra solo al cambiar de mes).' },
-  { k: ['gasto', 'gastos', 'gastos propios', 'inflacion', 'aumento'], a: 'En Finanzas → Gastos Propios cargás gastos por categoría, con proyección por período y un botón de "Aumento por inflación" que sube todos los precios por un %.' },
-  { k: ['dolar', 'dolares', 'usd', 'suscripcion', 'gastos en dolares'], a: 'En Finanzas → Gastos en USD llevás gastos en dólares (fijos, pendientes y futuros) con conversión al dólar blue. Se pueden editar y filtrar.' },
-  { k: ['cripto', 'criptomoneda', 'bitcoin', 'crypto'], a: 'En Finanzas → Criptomonedas ves precios en vivo y gráficos de varias monedas, cada una con su riesgo, plazo, tipo e intereses. Tocá una para ver el detalle.' },
-  { k: ['etsy', 'tienda', 'tiendas', 'organizador', 'lanzamiento', 'reseña', 'reseñas'], a: 'En Etsy administrás tus tiendas: información y reseñas, artículos (con grupos y subartículos), un Organizador con flujo de lanzamiento, creaciones/prompts, clientes y planificación de fechas comerciales.' },
-  { k: ['navegador', 'chrome', 'edge', 'navegador por defecto'], a: 'En Software → Navegador podés fijar Chrome o Edge como navegador por defecto del sistema.' },
-  { k: ['bluetooth', 'dispositivo', 'auriculares', 'control', 'joystick'], a: 'En Software → Dispositivos ves los dispositivos Bluetooth conectados; también aparecen en el HUD de la barra superior.' },
-  { k: ['transferencia', 'transferir', 'wifi', 'pasar archivos', 'qr', 'celular'], a: 'En Software → Transferencias podés pasar archivos entre la PC y el celular por WiFi escaneando un QR.' },
-  { k: ['edicion', 'editor', 'imagen', 'canvas', 'marco', 'diseño'], a: 'La sección Edición es un editor gráfico con capas, formas, texto y guías sobre un canvas.' },
-  { k: ['notas', 'carpetas', 'etiquetas de notas'], a: 'La sección Notas guarda notas con carpetas, etiquetas y búsqueda; podés marcar notas efímeras que se auto-eliminan.' },
-  { k: ['proyecto', 'proyectos', 'kanban', 'tablero'], a: 'En Proyectos gestionás proyectos en lista o tablero Kanban. Las etiquetas (tipos) se pueden agregar desde Configuración → Adicionales.' },
-  { k: ['extras', 'ruleta', 'aleatorio', 'sorteo', 'random'], a: 'En Extras tenés una ruleta configurable y una grilla aleatoria para sorteos y decisiones.' },
-  { k: ['alerta', 'alertas', 'recordatorio', 'notificacion', 'campana'], a: 'En Alertas ves tus recordatorios y notificaciones. La campana arriba a la derecha muestra las no leídas. La anticipación se configura en Configuración → Alertas.' },
-  { k: ['tema', 'oscuro', 'claro', 'color', 'acento', 'apariencia', 'personalizar'], a: 'El tema (claro/oscuro) y el color de acento se cambian en Configuración → Personalización.' },
-  { k: ['sonido', 'sonidos', 'volumen', 'silenciar'], a: 'Los sonidos de interfaz y su volumen se controlan en Configuración → Sistema → Sonidos.' },
-  { k: ['escala', 'tamaño de texto', 'tipografia', 'zoom', 'letra mas grande'], a: 'El tamaño de la tipografía/interfaz se ajusta en Configuración → Sistema → Tamaño de la tipografía.' },
-  { k: ['temporizador', 'timer', 'cronometro', 'cuenta regresiva'], a: 'El Temporizador es un widget de Inicio: elegí los minutos y suena al terminar aunque estés en otra sección o minimizado.' },
-  { k: ['mundial', 'futbol', 'partido', 'gol'], a: 'El widget "Mundial 2026" en Inicio muestra los partidos en vivo y los de Argentina, con aviso de goles y penales.' },
-  { k: ['widget', 'widgets', 'inicio', 'pantalla principal', 'reorganizar'], a: 'En Inicio podés combinar y apilar los widgets sin límite (reloj, clima, temporizador, calendario, rutina, alertas, etc.) y ajustar su ancho (1, 1.5, 2, 2.5 o 3x). Podés ocultarlos desde Configuración → Paneles.' },
-  { k: ['checklist', 'casilla', 'verificable', 'tarea', 'checkbox', 'lista de tareas'], a: 'En el Editor de Textos (Notas, Anotaciones, etc.) podés insertar una checklist con el botón de casillas de la barra, o convertir un texto en casilla verificable con clic derecho sobre el grip del bloque. Se marca/desmarca con un clic.' },
-  { k: ['aplicacion', 'app de promo', 'agregar aplicacion', 'modo', 'mercado pago'], a: 'Las opciones del campo «Aplicación» de las Promociones (Pedidos Ya, Rappi, Presencial y las que agregues) se administran en Configuración → Adicionales → «Aplicaciones de Promociones».' },
-  { k: ['subgrupo', 'subgrupos', 'creaciones', 'prompt', 'prompts'], a: 'En Etsy → Creaciones los grupos pueden tener subgrupos, y cada prompt puede nombrarse a mano y copiarse con un botón.' },
-  { k: ['copiar', 'copiado', 'portapapeles'], a: 'Cualquier botón de copiar de la app copia al portapapeles y muestra una notificación «Copiado». Por ejemplo, el número de tarjeta, los keywords de SEO o los mensajes predeterminados de Etsy.' },
-  { k: ['backup', 'exportar', 'importar', 'guardar datos', 'copia de seguridad'], a: 'Tus datos se respaldan solos en la nube (Supabase) a medida que los cargás. Al iniciar sesión en otra PC, se descargan automáticamente.' },
-]
-
-// Respuestas dinámicas usando los datos reales del usuario (localStorage nn-*).
-// Devuelve null si la pregunta no matchea ninguna intención con datos.
-function dynamicAnswer(q: string): string | null {
-  const load = <T,>(k: string, f: T): T => { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : f } catch { return f } }
-  const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`
-  const countIntent = q.includes('cuant') || q.includes('cantidad') || q.includes('cuenta')
-
-  if (countIntent && q.includes('nota')) { const n = load<any[]>('nn-notas', []).length; return n ? `Tenés ${plural(n, 'nota guardada', 'notas guardadas')} en la sección Notas.` : 'Todavía no tenés notas. Creá la primera en la sección Notas con «Añadir nota».' }
-  if (countIntent && q.includes('tarjeta')) { const n = loadCardIndex().length; return n ? `Tenés ${plural(n, 'tarjeta guardada', 'tarjetas guardadas')} en Personal → Tarjetas.` : 'No tenés tarjetas cargadas. Agregá una en Personal → Tarjetas.' }
-  if (countIntent && q.includes('proyecto')) { const n = load<any[]>('nn-projects', []).length; return n ? `Tenés ${plural(n, 'proyecto', 'proyectos')} en la sección Proyectos.` : 'No tenés proyectos. Creá uno en la sección Proyectos.' }
-
-  // Pendientes (recordatorios sin completar)
-  if (q.includes('pendiente') || q.includes('que tengo que hacer') || q.includes('que me falta')) {
-    const rem = load<any[]>('nn-reminders', []).filter((r: any) => !r.done)
-    if (rem.length === 0) return 'No tenés recordatorios pendientes. 🎉'
-    const sample = rem.slice(0, 3).map((r: any) => `• ${r.text}`).join('\n')
-    return `Tenés ${plural(rem.length, 'recordatorio pendiente', 'recordatorios pendientes')}:\n${sample}${rem.length > 3 ? `\n…y ${rem.length - 3} más. Miralos en Alertas.` : ''}`
-  }
-
-  // Promociones de hoy
-  if (q.includes('promo') && (q.includes('hoy') || q.includes('activa'))) {
-    const promos = load<any[]>('nn-pedidosya', [])
-    const cards = loadCardIndex()
-    const todayIdx = (new Date().getDay() + 6) % 7
-    const today = promos.filter((p: any) => Array.isArray(p.days) && p.days.includes(todayIdx) && cards.some((c: any) => c.id === p.cardId))
-    return today.length
-      ? `Hoy tenés ${plural(today.length, 'promoción activa', 'promociones activas')}. Miralas en el widget «Promos de hoy» o en Personal → Tarjetas → Promociones.`
-      : 'Hoy no hay promociones activas según lo que cargaste en Personal → Tarjetas → Promociones.'
-  }
-
-  // Buscar una nota por título
-  const m = q.match(/(?:busca(?:r|me)?|encontra(?:r|me)?)\s+(?:la\s+)?(?:nota|notas)\s+(?:sobre\s+|de\s+|que\s+diga\s+)?(.+)/)
-  if (m && m[1]) {
-    const term = m[1].trim()
-    const notes = load<any[]>('nn-notas', [])
-    const hits = notes.filter((n: any) => normalize((n.title || '') + ' ' + (n.content || '')).includes(normalize(term)))
-    if (hits.length === 0) return `No encontré ninguna nota que mencione «${term}».`
-    const titles = hits.slice(0, 5).map((n: any) => `• ${n.title || '(sin título)'}`).join('\n')
-    return `Encontré ${plural(hits.length, 'nota', 'notas')} sobre «${term}»:\n${titles}${hits.length > 5 ? '\n…y más. Abrí Notas y buscá ahí.' : ''}`
-  }
-
-  return null
-}
-
-function answerFor(qRaw: string): string {
-  const q = normalize(qRaw)
-  if (!q.trim()) return ''
-  const dyn = dynamicAnswer(q)
-  if (dyn) return dyn
-  let best: KbEntry | null = null
-  let bestScore = 0
-  for (const e of KB) {
-    let score = 0
-    for (const kw of e.k) { const nk = normalize(kw); if (q.includes(nk)) score += nk.split(' ').length }
-    if (score > bestScore) { bestScore = score; best = e }
-  }
-  if (best && bestScore > 0) return best.a
-  return 'No estoy seguro de eso 🤔. Puedo contarte cómo usar cualquier sección (Inicio, Personal, Finanzas, Etsy, Software, Edición, Notas, Proyectos, Extras, Alertas, Configuración) y responder con tus datos: probá «¿cuántas notas tengo?», «¿qué tengo pendiente?» o «buscar nota sobre …».'
-}
-
-interface ChatMsg { role: 'user' | 'bot'; text: string }
-function AppAssistant() {
-  const [messages, setMessages] = useState<ChatMsg[]>([{ role: 'bot', text: '¡Hola! Soy el asistente de Nova Nexus. Preguntame cómo usar una sección o dónde configurar algo, o consultá tus datos: «¿cuántas notas tengo?», «¿qué tengo pendiente?», «¿hay promos hoy?» o «buscar nota sobre …».' }])
-  const [input, setInput] = useState('')
-  const listRef = useRef<HTMLDivElement>(null)
-  useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, [messages])
-  const send = () => {
-    const t = input.trim(); if (!t) return
-    const reply = answerFor(t)
-    setMessages(m => [...m, { role: 'user', text: t }, { role: 'bot', text: reply }])
-    setInput('')
-  }
-  return (
-    <div className="quick-chat card app-assistant">
-      <div className="card-title"><Bot size={14} /> Asistente de la app</div>
-      <div className="assistant-messages" ref={listRef}>
-        {messages.map((m, i) => <div key={i} className={`assistant-msg ${m.role}`} style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>)}
-      </div>
-      <div className="quick-chat-input-row">
-        <input placeholder="Preguntá sobre la app..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
-        <button onClick={send} disabled={!input.trim()} className="quick-chat-send"><Send size={14} /></button>
-      </div>
-    </div>
-  )
-}
 
 // ============ WIDGETS ============
 
@@ -812,14 +678,13 @@ function PromosHoyWidget() {
   )
 }
 
-type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'assistant' | 'routine' | 'alerts' | 'holidays' | 'promos' | 'mundial'
+type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'routine' | 'alerts' | 'holidays' | 'promos' | 'mundial'
 const widgetRegistry: Record<WidgetId, { name: string; component: React.FC; icon: React.ReactNode; defaultSpan: number }> = {
   timer: { name: 'Temporizador', component: TimerWidget, icon: <Timer size={14} />, defaultSpan: 1 },
   weather: { name: 'Clima', component: WeatherWidget, icon: <CloudSun size={14} />, defaultSpan: 1 },
   calendar: { name: 'Calendario', component: CalendarWidget, icon: <Calendar size={14} />, defaultSpan: 1 },
   quote: { name: 'Frase del día', component: QuotePanel, icon: <Sparkles size={14} />, defaultSpan: 2 },
   chat: { name: 'Chat rápido', component: QuickChat, icon: <MessageSquare size={14} />, defaultSpan: 1 },
-  assistant: { name: 'Asistente de la app', component: AppAssistant, icon: <Bot size={14} />, defaultSpan: 2 },
   routine: { name: 'Rutina de hoy', component: DayRoutineWidget, icon: <Dumbbell size={14} />, defaultSpan: 1 },
   alerts: { name: 'Próximas alertas', component: NextAlertsWidget, icon: <Bell size={14} />, defaultSpan: 1 },
   holidays: { name: 'Feriados de Argentina', component: HolidaysWidget, icon: <Flag size={14} />, defaultSpan: 1 },
@@ -840,7 +705,7 @@ const spanCols = (s: number) => Math.max(2, Math.round(s * 2))
 
 const defaultBlocks: LayoutBlock[] = [
   { key: newKey(), span: 1, widgets: ['routine'] }, { key: newKey(), span: 1, widgets: ['alerts'] }, { key: newKey(), span: 1, widgets: ['quote'] },
-  { key: newKey(), span: 1, widgets: ['chat'] }, { key: newKey(), span: 2, widgets: ['assistant'] }, { key: newKey(), span: 1, widgets: ['timer'] }, { key: newKey(), span: 1, widgets: ['weather'] }, { key: newKey(), span: 1, widgets: ['calendar'] },
+  { key: newKey(), span: 1, widgets: ['chat'] }, { key: newKey(), span: 1, widgets: ['timer'] }, { key: newKey(), span: 1, widgets: ['weather'] }, { key: newKey(), span: 1, widgets: ['calendar'] },
   { key: newKey(), span: 1, widgets: ['holidays'] }, { key: newKey(), span: 1, widgets: ['promos'] },
   { key: newKey(), span: 3, widgets: ['mundial'] },
 ]
@@ -856,7 +721,20 @@ function mundialLast(blocks: LayoutBlock[]): LayoutBlock[] {
   return m ? [...rest, m] : rest
 }
 
+// Widgets desactivados a propósito (por el usuario). Única fuente de verdad,
+// compartida con Configuración → Paneles. Se persiste para que la desactivación
+// se mantenga entre reinicios (antes loadLayout re-agregaba todo lo faltante y
+// la desactivación se perdía al reabrir la app).
+function loadHiddenWidgets(): Set<WidgetId> {
+  try { const arr = JSON.parse(localStorage.getItem('nn-hidden-widgets') || '[]'); return new Set((Array.isArray(arr) ? arr : []).filter((id: string) => id in widgetRegistry)) } catch { return new Set() }
+}
+function saveHiddenWidgets(set: Set<WidgetId>) { localStorage.setItem('nn-hidden-widgets', JSON.stringify([...set])) }
+function setWidgetHidden(id: WidgetId, hidden: boolean) {
+  const set = loadHiddenWidgets(); if (hidden) set.add(id); else set.delete(id); saveHiddenWidgets(set)
+}
+
 function loadLayout(): LayoutBlock[] {
+  const hidden = loadHiddenWidgets()
   try {
     const s = localStorage.getItem('nn-inicio-layout')
     if (s) {
@@ -871,14 +749,18 @@ function loadLayout(): LayoutBlock[] {
           // Old { id, span }[] format → one widget per block.
           blocks = (parsed as { id: WidgetId; span: number }[]).filter(i => i.id in widgetRegistry).map(i => ({ key: newKey(), span: i.span || 1, widgets: [i.id] }))
         }
+        // Respetar los widgets desactivados: no mostrarlos aunque estén en el layout guardado.
+        blocks = blocks.map(b => ({ ...b, widgets: b.widgets.filter(w => !hidden.has(w)) })).filter(b => b.widgets.length)
+        // Auto-introducir widgets nuevos (de futuras versiones) que el usuario nunca vio,
+        // pero NUNCA re-agregar los que desactivó a propósito.
         const used = new Set(blocks.flatMap(b => b.widgets))
-        const missing = (Object.keys(widgetRegistry) as WidgetId[]).filter(id => !used.has(id))
+        const missing = (Object.keys(widgetRegistry) as WidgetId[]).filter(id => !used.has(id) && !hidden.has(id))
         for (const id of missing) blocks.push({ key: newKey(), span: widgetRegistry[id].defaultSpan || 1, widgets: [id] })
         return mundialLast(blocks)
       }
     }
   } catch {}
-  return defaultBlocks
+  return mundialLast(defaultBlocks.filter(b => !b.widgets.some(w => hidden.has(w))))
 }
 function saveLayout(l: LayoutBlock[]) { localStorage.setItem('nn-inicio-layout', JSON.stringify(l)) }
 
@@ -901,16 +783,19 @@ export default function InicioSection() {
 
   const swapWidget = (from: number, to: number) => { const a = [...layout]; [a[from], a[to]] = [a[to], a[from]]; updateLayout(a) }
   const cycleSpan = (index: number) => { const a = [...layout]; const i = SPAN_STEPS.indexOf(a[index].span); a[index] = { ...a[index], span: SPAN_STEPS[(i + 1) % SPAN_STEPS.length] }; updateLayout(a) }
-  const addNewBlock = (id: WidgetId) => { updateLayout([...layout, { key: newKey(), span: widgetRegistry[id].defaultSpan || 1, widgets: [id] }]); setShowAdd(false) }
+  const addNewBlock = (id: WidgetId) => { setWidgetHidden(id, false); updateLayout([...layout, { key: newKey(), span: widgetRegistry[id].defaultSpan || 1, widgets: [id] }]); setShowAdd(false) }
   // Move any widget into a block (pulled out of whatever block it currently lives in)
   // so any panels can be combined freely.
   const moveWidgetToBlock = (targetKey: string, id: WidgetId) => {
+    setWidgetHidden(id, false)
     let a = layout.map(b => ({ ...b, widgets: b.widgets.filter(w => w !== id) }))
     a = a.map(b => b.key === targetKey && b.widgets.length < MAX_PER_BLOCK ? { ...b, widgets: [...b.widgets, id] } : b)
     updateLayout(a.filter(b => b.widgets.length > 0))
     setAddToBlock(null)
   }
-  const removeWidget = (index: number, id: WidgetId) => { const a = [...layout]; a[index] = { ...a[index], widgets: a[index].widgets.filter(w => w !== id) }; updateLayout(a.filter(b => b.widgets.length > 0)) }
+  // Quitar un widget del inicio = desactivarlo. Se marca como oculto para que la
+  // desactivación persista entre reinicios (y quede sincronizado con Configuración → Paneles).
+  const removeWidget = (index: number, id: WidgetId) => { setWidgetHidden(id, true); const a = [...layout]; a[index] = { ...a[index], widgets: a[index].widgets.filter(w => w !== id) }; updateLayout(a.filter(b => b.widgets.length > 0)) }
 
   const nq = normalize(search.trim())
   const searchResults = nq ? sectionIndex.filter(s => normalize(s.label).includes(nq) || s.keywords.some(k => { const nk = normalize(k); return nk.includes(nq) || nq.includes(nk) })) : []
