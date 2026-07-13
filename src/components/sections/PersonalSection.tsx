@@ -529,7 +529,7 @@ function ExercisePanel() {
 }
 
 // ============ TARJETAS ============
-interface CardData { id: string; label: string; bank: string; type: 'visa' | 'mastercard' | 'amex'; number: string; holder: string; expiry: string; cvv: string; color: string }
+interface CardData { id: string; label: string; bank: string; type: 'visa' | 'mastercard' | 'amex'; number: string; holder: string; expiry: string; cvv: string; color: string; alias?: string }
 
 // Dark tones — card text/fields are white for contrast.
 const CARD_COLORS = [
@@ -863,6 +863,8 @@ function TarjetasTab() {
   const save = (c: CardData[]) => { setCards(c); void persist(c).catch(() => notify()?.error('No se pudo guardar la tarjeta cifrada')) }
   const setView = (m: 'list' | 'grid') => { setViewMode(m); try { localStorage.setItem('nn-cards-view', m) } catch {} }
   const copyText = (text: string, field: string) => { copyToClipboard(text.replace(/\D/g, '')); setCopied(field); setTimeout(() => setCopied(null), 1500) }
+  // Copia el texto tal cual (para el alias, que es alfanumérico y no debe perder puntos/letras).
+  const copyRaw = (text: string, field: string) => { copyToClipboard(text); setCopied(field); setTimeout(() => setCopied(null), 1500) }
 
   // Primer cifrado: crea la contraseña y cifra las tarjetas legacy (si las había).
   const doSetup = async () => {
@@ -952,6 +954,13 @@ function TarjetasTab() {
     const digits = search.replace(/\D/g, '')
     const digitMatch = digits.length >= 1 && digits.length <= 4 && c.number.replace(/\D/g, '').endsWith(digits)
     return textMatch || digitMatch
+  }).sort((a, b) => {
+    // Orden por defecto: alfabético por nombre del banco (las sin banco, al final).
+    const ba = (a.bank || '').trim(), bb = (b.bank || '').trim()
+    if (!ba && !bb) return 0
+    if (!ba) return 1
+    if (!bb) return -1
+    return ba.localeCompare(bb, 'es', { sensitivity: 'base' })
   })
 
   return (
@@ -999,6 +1008,14 @@ function TarjetasTab() {
               {formatCardNumber(card.number) || 'XXXX XXXX XXXX XXXX'}
               {copied === card.id + '-num' && <span className="tarjeta-v2-copied">Copiado</span>}
             </div>
+            {card.alias?.trim() && !editing && (
+              <div className="tarjeta-v2-alias" onClick={() => copyRaw(card.alias!.trim(), card.id + '-alias')} title="Alias para transferencias — clic para copiar">
+                <span className="tarjeta-v2-alias-label">ALIAS</span>
+                <span className="tarjeta-v2-alias-val">{card.alias.trim()}</span>
+                <Copy size={11} />
+                {copied === card.id + '-alias' && <span className="tarjeta-v2-copied">Copiado</span>}
+              </div>
+            )}
             <div className="tarjeta-v2-bottom">
               <div className="tarjeta-v2-field"><span>TITULAR</span><span>{card.holder || DEFAULT_HOLDER}</span></div>
               <div className="tarjeta-v2-field"><span>VENCE</span><span style={expired ? { color: '#fca5a5', fontWeight: 700 } : undefined}>{formatExpiry(card.expiry) || 'MM/AA'}</span></div>
@@ -1018,6 +1035,7 @@ function TarjetasTab() {
                 </div>
                 <input className="tarjeta-v2-edit-field" value={formatCardNumber(card.number)} onChange={e => updateCard(card.id, { number: e.target.value.replace(/\D/g, '').slice(0, 16) })} placeholder="Número *" inputMode="numeric" />
                 <input className="tarjeta-v2-edit-field" value={card.holder} onChange={e => updateCard(card.id, { holder: e.target.value })} placeholder="Titular *" />
+                <input className="tarjeta-v2-edit-field" value={card.alias || ''} onChange={e => updateCard(card.id, { alias: e.target.value })} placeholder="Alias (opcional, para transferencias)" />
                 <div className="tarjeta-v2-edit-row">
                   <input className="tarjeta-v2-edit-field" value={formatExpiry(card.expiry)} onChange={e => updateCard(card.id, { expiry: e.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="MM/AA *" inputMode="numeric" />
                   <input className="tarjeta-v2-edit-field" value={card.cvv} onChange={e => updateCard(card.id, { cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="CVV *" inputMode="numeric" />
