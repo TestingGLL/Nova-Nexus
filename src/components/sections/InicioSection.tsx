@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
-import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy, Flag, Tag } from 'lucide-react'
+import { Timer, CloudSun, Calendar, Droplets, Wind, Thermometer, Play, Pause, RotateCcw, GripVertical, EyeOff, Plus, ChevronLeft, ChevronRight, Trash2, Search, Bell, CheckCircle2, X, Send, MessageSquare, Sparkles, Settings, ChevronDown, Dumbbell, Trophy, Flag, Tag, Check, Receipt } from 'lucide-react'
 import { loadNotifications } from '../../lib/notifications'
 import { subscribeMundial, getMundialSnapshot } from '../../lib/mundialStore'
 import { subscribeTimer, getTimerSnapshot, toggleTimer, resetTimer, setTimerTotal } from '../../lib/timerStore'
@@ -678,7 +678,70 @@ function PromosHoyWidget() {
   )
 }
 
-type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'routine' | 'alerts' | 'holidays' | 'promos' | 'mundial'
+// ============ WIDGET: SERVICIOS ============
+// Muestra los servicios cargados en Finanzas → Alquiler (nn-rent.categories), su
+// próxima fecha de vencimiento y un tilde "Pagado". El estado "Pagado" se guarda por
+// mes y se reestablece solo el día 1 de cada mes (al cambiar de mes se ignora el mes previo).
+interface RentService { id: string; name: string; amount: number; color: string; dueDay: number }
+function loadServices(): RentService[] {
+  try { const d = JSON.parse(localStorage.getItem('nn-rent') || 'null'); return Array.isArray(d?.categories) ? d.categories : [] } catch { return [] }
+}
+const svcMonthTag = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+function loadServicesPaid(): Record<string, boolean> {
+  try { const raw = JSON.parse(localStorage.getItem('nn-servicios-pagados') || 'null'); if (raw && raw.month === svcMonthTag()) return raw.paid || {} } catch {}
+  return {} // mes distinto (o sin datos) → todo desmarcado: así se reestablece solo el día 1
+}
+function saveServicesPaid(paid: Record<string, boolean>) { localStorage.setItem('nn-servicios-pagados', JSON.stringify({ month: svcMonthTag(), paid })) }
+// Próximo vencimiento a partir del día del mes (si ya pasó este mes, cae en el próximo).
+function nextServiceDue(dueDay: number): Date {
+  const now = new Date(); const today = now.getDate()
+  const day = Math.min(Math.max(Math.round(dueDay) || 1, 1), 28)
+  const month = day >= today ? now.getMonth() : now.getMonth() + 1
+  return new Date(now.getFullYear(), month, day)
+}
+function fmtServiceDue(d: Date): string {
+  const days = Math.ceil((d.getTime() - Date.now()) / 86400000)
+  const label = d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+  if (days <= 0) return `hoy (${label})`
+  if (days === 1) return `mañana (${label})`
+  return `${label} · ${days}d`
+}
+
+function ServiciosWidget() {
+  const services = loadServices()
+  const [paid, setPaid] = useState<Record<string, boolean>>(loadServicesPaid)
+  const toggle = (id: string) => { const next = { ...paid, [id]: !paid[id] }; setPaid(next); saveServicesPaid(next) }
+  const withDue = services.map(s => ({ ...s, due: nextServiceDue(s.dueDay || 1) })).sort((a, b) => a.due.getTime() - b.due.getTime())
+  const paidCount = services.filter(s => paid[s.id]).length
+  return (
+    <div className="servicios-widget card">
+      <div className="card-title">
+        <Receipt size={14} /> Servicios
+        {services.length > 0 && <span className="servicios-count">{paidCount}/{services.length} pagados</span>}
+      </div>
+      {services.length === 0 ? (
+        <p className="servicios-empty">Cargá servicios en Finanzas → Alquiler → Servicios para verlos acá.</p>
+      ) : (
+        <div className="servicios-list">
+          {withDue.map(s => (
+            <div key={s.id} className={`servicio-row ${paid[s.id] ? 'paid' : ''}`}>
+              <span className="servicio-dot" style={{ background: s.color || '#22c55e' }} />
+              <div className="servicio-info">
+                <span className="servicio-name">{s.name}</span>
+                <span className="servicio-due">vence {fmtServiceDue(s.due)}{s.amount ? ` · $${s.amount.toLocaleString('es-AR')}` : ''}</span>
+              </div>
+              <button className={`servicio-check ${paid[s.id] ? 'checked' : ''}`} onClick={() => toggle(s.id)} title={paid[s.id] ? 'Pagado (clic para desmarcar)' : 'Marcar como pagado'}>
+                {paid[s.id] && <Check size={12} />}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'routine' | 'alerts' | 'holidays' | 'promos' | 'servicios' | 'mundial'
 const widgetRegistry: Record<WidgetId, { name: string; component: React.FC; icon: React.ReactNode; defaultSpan: number }> = {
   timer: { name: 'Temporizador', component: TimerWidget, icon: <Timer size={14} />, defaultSpan: 1 },
   weather: { name: 'Clima', component: WeatherWidget, icon: <CloudSun size={14} />, defaultSpan: 1 },
@@ -689,6 +752,7 @@ const widgetRegistry: Record<WidgetId, { name: string; component: React.FC; icon
   alerts: { name: 'Próximas alertas', component: NextAlertsWidget, icon: <Bell size={14} />, defaultSpan: 1 },
   holidays: { name: 'Feriados de Argentina', component: HolidaysWidget, icon: <Flag size={14} />, defaultSpan: 1 },
   promos: { name: 'Promos de hoy', component: PromosHoyWidget, icon: <Tag size={14} />, defaultSpan: 1 },
+  servicios: { name: 'Servicios', component: ServiciosWidget, icon: <Receipt size={14} />, defaultSpan: 1 },
   mundial: { name: 'Mundial 2026', component: MundialWidget, icon: <Trophy size={14} />, defaultSpan: 3 },
 }
 
@@ -706,7 +770,7 @@ const spanCols = (s: number) => Math.max(2, Math.round(s * 2))
 const defaultBlocks: LayoutBlock[] = [
   { key: newKey(), span: 1, widgets: ['routine'] }, { key: newKey(), span: 1, widgets: ['alerts'] }, { key: newKey(), span: 1, widgets: ['quote'] },
   { key: newKey(), span: 1, widgets: ['chat'] }, { key: newKey(), span: 1, widgets: ['timer'] }, { key: newKey(), span: 1, widgets: ['weather'] }, { key: newKey(), span: 1, widgets: ['calendar'] },
-  { key: newKey(), span: 1, widgets: ['holidays'] }, { key: newKey(), span: 1, widgets: ['promos'] },
+  { key: newKey(), span: 1, widgets: ['holidays'] }, { key: newKey(), span: 1, widgets: ['promos'] }, { key: newKey(), span: 1, widgets: ['servicios'] },
   { key: newKey(), span: 3, widgets: ['mundial'] },
 ]
 

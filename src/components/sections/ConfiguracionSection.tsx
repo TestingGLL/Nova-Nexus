@@ -152,8 +152,8 @@ function saveCategories(c: CustomCategories) { localStorage.setItem('nn-custom-c
 function loadNoteTags(): string[] { try { const s = localStorage.getItem('nn-note-tags'); return s ? JSON.parse(s) : ['recordar', 'curioso', 'revisar'] } catch { return ['recordar', 'curioso', 'revisar'] } }
 function saveNoteTags(t: string[]) { localStorage.setItem('nn-note-tags', JSON.stringify(t)) }
 
-type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'routine' | 'alerts' | 'holidays' | 'promos' | 'mundial'
-const widgetNames: Record<WidgetId, string> = { timer: 'Temporizador', weather: 'Clima', calendar: 'Calendario', quote: 'Frase del día', chat: 'Chat rápido', routine: 'Rutina de hoy', alerts: 'Próximas alertas', holidays: 'Feriados de Argentina', promos: 'Promos de hoy', mundial: 'Mundial 2026' }
+type WidgetId = 'timer' | 'weather' | 'calendar' | 'quote' | 'chat' | 'routine' | 'alerts' | 'holidays' | 'promos' | 'servicios' | 'mundial'
+const widgetNames: Record<WidgetId, string> = { timer: 'Temporizador', weather: 'Clima', calendar: 'Calendario', quote: 'Frase del día', chat: 'Chat rápido', routine: 'Rutina de hoy', alerts: 'Próximas alertas', holidays: 'Feriados de Argentina', promos: 'Promos de hoy', servicios: 'Servicios', mundial: 'Mundial 2026' }
 
 type ConfigTab = 'personalizacion' | 'paneles' | 'adicionales' | 'usuario' | 'alertas' | 'sistema'
 
