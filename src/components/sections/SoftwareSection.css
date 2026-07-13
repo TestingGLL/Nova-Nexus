@@ -110,11 +110,10 @@
 .transfer-qr-img { width: 180px; height: 180px; border-radius: 10px; display: block; }
 .transfer-url { font-size: 12px; color: var(--text-secondary); font-family: 'Consolas', monospace; }
 .transfer-hint { font-size: 11px; color: var(--text-secondary); text-align: center; line-height: 1.5; margin: 0; max-width: 200px; }
-/* QR como botón: al pasar el mouse muestra el hint de ampliar */
-.transfer-qr-btn { position: relative; padding: 0; border: none; background: none; cursor: pointer; border-radius: 10px; line-height: 0; }
-.transfer-qr-btn:hover .transfer-qr-img { filter: brightness(0.85); }
-.transfer-qr-zoom { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 5px; border-radius: 10px; background: rgba(0,0,0,0.45); color: #fff; font-size: 12px; font-weight: 600; opacity: 0; transition: opacity 0.15s; }
-.transfer-qr-btn:hover .transfer-qr-zoom { opacity: 1; }
+/* QR oculto por defecto: botón que abre el desplegable con el QR ampliado */
+.transfer-qr-reveal { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border: 1px dashed var(--accent); background: var(--accent-soft); color: var(--accent); border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+.transfer-qr-reveal:hover:not(:disabled) { background: var(--bg-active); }
+.transfer-qr-reveal:disabled { opacity: 0.5; cursor: default; }
 /* Modal del QR ampliado: oscurece el fondo */
 @keyframes transferFadeIn { from { opacity: 0; } to { opacity: 1; } }
 .transfer-qr-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); animation: transferFadeIn 0.15s ease; }
@@ -187,3 +186,8 @@
 .transfer-sent-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .transfer-msg.sent { display: flex; justify-content: flex-end; }
 .transfer-msg.sent .transfer-msg-bubble { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 10px; padding: 8px 10px; max-width: 90%; }
+.transfer-msg.sent .transfer-msg-bubble.transfer-msg-file { border-radius: 12px 12px 4px 12px; }
+/* Miniatura/preview de archivos (imagen, video o ícono) dentro del chat */
+.transfer-msg-file { align-items: center; }
+.transfer-thumb { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: var(--bg-hover); }
+.transfer-thumb-icon { display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); border: 1px solid var(--border); }

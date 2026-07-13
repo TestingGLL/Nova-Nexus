@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react'
+import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, ChevronDown, ChevronRight, Maximize2, Image as ImageIcon, Film, Music, File as FileIcon } from 'lucide-react'
 import { useToast } from '../Toast'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { copyToClipboard } from '../../lib/clipboard'
@@ -260,10 +260,14 @@ function AppDataTab() {
 
 // ============ TRANSFERENCIAS TAB ============
 
-interface SharedFile { id: string; name: string; size: number }
-interface ReceivedFile { name?: string; size?: number; ts: number; type?: string; text?: string }
-// Entrada del chat único: un texto enviado desde la PC, o un archivo/texto recibido del celular.
-type ChatEntry = { id: string; dir: 'sent'; ts: number; text: string } | { id: string; dir: 'received'; ts: number; file: ReceivedFile }
+interface SharedFile { id: string; name: string; size: number; ts?: number; kind?: string }
+interface ReceivedFile { id?: string; name?: string; size?: number; ts: number; type?: string; text?: string; kind?: string }
+// Entrada del chat único: todo (texto/archivo, enviado desde la PC o recibido del
+// celular) convive en la misma conversación. `scope` indica de qué colección sale el
+// archivo (compartido desde la PC / recibido del celular) para armar la URL de preview.
+type ChatEntry =
+  | { id: string; dir: 'sent' | 'received'; ts: number; kind: 'text'; text: string }
+  | { id: string; dir: 'sent' | 'received'; ts: number; kind: 'file'; scope: 'shared' | 'received'; file: { id?: string; name?: string; size?: number; kind?: string } }
 
 function fmt(bytes: number) {
   if (bytes < 1024) return bytes + ' B'
@@ -271,11 +275,21 @@ function fmt(bytes: number) {
   return (bytes / 1048576).toFixed(1) + ' MB'
 }
 
+// Miniatura/preview de un archivo del chat: imagen o video se muestran de verdad
+// (servidos inline por el server local); el resto cae en un ícono según su tipo.
+function FilePreview({ kind, url }: { kind?: string; url: string }) {
+  const [err, setErr] = useState(false)
+  if (url && !err && kind === 'image') return <img src={url} className="transfer-thumb" alt="" loading="lazy" onError={() => setErr(true)} />
+  if (url && !err && kind === 'video') return <video src={url} className="transfer-thumb" muted playsInline preload="metadata" onError={() => setErr(true)} />
+  const Icon = kind === 'image' ? ImageIcon : kind === 'video' ? Film : kind === 'audio' ? Music : FileIcon
+  return <span className="transfer-thumb transfer-thumb-icon"><Icon size={20} /></span>
+}
+
 function TransferenciasTab() {
   const toast = useToast()
   const [running, setRunning] = useState(false)
   const [starting, setStarting] = useState(false)
-  const [_url, setUrl] = useState('')
+  const [url, setUrl] = useState('')
   const [ip, setIp] = useState('')
   const [port, setPort] = useState(0)
   const [dir, setDir] = useState('')
@@ -392,11 +406,19 @@ function TransferenciasTab() {
   const fileExt = (name: string) => { const dot = name.lastIndexOf('.'); return dot >= 0 ? name.slice(dot + 1).toUpperCase() : '' }
   const chatTime = (ts: number) => new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
 
-  // Chat único: mezcla enviados (texto desde la PC) y recibidos (archivos/textos del
-  // celular) en una sola conversación ordenada por hora; el filtro sólo cambia la vista.
+  // Base + token del server local para construir las URLs de preview (miniaturas).
+  const { previewBase, previewTok } = (() => { try { const u = new URL(url); return { previewBase: u.origin, previewTok: u.searchParams.get('t') || '' } } catch { return { previewBase: '', previewTok: '' } } })()
+  const fileUrl = (scope: 'shared' | 'received', id?: string) => (previewBase && previewTok && id) ? `${previewBase}/file/${scope}/${id}?t=${previewTok}` : ''
+
+  // Chat único: todo convive en una sola conversación ordenada por hora — texto y
+  // archivos enviados desde la PC (compartidos) + texto y archivos recibidos del
+  // celular. El filtro sólo cambia la vista (todos / recibidos / enviados).
   const chat: ChatEntry[] = [
-    ...pcMessages.map(m => ({ id: 's-' + m.id, dir: 'sent' as const, ts: m.ts, text: m.text })),
-    ...received.map((f, i) => ({ id: 'r-' + i + '-' + f.ts, dir: 'received' as const, ts: f.ts, file: f })),
+    ...pcMessages.map(m => ({ id: 's-' + m.id, dir: 'sent' as const, ts: m.ts, kind: 'text' as const, text: m.text })),
+    ...shared.map(f => ({ id: 'sf-' + f.id, dir: 'sent' as const, ts: f.ts || 0, kind: 'file' as const, scope: 'shared' as const, file: f })),
+    ...received.map(f => f.type === 'text'
+      ? ({ id: 'rt-' + (f.id || f.ts), dir: 'received' as const, ts: f.ts, kind: 'text' as const, text: f.text || '' })
+      : ({ id: 'rf-' + (f.id || f.ts), dir: 'received' as const, ts: f.ts, kind: 'file' as const, scope: 'received' as const, file: f })),
   ].sort((a, b) => a.ts - b.ts)
   const visibleChat = chatFilter === 'all' ? chat : chat.filter(e => e.dir === chatFilter)
 
@@ -445,14 +467,12 @@ function TransferenciasTab() {
       <div className="transfer-grid">
         <div className="card transfer-qr-card">
           <h4><QrCode size={14} /> Escaneá con tu celular</h4>
-          {qrDataUrl && (
-            <button className="transfer-qr-btn" onClick={() => setQrOpen(true)} title="Ampliar el código QR">
-              <img src={qrDataUrl} alt="QR" className="transfer-qr-img" />
-              <span className="transfer-qr-zoom"><Maximize2 size={13} /> Ampliar</span>
-            </button>
-          )}
+          {/* El QR permanece oculto: se muestra ampliado en un desplegable al tocar el botón. */}
+          <button className="transfer-qr-reveal" onClick={() => setQrOpen(true)} title="Mostrar el código QR" disabled={!qrDataUrl}>
+            <QrCode size={22} /> Mostrar código QR <Maximize2 size={13} />
+          </button>
           <span className="transfer-url">{ip}:{port}</span>
-          <p className="transfer-hint">Abrí la cámara de tu Android y escaneá el código.</p>
+          <p className="transfer-hint">Tocá «Mostrar código QR» y escanealo con la cámara de tu Android.</p>
         </div>
 
         <div className="card transfer-shared-card">
@@ -500,9 +520,10 @@ function TransferenciasTab() {
         {receivedOpen && visibleChat.length === 0 && <p className="transfer-empty">{chat.length === 0 ? 'Todavía no hay mensajes. Los textos y archivos enviados y recibidos aparecen acá; se limpian a las 2 horas.' : 'Sin mensajes para este filtro.'}</p>}
         {receivedOpen && <div className="transfer-file-list transfer-chat-style">
           {visibleChat.map(entry => (
-            entry.dir === 'sent' ? (
-              <div key={entry.id} className="transfer-msg sent">
+            <div key={entry.id} className={`transfer-msg ${entry.dir}`}>
+              {entry.kind === 'text' ? (
                 <div className="transfer-msg-bubble transfer-msg-text">
+                  {entry.dir === 'received' && <MessageSquare size={13} className="transfer-received-icon" />}
                   <div className="transfer-msg-info">
                     <span className="transfer-text-content">{entry.text}</span>
                     <span className="transfer-msg-meta">
@@ -511,34 +532,19 @@ function TransferenciasTab() {
                     </span>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div key={entry.id} className="transfer-msg received">
-                {entry.file.type === 'text' ? (
-                  <div className="transfer-msg-bubble transfer-msg-text">
-                    <MessageSquare size={13} className="transfer-received-icon" />
-                    <div className="transfer-msg-info">
-                      <span className="transfer-text-content">{entry.file.text}</span>
-                      <span className="transfer-msg-meta">
-                        <button className="transfer-copy-btn" onClick={() => copyToClipboard(entry.file.text || '')}>Copiar</button>
-                        {chatTime(entry.ts)}
-                      </span>
-                    </div>
+              ) : (
+                <div className="transfer-msg-bubble transfer-msg-file">
+                  <FilePreview kind={entry.file.kind} url={fileUrl(entry.scope, entry.file.id)} />
+                  <div className="transfer-msg-info">
+                    <span className="transfer-file-name">{entry.file.name}</span>
+                    <span className="transfer-msg-meta">
+                      {fileExt(entry.file.name || '') && <span className="transfer-file-ext-sm">{fileExt(entry.file.name || '')}</span>}
+                      {fmt(entry.file.size || 0)} · {chatTime(entry.ts)}
+                    </span>
                   </div>
-                ) : (
-                  <div className="transfer-msg-bubble">
-                    <Download size={13} className="transfer-received-icon" />
-                    <div className="transfer-msg-info">
-                      <span className="transfer-file-name">{entry.file.name}</span>
-                      <span className="transfer-msg-meta">
-                        {fileExt(entry.file.name || '') && <span className="transfer-file-ext-sm">{fileExt(entry.file.name || '')}</span>}
-                        {fmt(entry.file.size || 0)} · {chatTime(entry.ts)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
+                </div>
+              )}
+            </div>
           ))}
         </div>}
         {receivedOpen && dir && <p className="transfer-dir">Guardado en: <code>{dir}</code></p>}

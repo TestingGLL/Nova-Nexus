@@ -20,6 +20,19 @@ let pruneTimer = null;
 const FIXED_PORT = 8473;
 const HISTORY_TTL = 2 * 60 * 60 * 1000; // 2h — only the history entries expire; files stay on disk.
 
+// Tipo de contenido por extensión (para servir miniaturas inline y clasificar en el chat).
+const MIME = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+  bmp: 'image/bmp', svg: 'image/svg+xml', avif: 'image/avif', heic: 'image/heic',
+  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska', m4v: 'video/mp4',
+  mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/mp4', flac: 'audio/flac',
+  pdf: 'application/pdf',
+};
+function extOf(name) { const d = String(name || '').lastIndexOf('.'); return d >= 0 ? String(name).slice(d + 1).toLowerCase() : ''; }
+function mimeOf(name) { return MIME[extOf(name)] || 'application/octet-stream'; }
+function kindOf(name) { const m = mimeOf(name); if (m.startsWith('image/')) return 'image'; if (m.startsWith('video/')) return 'video'; if (m.startsWith('audio/')) return 'audio'; return 'file'; }
+function newId(p) { return p + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
 // Drop history entries older than 2h. Transferred files remain on disk untouched.
 function pruneHistory() {
   const cutoff = Date.now() - HISTORY_TTL;
@@ -238,11 +251,28 @@ function handle(req, res) {
     fs.createReadStream(f.path).pipe(res);
     return;
   }
+  // Sirve un archivo compartido o recibido INLINE (con su Content-Type real) para
+  // poder mostrar miniaturas/preview de imágenes y videos en la app. /file/<scope>/<id>.
+  if (req.method === 'GET' && pathname.startsWith('/file/')) {
+    const parts = pathname.split('/'); // ['', 'file', scope, id]
+    const scope = parts[2]; const id = decodeURIComponent(parts[3] || '');
+    const f = scope === 'shared' ? sharedFiles.find(x => x.id === id) : received.find(x => x.id === id);
+    if (!f || !f.path || !fs.existsSync(f.path)) { res.writeHead(404); res.end('No encontrado'); return; }
+    let size = f.size; try { size = fs.statSync(f.path).size; } catch {}
+    res.writeHead(200, {
+      'Content-Type': mimeOf(f.name),
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(f.name)}`,
+      'Content-Length': size,
+      'Cache-Control': 'public, max-age=3600',
+    });
+    fs.createReadStream(f.path).pipe(res);
+    return;
+  }
   if (req.method === 'POST' && pathname === '/sendtext') {
     let body = '';
     req.on('data', c => { body += c; if (body.length > 100000) req.destroy(); });
     req.on('end', () => {
-      try { const { text } = JSON.parse(body || '{}'); if (text && String(text).trim()) received.unshift({ type: 'text', text: String(text).slice(0, 5000), ts: Date.now() }); } catch {}
+      try { const { text } = JSON.parse(body || '{}'); if (text && String(text).trim()) received.unshift({ id: newId('rt'), type: 'text', text: String(text).slice(0, 5000), ts: Date.now() }); } catch {}
       res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true }));
     });
     return;
@@ -255,7 +285,7 @@ function handle(req, res) {
     req.pipe(ws);
     ws.on('finish', () => {
       let size = 0; try { size = fs.statSync(dest).size; } catch {}
-      received.unshift({ name, path: dest, size, ts: Date.now() });
+      received.unshift({ id: newId('rf'), name, path: dest, size, ts: Date.now() });
       res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true }));
     });
     ws.on('error', () => { res.writeHead(500); res.end('Error'); });
@@ -294,20 +324,20 @@ function start(dir) {
 }
 
 function stop() { if (server) { try { server.close(); } catch {} server = null; } if (pruneTimer) { clearInterval(pruneTimer); pruneTimer = null; } activePort = 0; }
-function listShared() { return sharedFiles.map(f => ({ id: f.id, name: f.name, size: f.size })); }
+function listShared() { return sharedFiles.map(f => ({ id: f.id, name: f.name, size: f.size, ts: f.ts, kind: kindOf(f.name) })); }
 function addShared(paths) {
   for (const p of paths || []) {
     if (!p) continue;
     let size = 0;
     try { size = fs.statSync(p).size; } catch { continue; }
     if (sharedFiles.some(f => f.path === p)) continue;
-    sharedFiles.push({ id: 'f-' + Date.now() + Math.random().toString(36).slice(2, 6), name: sanitize(path.basename(p)), path: p, size });
+    sharedFiles.push({ id: 'f-' + Date.now() + Math.random().toString(36).slice(2, 6), name: sanitize(path.basename(p)), path: p, size, ts: Date.now() });
   }
   return listShared();
 }
 function removeShared(id) { sharedFiles = sharedFiles.filter(f => f.id !== id); return listShared(); }
 function getShared() { return listShared(); }
-function getReceived() { pruneHistory(); return received.map(r => r.type === 'text' ? ({ type: 'text', text: r.text, ts: r.ts }) : ({ name: r.name, size: r.size, ts: r.ts })); }
+function getReceived() { pruneHistory(); return received.map(r => r.type === 'text' ? ({ id: r.id || ('rt-' + r.ts), type: 'text', text: r.text, ts: r.ts }) : ({ id: r.id || ('rf-' + r.ts), name: r.name, size: r.size, ts: r.ts, kind: kindOf(r.name) })); }
 function clearReceived() { received = []; pcMessages = []; }
 // PC → phone text message (shown on the phone page, copyable).
 function addPcText(text) {
