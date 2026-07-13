@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Plus, Trash2, Search, Copy, FolderPlus, Folder, ChevronRight, ChevronDown, Tag, X, Check, Clock } from 'lucide-react'
+import { Plus, Trash2, Search, Copy, FolderPlus, Folder, ChevronRight, ChevronDown, Tag, X, Check, Clock, Eye } from 'lucide-react'
 import { useConfirm } from '../ConfirmDialog'
 import RichTextEditor from '../RichTextEditor'
 import './NotasSection.css'
@@ -14,6 +14,8 @@ interface Note {
   ephemeral?: boolean
   createdTs?: number
   expiresInDays?: number
+  lastViewedAt?: string  // ISO: última vez que se abrió/visualizó la nota
+  lastSavedAt?: string   // ISO: última vez que se guardó (editó/persistió) la nota
 }
 
 interface NoteFolder {
@@ -54,6 +56,12 @@ function loadFolders(): NoteFolder[] {
 }
 function saveFolders(f: NoteFolder[]) { localStorage.setItem('nn-notas-folders', JSON.stringify(f)) }
 
+// Fecha+hora corta para las marcas de "guardado"/"visto".
+function fmtTs(iso?: string): string {
+  if (!iso) return '—'
+  try { return new Date(iso).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) } catch { return '—' }
+}
+
 export default function NotasSection() {
   const [notes, setNotes] = useState<Note[]>(loadNotes)
   const [folders, setFolders] = useState<NoteFolder[]>(loadFolders)
@@ -88,11 +96,13 @@ export default function NotasSection() {
   useEffect(() => {
     const note = notes.find(n => n.id === activeNote)
     snapshot.current = note ? { title: note.title, content: note.content } : null
+    // Registrar la última hora de visualización cada vez que se abre una nota.
+    if (activeNote) setNotes(prev => prev.map(n => n.id === activeNote ? { ...n, lastViewedAt: new Date().toISOString() } : n))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNote])
 
   const flashSaved = () => { setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1200) }
-  const saveCurrent = () => { if (activeNote) { const cur = notes.find(n => n.id === activeNote); snapshot.current = { title: cur?.title || '', content: cur?.content || '' }; flashSaved() } }
+  const saveCurrent = () => { if (activeNote) { const cur = notes.find(n => n.id === activeNote); snapshot.current = { title: cur?.title || '', content: cur?.content || '' }; setNotes(prev => prev.map(n => n.id === activeNote ? { ...n, lastSavedAt: new Date().toISOString() } : n)); flashSaved() } }
   const cancelEdits = () => {
     if (!activeNote || !snapshot.current) return
     const snap = snapshot.current
@@ -114,6 +124,8 @@ export default function NotasSection() {
       content: '',
       createdAt: new Date().toLocaleDateString('es-AR'),
       createdTs: Date.now(),
+      lastSavedAt: new Date().toISOString(),
+      lastViewedAt: new Date().toISOString(),
       tags: [],
       folderId: activeFolder === '__all' ? null : activeFolder,
     }
@@ -124,7 +136,7 @@ export default function NotasSection() {
   const duplicateNote = (id: string) => {
     const original = notes.find(n => n.id === id)
     if (!original) return
-    const dup: Note = { ...original, id: crypto.randomUUID(), title: original.title + ' (copia)', createdAt: new Date().toLocaleDateString('es-AR') }
+    const dup: Note = { ...original, id: crypto.randomUUID(), title: original.title + ' (copia)', createdAt: new Date().toLocaleDateString('es-AR'), lastSavedAt: new Date().toISOString(), lastViewedAt: new Date().toISOString() }
     setNotes(prev => [dup, ...prev])
     setActiveNote(dup.id)
   }
@@ -137,13 +149,13 @@ export default function NotasSection() {
   }
 
   const updateTitle = (id: string, title: string) => {
-    setNotes(prev => prev.map(n => n.id === id ? { ...n, title } : n))
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, title, lastSavedAt: new Date().toISOString() } : n))
   }
 
   // Persiste el contenido del Editor de Textos en la nota activa.
   const setContent = (html: string) => {
     if (!activeNote) return
-    setNotes(prev => prev.map(n => n.id === activeNote ? { ...n, content: html } : n))
+    setNotes(prev => prev.map(n => n.id === activeNote ? { ...n, content: html, lastSavedAt: new Date().toISOString() } : n))
   }
 
   const addTag = (noteId: string, tag: string) => {
@@ -358,6 +370,10 @@ export default function NotasSection() {
               className="notas-rte"
             />
 
+            <div className="notas-timestamps">
+              <span title="Última vez que se guardó esta nota"><Clock size={11} /> Guardado: {fmtTs(current.lastSavedAt)}</span>
+              <span title="Última vez que se abrió/visualizó esta nota"><Eye size={11} /> Visto: {fmtTs(current.lastViewedAt)}</span>
+            </div>
             <div className="notas-save-bar">
               <button className="notas-cancel-btn" onClick={cancelEdits}>Cancelar</button>
               <button className="notas-save-btn" onClick={saveCurrent}><Check size={14} /> Guardar</button>
