@@ -108,10 +108,34 @@ function BlockRow({ block, placeholder, selected, onInput, onEnter, onBackspaceE
     if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); onSelectAll(); return }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); onDuplicate(); return }
     if (e.key === 'Enter' && !e.shiftKey) {
-      // Dentro de una lista, Enter sigue creando ítems (comportamiento nativo).
       const sel = window.getSelection()
       let n: Node | null = sel?.anchorNode || null
-      while (n && n !== ref.current) { if (n.nodeName === 'LI') return; n = n.parentNode }
+      let li: HTMLElement | null = null
+      while (n && n !== ref.current) { if (n.nodeName === 'LI') { li = n as HTMLElement; break } n = n.parentNode }
+      // En una checklist, Enter crea explícitamente otra casilla (desmarcada) debajo.
+      if (li && li.closest('.rte-checklist')) {
+        e.preventDefault()
+        if ((li.textContent || '').trim() === '') {
+          // Casilla vacía + Enter → salir de la checklist y crear un bloque normal debajo.
+          const ul = li.parentElement
+          li.remove()
+          if (ul && !ul.querySelector('li')) ul.remove()
+          onInput(ref.current?.innerHTML || '')
+          onEnter()
+          return
+        }
+        const nli = document.createElement('li')
+        nli.setAttribute('data-checked', 'false')
+        nli.innerHTML = '<br>'
+        li.after(nli)
+        const range = document.createRange()
+        range.setStart(nli, 0); range.collapse(true)
+        sel?.removeAllRanges(); sel?.addRange(range)
+        onInput(ref.current?.innerHTML || '')
+        return
+      }
+      // Otras listas (ul/ol normales): Enter nativo sigue creando ítems.
+      if (li) return
       e.preventDefault(); onEnter()
     } else if (e.key === 'Backspace' && (ref.current?.textContent || '') === '' && !/(<hr|<img|<details)/i.test(ref.current?.innerHTML || '')) {
       e.preventDefault(); onBackspaceEmpty()
