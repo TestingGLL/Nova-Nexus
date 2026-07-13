@@ -237,12 +237,63 @@ const KB: KbEntry[] = [
   { k: ['escala', 'tamaño de texto', 'tipografia', 'zoom', 'letra mas grande'], a: 'El tamaño de la tipografía/interfaz se ajusta en Configuración → Sistema → Tamaño de la tipografía.' },
   { k: ['temporizador', 'timer', 'cronometro', 'cuenta regresiva'], a: 'El Temporizador es un widget de Inicio: elegí los minutos y suena al terminar aunque estés en otra sección o minimizado.' },
   { k: ['mundial', 'futbol', 'partido', 'gol'], a: 'El widget "Mundial 2026" en Inicio muestra los partidos en vivo y los de Argentina, con aviso de goles y penales.' },
-  { k: ['widget', 'widgets', 'inicio', 'pantalla principal', 'reorganizar'], a: 'En Inicio podés combinar y reordenar los widgets (reloj, clima, temporizador, calendario, rutina, alertas, etc.). Podés ocultarlos desde Configuración → Paneles.' },
+  { k: ['widget', 'widgets', 'inicio', 'pantalla principal', 'reorganizar'], a: 'En Inicio podés combinar y apilar los widgets sin límite (reloj, clima, temporizador, calendario, rutina, alertas, etc.) y ajustar su ancho (1, 1.5, 2, 2.5 o 3x). Podés ocultarlos desde Configuración → Paneles.' },
+  { k: ['checklist', 'casilla', 'verificable', 'tarea', 'checkbox', 'lista de tareas'], a: 'En el Editor de Textos (Notas, Anotaciones, etc.) podés insertar una checklist con el botón de casillas de la barra, o convertir un texto en casilla verificable con clic derecho sobre el grip del bloque. Se marca/desmarca con un clic.' },
+  { k: ['aplicacion', 'app de promo', 'agregar aplicacion', 'modo', 'mercado pago'], a: 'Las opciones del campo «Aplicación» de las Promociones (Pedidos Ya, Rappi, Presencial y las que agregues) se administran en Configuración → Adicionales → «Aplicaciones de Promociones».' },
+  { k: ['subgrupo', 'subgrupos', 'creaciones', 'prompt', 'prompts'], a: 'En Etsy → Creaciones los grupos pueden tener subgrupos, y cada prompt puede nombrarse a mano y copiarse con un botón.' },
+  { k: ['copiar', 'copiado', 'portapapeles'], a: 'Cualquier botón de copiar de la app copia al portapapeles y muestra una notificación «Copiado». Por ejemplo, el número de tarjeta, los keywords de SEO o los mensajes predeterminados de Etsy.' },
+  { k: ['backup', 'exportar', 'importar', 'guardar datos', 'copia de seguridad'], a: 'Tus datos se respaldan solos en la nube (Supabase) a medida que los cargás. Al iniciar sesión en otra PC, se descargan automáticamente.' },
 ]
+
+// Respuestas dinámicas usando los datos reales del usuario (localStorage nn-*).
+// Devuelve null si la pregunta no matchea ninguna intención con datos.
+function dynamicAnswer(q: string): string | null {
+  const load = <T,>(k: string, f: T): T => { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : f } catch { return f } }
+  const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`
+  const countIntent = q.includes('cuant') || q.includes('cantidad') || q.includes('cuenta')
+
+  if (countIntent && q.includes('nota')) { const n = load<any[]>('nn-notas', []).length; return n ? `Tenés ${plural(n, 'nota guardada', 'notas guardadas')} en la sección Notas.` : 'Todavía no tenés notas. Creá la primera en la sección Notas con «Añadir nota».' }
+  if (countIntent && q.includes('tarjeta')) { const n = load<any[]>('nn-cards', []).length; return n ? `Tenés ${plural(n, 'tarjeta guardada', 'tarjetas guardadas')} en Personal → Tarjetas.` : 'No tenés tarjetas cargadas. Agregá una en Personal → Tarjetas.' }
+  if (countIntent && q.includes('proyecto')) { const n = load<any[]>('nn-projects', []).length; return n ? `Tenés ${plural(n, 'proyecto', 'proyectos')} en la sección Proyectos.` : 'No tenés proyectos. Creá uno en la sección Proyectos.' }
+
+  // Pendientes (recordatorios sin completar)
+  if (q.includes('pendiente') || q.includes('que tengo que hacer') || q.includes('que me falta')) {
+    const rem = load<any[]>('nn-reminders', []).filter((r: any) => !r.done)
+    if (rem.length === 0) return 'No tenés recordatorios pendientes. 🎉'
+    const sample = rem.slice(0, 3).map((r: any) => `• ${r.text}`).join('\n')
+    return `Tenés ${plural(rem.length, 'recordatorio pendiente', 'recordatorios pendientes')}:\n${sample}${rem.length > 3 ? `\n…y ${rem.length - 3} más. Miralos en Alertas.` : ''}`
+  }
+
+  // Promociones de hoy
+  if (q.includes('promo') && (q.includes('hoy') || q.includes('activa'))) {
+    const promos = load<any[]>('nn-pedidosya', [])
+    const cards = load<any[]>('nn-cards', [])
+    const todayIdx = (new Date().getDay() + 6) % 7
+    const today = promos.filter((p: any) => Array.isArray(p.days) && p.days.includes(todayIdx) && cards.some((c: any) => c.id === p.cardId))
+    return today.length
+      ? `Hoy tenés ${plural(today.length, 'promoción activa', 'promociones activas')}. Miralas en el widget «Promos de hoy» o en Personal → Tarjetas → Promociones.`
+      : 'Hoy no hay promociones activas según lo que cargaste en Personal → Tarjetas → Promociones.'
+  }
+
+  // Buscar una nota por título
+  const m = q.match(/(?:busca(?:r|me)?|encontra(?:r|me)?)\s+(?:la\s+)?(?:nota|notas)\s+(?:sobre\s+|de\s+|que\s+diga\s+)?(.+)/)
+  if (m && m[1]) {
+    const term = m[1].trim()
+    const notes = load<any[]>('nn-notas', [])
+    const hits = notes.filter((n: any) => normalize((n.title || '') + ' ' + (n.content || '')).includes(normalize(term)))
+    if (hits.length === 0) return `No encontré ninguna nota que mencione «${term}».`
+    const titles = hits.slice(0, 5).map((n: any) => `• ${n.title || '(sin título)'}`).join('\n')
+    return `Encontré ${plural(hits.length, 'nota', 'notas')} sobre «${term}»:\n${titles}${hits.length > 5 ? '\n…y más. Abrí Notas y buscá ahí.' : ''}`
+  }
+
+  return null
+}
 
 function answerFor(qRaw: string): string {
   const q = normalize(qRaw)
   if (!q.trim()) return ''
+  const dyn = dynamicAnswer(q)
+  if (dyn) return dyn
   let best: KbEntry | null = null
   let bestScore = 0
   for (const e of KB) {
@@ -251,12 +302,12 @@ function answerFor(qRaw: string): string {
     if (score > bestScore) { bestScore = score; best = e }
   }
   if (best && bestScore > 0) return best.a
-  return 'No estoy seguro de eso 🤔. Puedo ayudarte con las secciones (Inicio, Personal, Finanzas, Etsy, Software, Edición, Notas, Proyectos, Extras, Alertas, Configuración) y con funciones como tarjetas, contraseñas, sincronización, criptos, alquiler o rutinas. Preguntame por alguna 🙂.'
+  return 'No estoy seguro de eso 🤔. Puedo contarte cómo usar cualquier sección (Inicio, Personal, Finanzas, Etsy, Software, Edición, Notas, Proyectos, Extras, Alertas, Configuración) y responder con tus datos: probá «¿cuántas notas tengo?», «¿qué tengo pendiente?» o «buscar nota sobre …».'
 }
 
 interface ChatMsg { role: 'user' | 'bot'; text: string }
 function AppAssistant() {
-  const [messages, setMessages] = useState<ChatMsg[]>([{ role: 'bot', text: '¡Hola! Soy el asistente de Nova Nexus. Preguntame cualquier cosa sobre la app: cómo usar una sección o dónde configurar algo.' }])
+  const [messages, setMessages] = useState<ChatMsg[]>([{ role: 'bot', text: '¡Hola! Soy el asistente de Nova Nexus. Preguntame cómo usar una sección o dónde configurar algo, o consultá tus datos: «¿cuántas notas tengo?», «¿qué tengo pendiente?», «¿hay promos hoy?» o «buscar nota sobre …».' }])
   const [input, setInput] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, [messages])
@@ -270,7 +321,7 @@ function AppAssistant() {
     <div className="quick-chat card app-assistant">
       <div className="card-title"><Bot size={14} /> Asistente de la app</div>
       <div className="assistant-messages" ref={listRef}>
-        {messages.map((m, i) => <div key={i} className={`assistant-msg ${m.role}`}>{m.text}</div>)}
+        {messages.map((m, i) => <div key={i} className={`assistant-msg ${m.role}`} style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>)}
       </div>
       <div className="quick-chat-input-row">
         <input placeholder="Preguntá sobre la app..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
@@ -697,16 +748,17 @@ function MundialWidget() {
 // ============ GLOBAL SEARCH ============
 
 const sectionIndex: { key: string; label: string; keywords: string[] }[] = [
-  { key: 'inicio', label: 'Inicio', keywords: ['inicio', 'home', 'reloj', 'clima', 'temporizador', 'calendario'] },
-  { key: 'personal', label: 'Personal', keywords: ['personal', 'salud', 'agua', 'ejercicio', 'tarjetas', 'recordatorio', 'compras', 'diario', 'objetivos'] },
-  { key: 'finanzas', label: 'Finanzas', keywords: ['finanzas', 'alquiler', 'gastos', 'servicios', 'luz', 'gas', 'expensas', 'internet'] },
-  { key: 'etsy', label: 'Tiendas Etsy', keywords: ['etsy', 'tienda', 'productos', 'artículos', 'lanzamientos'] },
-  { key: 'proyectos', label: 'Proyectos', keywords: ['proyectos', 'freelancer', 'propio', 'producto', 'servicio'] },
-  { key: 'software', label: 'Software', keywords: ['software', 'navegador', 'chrome', 'edge'] },
-  { key: 'edicion', label: 'Edición', keywords: ['edición', 'imagen', 'convertidor', 'convertir', 'jpg', 'png', 'webp', 'ico'] },
-  { key: 'notas', label: 'Notas', keywords: ['notas', 'ideas', 'nota'] },
-  { key: 'configuracion', label: 'Configuración', keywords: ['configuración', 'tema', 'color', 'acento', 'oscuro', 'claro'] },
-  { key: 'alertas', label: 'Alertas', keywords: ['alertas', 'notificaciones'] },
+  { key: 'inicio', label: 'Inicio', keywords: ['inicio', 'home', 'reloj', 'clima', 'temporizador', 'timer', 'calendario', 'widget', 'widgets', 'frase', 'mundial'] },
+  { key: 'personal', label: 'Personal', keywords: ['personal', 'salud', 'agua', 'hidratacion', 'ejercicio', 'rutina', 'gimnasio', 'tarjetas', 'tarjeta', 'cvv', 'promociones', 'promos', 'recordatorio', 'recordatorios', 'compras', 'listas', 'super', 'diario', 'objetivos', 'metas', 'anotaciones', 'contactos', 'agenda'] },
+  { key: 'finanzas', label: 'Finanzas', keywords: ['finanzas', 'alquiler', 'renta', 'gastos', 'gasto', 'ingresos', 'sueldo', 'servicios', 'luz', 'gas', 'expensas', 'internet', 'dolar', 'usd', 'cripto', 'bitcoin', 'inflacion'] },
+  { key: 'etsy', label: 'Tiendas Etsy', keywords: ['etsy', 'tienda', 'tiendas', 'productos', 'articulos', 'lanzamientos', 'organizador', 'creaciones', 'prompts', 'seo', 'tags', 'clientes', 'resenas', 'predeterminadas', 'planificacion'] },
+  { key: 'proyectos', label: 'Proyectos', keywords: ['proyectos', 'proyecto', 'kanban', 'tablero', 'freelancer', 'propio', 'producto', 'servicio'] },
+  { key: 'software', label: 'Software', keywords: ['software', 'navegador', 'chrome', 'edge', 'bluetooth', 'dispositivos', 'transferencias', 'transferir', 'wifi', 'qr', 'papelera', 'appdata'] },
+  { key: 'edicion', label: 'Edición', keywords: ['edicion', 'editor', 'imagen', 'imagenes', 'canvas', 'capas', 'convertidor', 'convertir', 'jpg', 'png', 'webp', 'ico'] },
+  { key: 'notas', label: 'Notas', keywords: ['notas', 'nota', 'ideas', 'carpetas', 'etiquetas', 'checklist', 'efimera'] },
+  { key: 'extras', label: 'Extras', keywords: ['extras', 'ruleta', 'sorteo', 'aleatorio', 'random', 'grilla'] },
+  { key: 'configuracion', label: 'Configuración', keywords: ['configuracion', 'ajustes', 'tema', 'color', 'acento', 'oscuro', 'claro', 'seguridad', 'contrasena', 'password', 'sonido', 'escala', 'zoom', 'adicionales', 'paneles', 'perfil', 'usuario'] },
+  { key: 'alertas', label: 'Alertas', keywords: ['alertas', 'alerta', 'notificaciones', 'recordatorios', 'campana'] },
 ]
 
 // ============ PENDING ITEMS ============
@@ -860,7 +912,8 @@ export default function InicioSection() {
   }
   const removeWidget = (index: number, id: WidgetId) => { const a = [...layout]; a[index] = { ...a[index], widgets: a[index].widgets.filter(w => w !== id) }; updateLayout(a.filter(b => b.widgets.length > 0)) }
 
-  const searchResults = search.trim() ? sectionIndex.filter(s => s.label.toLowerCase().includes(search.toLowerCase()) || s.keywords.some(k => k.includes(search.toLowerCase()))) : []
+  const nq = normalize(search.trim())
+  const searchResults = nq ? sectionIndex.filter(s => normalize(s.label).includes(nq) || s.keywords.some(k => { const nk = normalize(k); return nk.includes(nq) || nq.includes(nk) })) : []
 
   const pendingItems: { id: string; text: string; type: 'notification' | 'reminder'; date?: string; section?: string }[] = []
   if (filterType === 'all' || filterType === 'notifications') notifs.forEach(n => pendingItems.push({ id: n.id, text: n.title || n.message, type: 'notification', section: 'alertas' }))
