@@ -39,3 +39,62 @@ export async function uploadImage(file: File, folder = 'misc'): Promise<string> 
     return await fileToDataUrl(file)
   }
 }
+
+// ---- Migración de imágenes existentes (data URL → Storage) ----
+
+const isDataUrl = (v: unknown): v is string => typeof v === 'string' && v.startsWith('data:image')
+
+function dataUrlToFile(dataUrl: string, name: string): File | null {
+  try {
+    const [head, b64] = dataUrl.split(',')
+    const mime = (head.match(/data:([^;]+)/) || [])[1] || 'image/png'
+    const bin = atob(b64)
+    const arr = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
+    const ext = (mime.split('/')[1] || 'png').replace('jpeg', 'jpg').replace('svg+xml', 'svg')
+    return new File([arr], `${name}.${ext}`, { type: mime })
+  } catch { return null }
+}
+
+// Sube un data URL; devuelve la URL http sólo si REALMENTE subió (si no, null → no se toca).
+async function migrateDataUrl(dataUrl: string, folder: string): Promise<string | null> {
+  const file = dataUrlToFile(dataUrl, 'img')
+  if (!file) return null
+  const url = await uploadImage(file, folder)
+  return url.startsWith('http') ? url : null
+}
+
+async function migrateArray(key: string, fields: string[], folder: string) {
+  let arr: any
+  try { arr = JSON.parse(localStorage.getItem(key) || 'null') } catch { return }
+  if (!Array.isArray(arr)) return
+  let changed = false
+  for (const item of arr) {
+    for (const f of fields) {
+      if (isDataUrl(item?.[f])) { const url = await migrateDataUrl(item[f], folder); if (url) { item[f] = url; changed = true } }
+    }
+  }
+  if (changed) localStorage.setItem(key, JSON.stringify(arr))
+}
+
+async function migrateField(key: string, field: string, folder: string) {
+  let obj: any
+  try { obj = JSON.parse(localStorage.getItem(key) || 'null') } catch { return }
+  if (!obj || typeof obj !== 'object') return
+  if (isDataUrl(obj[field])) { const url = await migrateDataUrl(obj[field], folder); if (url) { obj[field] = url; localStorage.setItem(key, JSON.stringify(obj)) } }
+}
+
+// Migra en segundo plano las imágenes ya guardadas como data URL a Storage.
+// Idempotente (sólo toca valores data:). Si no hay sesión/bucket/políticas, no hace nada.
+export async function migrateImagesToStorage(): Promise<void> {
+  try {
+    if (!supabase) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) return
+    await migrateField('nn-profile', 'avatar', 'avatar')
+    await migrateArray('nn-etsy-stores', ['bannerImage', 'logoImage'], 'etsy')
+    await migrateArray('nn-exercise-routines', ['banner'], 'routine')
+    await migrateArray('nn-stretches', ['banner'], 'routine')
+  } catch {}
+}

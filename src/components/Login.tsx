@@ -3,6 +3,7 @@ import { Mail, Lock, Eye, EyeOff, KeyRound, Loader } from 'lucide-react'
 import { APP_VERSION } from '../App'
 import { supabase, supabaseEnabled } from '../lib/supabase'
 import { startCloudSync } from '../lib/cloudSync'
+import { migrateImagesToStorage } from '../lib/imageStore'
 import './Login.css'
 
 const VALID_EMAIL = 'GallardoTesting@outlook.com'
@@ -69,7 +70,7 @@ export default function Login({ onLogin }: LoginProps) {
           await supabase.auth.signUp({ email: VALID_EMAIL, password: VALID_PASS })
           res = await supabase.auth.signInWithPassword({ email: VALID_EMAIL, password: VALID_PASS })
         }
-        if (!res.error) await startCloudSync()
+        if (!res.error) { await startCloudSync(); void migrateImagesToStorage() }
       } catch {}
       setConnecting(false)
     }
