@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { CSSProperties } from 'react'
-import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, ChevronRight, Flame, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle, Settings, ClipboardList, LayoutGrid, LayoutList } from 'lucide-react'
+import { Dumbbell, Droplets, ArrowLeft, Plus, CreditCard, StickyNote, Lock, Copy, Check, Zap, CalendarClock, Trash2, Heart, RotateCcw, GripVertical, ShoppingCart, X, Edit3, Target, BookOpen, ShoppingBag, ChevronDown, ChevronUp, ChevronRight, Flame, Eye, EyeOff, Search, Save, Play, Phone, Mail, MapPin, User, Contact as ContactIcon, Folder, AlertTriangle, Settings, ClipboardList, LayoutGrid, LayoutList, Trophy } from 'lucide-react'
 import { addNotification } from '../../lib/notifications'
 import { useWater, WATER_GOAL } from '../../lib/water'
 import ColorInput from '../ColorInput'
@@ -1500,7 +1500,7 @@ function ListaComprasTab() {
 }
 
 // ============ WISHLIST (COMPRAS) ============
-interface WishItem { id: string; name: string; category: string; done: boolean; link?: string }
+interface WishItem { id: string; name: string; category: string; done: boolean; link?: string; doneAt?: string }
 
 const wishCatColors: Record<string, string> = { General: '#6b7280', Tecnología: '#3b82f6', Ropa: '#ec4899', Hogar: '#22c55e', Juegos: '#8b5cf6', Otros: '#f59e0b' }
 
@@ -1511,6 +1511,7 @@ function WishlistTab() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(() => { try { const s = localStorage.getItem('nn-wishlist-collapsed'); return new Set(s ? JSON.parse(s) : []) } catch { return new Set() } })
   const [wishSort, setWishSort] = useState<'manual' | 'alpha'>(() => { try { return localStorage.getItem('nn-wishlist-sort') === 'manual' ? 'manual' : 'alpha' } catch { return 'alpha' } })
+  const [showAchieved, setShowAchieved] = useState(false)
   const dragWish = useRef<string | null>(null)
   const [dragOverWish, setDragOverWish] = useState<string | null>(null)
   const cats = ['General', 'Tecnología', 'Ropa', 'Hogar', 'Juegos', 'Otros']
@@ -1530,7 +1531,8 @@ function WishlistTab() {
     if (parts.length <= 1) return
     e.preventDefault(); addNames(parts)
   }
-  const toggle = (id: string) => save(items.map(i => i.id === id ? { ...i, done: !i.done } : i))
+  // Marcar como conseguida = pasa al menú lateral "Compras Conseguidas". Se guarda cuándo se logró (para festejar).
+  const toggle = (id: string) => save(items.map(i => i.id === id ? { ...i, done: !i.done, doneAt: !i.done ? new Date().toISOString() : undefined } : i))
   const remove = (id: string) => save(items.filter(i => i.id !== id))
   const update = (id: string, u: Partial<WishItem>) => save(items.map(i => i.id === id ? { ...i, ...u } : i))
   const duplicate = (id: string) => { const it = items.find(i => i.id === id); if (!it) return; const idx = items.findIndex(i => i.id === id); const dup = { ...it, id: 'wish-' + Date.now(), name: it.name + ' (copia)' }; const next = [...items]; next.splice(idx + 1, 0, dup); save(next) }
@@ -1545,7 +1547,10 @@ function WishlistTab() {
     if (fromIdx < 0 || toIdx < 0) return
     const next = [...items]; const [m] = next.splice(fromIdx, 1); next.splice(toIdx, 0, m); save(next)
   }
-  const ordered = wishSort === 'alpha' ? [...items].sort((a, b) => a.name.localeCompare(b.name, 'es')) : items
+  // Las conseguidas salen de la lista principal y viven en el menú lateral (más recientes primero).
+  const pending = items.filter(i => !i.done)
+  const achieved = items.filter(i => i.done).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || ''))
+  const ordered = wishSort === 'alpha' ? [...pending].sort((a, b) => a.name.localeCompare(b.name, 'es')) : pending
   const grouped = cats.reduce<Record<string, WishItem[]>>((acc, c) => { acc[c] = ordered.filter(i => i.category === c); return acc }, {})
 
   return (
@@ -1555,12 +1560,17 @@ function WishlistTab() {
         <select value={newCat} onChange={e => setNewCat(e.target.value)}>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>
         <button onClick={add} disabled={!newName.trim()}><Plus size={14} /></button>
       </div>
-      {items.length > 1 && (
+      {items.length > 0 && (
         <div className="wishlist-toolbar">
-          <div className="shopping-sort-toggle" title="Orden de los artículos">
-            <button className={wishSort === 'manual' ? 'active' : ''} onClick={() => setWishSortMode('manual')} title="Orden manual (arrastrá los artículos para reordenarlos)"><GripVertical size={12} /> Manual</button>
-            <button className={wishSort === 'alpha' ? 'active' : ''} onClick={() => setWishSortMode('alpha')} title="Orden alfabético">A-Z</button>
-          </div>
+          {pending.length > 1 && (
+            <div className="shopping-sort-toggle" title="Orden de los artículos">
+              <button className={wishSort === 'manual' ? 'active' : ''} onClick={() => setWishSortMode('manual')} title="Orden manual (arrastrá los artículos para reordenarlos)"><GripVertical size={12} /> Manual</button>
+              <button className={wishSort === 'alpha' ? 'active' : ''} onClick={() => setWishSortMode('alpha')} title="Orden alfabético">A-Z</button>
+            </div>
+          )}
+          <button className="wishlist-trophy-btn" onClick={() => setShowAchieved(true)} title="Ver las compras que ya conseguiste">
+            <Trophy size={13} /> Compras Conseguidas{achieved.length ? ` (${achieved.length})` : ''}
+          </button>
         </div>
       )}
       {cats.filter(c => grouped[c]?.length > 0).map(c => {
@@ -1597,6 +1607,34 @@ function WishlistTab() {
         </div>
       )})}
       {items.length === 0 && <div className="shopping-empty"><ShoppingBag size={28} /><p>Sin artículos en la lista de deseos</p></div>}
+      {items.length > 0 && pending.length === 0 && (
+        <div className="shopping-empty"><Trophy size={28} /><p>¡Conseguiste todo lo que querías!</p><p className="shopping-empty-hint">Miralas en «Compras Conseguidas» 🏆</p></div>
+      )}
+
+      {showAchieved && (
+        <div className="wishlist-achieved-backdrop" onClick={() => setShowAchieved(false)}>
+          <div className="wishlist-achieved-drawer" onClick={e => e.stopPropagation()}>
+            <div className="wishlist-achieved-head">
+              <span className="wishlist-achieved-title"><Trophy size={18} /> Compras Conseguidas</span>
+              <button className="wishlist-achieved-close" onClick={() => setShowAchieved(false)}><X size={16} /></button>
+            </div>
+            <p className="wishlist-achieved-sub">{achieved.length ? `${achieved.length} ${achieved.length === 1 ? 'compra lograda' : 'compras logradas'}. ¡Bien ahí! 🎉` : 'Todavía no conseguiste ninguna. Cuando marques una compra, aparece acá.'}</p>
+            <div className="wishlist-achieved-list">
+              {achieved.map(item => (
+                <div key={item.id} className="wishlist-achieved-item">
+                  <span className="wishlist-achieved-dot" style={{ background: wishCatColors[item.category] || '#f59e0b' }} />
+                  <div className="wishlist-achieved-info">
+                    <span className="wishlist-achieved-name">{item.name}</span>
+                    {item.doneAt && <span className="wishlist-achieved-date">{new Date(item.doneAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
+                  </div>
+                  <button className="wishlist-achieved-undo" onClick={() => toggle(item.id)} title="Volver a la lista"><RotateCcw size={13} /></button>
+                  <button className="wishlist-achieved-del" onClick={() => remove(item.id)} title="Eliminar"><Trash2 size={13} /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
