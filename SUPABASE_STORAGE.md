@@ -18,26 +18,28 @@ En el panel de Supabase → **Storage** → **New bucket**:
 
 ## 2. Políticas (RLS) de `storage.objects`
 
-En **SQL Editor**, ejecutá:
+En **SQL Editor**, ejecutá (versión idempotente: se puede correr las veces que quieras
+sin el error `policy ... already exists`):
 
 ```sql
 -- Subir: cada usuario autenticado sube dentro de su propia carpeta (uid/...)
-create policy "nn-images auth insert"
-on storage.objects for insert to authenticated
+drop policy if exists "nn-images auth insert" on storage.objects;
+create policy "nn-images auth insert" on storage.objects for insert to authenticated
 with check ( bucket_id = 'nn-images' and (storage.foldername(name))[1] = auth.uid()::text );
 
--- Actualizar / borrar los propios archivos (opcional pero recomendado)
-create policy "nn-images auth update"
-on storage.objects for update to authenticated
+-- Actualizar los propios archivos
+drop policy if exists "nn-images auth update" on storage.objects;
+create policy "nn-images auth update" on storage.objects for update to authenticated
 using ( bucket_id = 'nn-images' and (storage.foldername(name))[1] = auth.uid()::text );
 
-create policy "nn-images auth delete"
-on storage.objects for delete to authenticated
+-- Borrar los propios archivos
+drop policy if exists "nn-images auth delete" on storage.objects;
+create policy "nn-images auth delete" on storage.objects for delete to authenticated
 using ( bucket_id = 'nn-images' and (storage.foldername(name))[1] = auth.uid()::text );
 
 -- Lectura pública (con bucket público suele alcanzar; esto lo deja explícito)
-create policy "nn-images public read"
-on storage.objects for select to public
+drop policy if exists "nn-images public read" on storage.objects;
+create policy "nn-images public read" on storage.objects for select to public
 using ( bucket_id = 'nn-images' );
 ```
 
