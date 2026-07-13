@@ -64,7 +64,7 @@ interface BrandInfoField { id: string; title: string; body: string }
 interface BrandInfo { slogan: string; sloganEn?: string; brandColors: string[]; notes: string; fonts?: string[]; infoFields?: BrandInfoField[] }
 interface PresetMsg { id: string; groupId?: string; titleEs: string; titleEn: string; descEs: string; descEn: string }
 interface PresetGroup { id: string; name: string; color?: string }
-interface PromptPanel { id: string; title: string; description: string; group?: string; groupId?: string; mainPrompt?: string; prompts: { id: string; text: string; variables: string[]; title?: string }[] }
+interface PromptPanel { id: string; title: string; description: string; group?: string; groupId?: string; mainPrompt?: string; mainTitle?: string; prompts: { id: string; text: string; variables: string[]; title?: string }[] }
 // Grupo de Creaciones: entidad con título, descripción, color y tag. `parentId` permite
 // anidar subgrupos dentro de otro grupo. (`icon` es legado y ya no se usa en la UI.)
 interface CreacionGroup { id: string; name: string; description?: string; color?: string; icon?: string; tag?: string; parentId?: string }
@@ -782,6 +782,8 @@ function CreacionesPanel({ panel, save, panels, groups }: { panel: PromptPanel; 
 
   // Etiqueta de cada subprompt en las pestañas: su título manual o el número.
   const subLabel = (pr: { title?: string }, i: number) => (pr.title || '').trim() || `#${i + 1}`
+  // Etiqueta de la pestaña principal: su título manual o «Principal» por defecto.
+  const mainLabel = (panel.mainTitle || '').trim() || 'Principal'
 
   return (
     <div className="card creacion-panel">
@@ -802,16 +804,20 @@ function CreacionesPanel({ panel, save, panels, groups }: { panel: PromptPanel; 
           </label>
 
           <div className="creacion-subtabs">
-            <button className={activeSub === '__main' ? 'active' : ''} onClick={() => setActiveSub('__main')}>Principal</button>
+            <button className={activeSub === '__main' ? 'active' : ''} onClick={() => setActiveSub('__main')} title={mainLabel}>{mainLabel}</button>
             {panel.prompts.map((pr, i) => (
               <button key={pr.id} className={activeSub === pr.id ? 'active' : ''} onClick={() => setActiveSub(pr.id)} title={subLabel(pr, i)}>{subLabel(pr, i)}</button>
             ))}
             <button className="creacion-subtab-add" onClick={addSub}><Plus size={11} /></button>
           </div>
 
-          {activePrompt && (
+          {/* El título de cada prompt es editable (incluida la pestaña «Principal»). Los
+              prompts secundarios además se pueden eliminar con el botón de abajo. */}
+          {activeSub === '__main' ? (
+            <input className="creacion-prompt-title" value={panel.mainTitle || ''} onChange={e => updatePanel({ mainTitle: e.target.value })} placeholder="Título del prompt principal (por defecto: «Principal»)..." />
+          ) : activePrompt ? (
             <input className="creacion-prompt-title" value={activePrompt.title || ''} onChange={e => updateSub(activePrompt.id, { title: e.target.value })} placeholder="Título del prompt (opcional)..." />
-          )}
+          ) : null}
 
           <div className="creacion-prompt-box">
             {activeSub === '__main' ? (
