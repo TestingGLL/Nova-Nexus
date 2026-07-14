@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Plus, Trash2, Search, Copy, FolderPlus, Folder, ChevronRight, ChevronDown, Tag, X, Check, Clock, Eye } from 'lucide-react'
+import { Plus, Trash2, Search, FolderPlus, Folder, ChevronRight, ChevronDown, Tag, X, Check, Clock, Eye } from 'lucide-react'
+import DuplicateIcon from '../DuplicateIcon'
 import { useConfirm } from '../ConfirmDialog'
 import RichTextEditor from '../RichTextEditor'
 import './NotasSection.css'
@@ -330,7 +331,7 @@ export default function NotasSection() {
                   </select>
                 )}
                 <button className={`nota-action-btn ${current.ephemeral ? 'active' : ''}`} onClick={() => toggleEphemeral(current.id)} title="Auto-eliminar tras N días"><Clock size={14} /></button>
-                <button className="nota-action-btn" onClick={() => duplicateNote(current.id)} title="Duplicar"><Copy size={14} /></button>
+                <button className="nota-action-btn" onClick={() => duplicateNote(current.id)} title="Duplicar"><DuplicateIcon size={14} /></button>
                 <button className="nota-action-btn danger" onClick={() => deleteNote(current.id)} title="Eliminar"><Trash2 size={14} /></button>
               </div>
             </div>

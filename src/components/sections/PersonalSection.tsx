@@ -11,6 +11,7 @@ import { copyToClipboard } from '../../lib/clipboard'
 import { loadPromoApps, findPromoApp } from '../../lib/promoApps'
 import { isCardEnvelope, encryptVerified, decryptVault, newVaultKey, saveCardIndex, loadCardIndex, type CardIndexEntry } from '../../lib/cardVault'
 import { uploadImage } from '../../lib/imageStore'
+import DuplicateIcon from '../DuplicateIcon'
 import { notify } from '../Toast'
 import './PersonalSection.css'
 
@@ -1457,7 +1458,7 @@ function ListaComprasTab() {
                 )}
                 <span className="shopping-group-count">{g.items.filter(i => !i.done).length} pendientes</span>
                 <button className="shopping-group-edit" onClick={() => setEditingGroup(editingGroup === g.id ? null : g.id)} title="Renombrar"><Edit3 size={11} /></button>
-                <button className="shopping-group-edit" onClick={() => duplicateGroup(g.id)} title="Duplicar lista"><Copy size={11} /></button>
+                <button className="shopping-group-edit" onClick={() => duplicateGroup(g.id)} title="Duplicar lista"><DuplicateIcon size={11} /></button>
                 <button className="shopping-group-delete" onClick={() => removeGroup(g.id)} title="Eliminar"><Trash2 size={11} /></button>
               </div>
               {!collapsed && (<>
@@ -1600,7 +1601,7 @@ function WishlistTab() {
               )}
               <select className="wishlist-cat-change" value={item.category} onChange={e => update(item.id, { category: e.target.value })}>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>
               <button className="shopping-group-edit" onClick={() => setEditingId(item.id)} title="Editar"><Edit3 size={11} /></button>
-              <button className="shopping-group-edit" onClick={() => duplicate(item.id)} title="Duplicar"><Copy size={11} /></button>
+              <button className="shopping-group-edit" onClick={() => duplicate(item.id)} title="Duplicar"><DuplicateIcon size={11} /></button>
               <button className="shopping-item-delete" onClick={() => remove(item.id)}><X size={11} /></button>
             </div>
           ))}
@@ -1787,7 +1788,7 @@ function ObjetivosTab() {
           <button onClick={() => move(g.id, -1)}><ChevronUp size={12} /></button>
           <button onClick={() => move(g.id, 1)}><ChevronDown size={12} /></button>
         </div>
-        <button className="shopping-group-edit" onClick={() => duplicate(g.id)} title="Clonar objetivo"><Copy size={13} /></button>
+        <button className="shopping-group-edit" onClick={() => duplicate(g.id)} title="Clonar objetivo"><DuplicateIcon size={13} /></button>
         <button className="shopping-item-delete" onClick={() => remove(g.id)}><Trash2 size={13} /></button>
       </div>
     </div>
@@ -1927,7 +1928,7 @@ function ContactosTab() {
               {c.notes && <p className="contacto-notes">{c.notes}</p>}
             </div>
             <button className="shopping-group-edit" onClick={() => setEditId(c.id)} title="Editar"><Edit3 size={13} /></button>
-            <button className="shopping-group-edit" onClick={() => duplicate(c.id)} title="Duplicar"><Copy size={13} /></button>
+            <button className="shopping-group-edit" onClick={() => duplicate(c.id)} title="Duplicar"><DuplicateIcon size={13} /></button>
             <button className="shopping-item-delete" onClick={() => remove(c.id)}><Trash2 size={13} /></button>
           </div>
         ))}

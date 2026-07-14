@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
-import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, ListChecks, Palette, Highlighter, Smile, Type, ChevronDown, Eraser, CaseSensitive, CaseUpper, CaseLower, GripVertical, Plus, X, Copy, CopyPlus, Trash2 } from 'lucide-react'
+import { Bold, Italic, Underline, Strikethrough, List, ListOrdered, ListChecks, Palette, Highlighter, Smile, Type, ChevronDown, Eraser, CaseSensitive, CaseUpper, CaseLower, GripVertical, Plus, X, Copy, Trash2 } from 'lucide-react'
+import DuplicateIcon from './DuplicateIcon'
 import { notify } from './Toast'
 import './RichTextEditor.css'
 
@@ -419,7 +420,7 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
       {selected.size > 0 && (
         <div className="rte-selbar" onMouseDown={e => e.stopPropagation()}>
           <span className="rte-selbar-count">{selected.size} bloque{selected.size > 1 ? 's' : ''} seleccionado{selected.size > 1 ? 's' : ''}</span>
-          <button onClick={duplicateSelected} title="Duplicar (Ctrl+D)"><CopyPlus size={13} /> Duplicar</button>
+          <button onClick={duplicateSelected} title="Duplicar (Ctrl+D)"><DuplicateIcon size={13} /> Duplicar</button>
           <button onClick={copySelected} title="Copiar (Ctrl+C)"><Copy size={13} /> Copiar</button>
           <button className="rte-selbar-del" onClick={deleteSelected} title="Eliminar (Supr)"><Trash2 size={13} /> Eliminar</button>
           <span className="rte-selbar-hint">Arrastrá para mover · Ctrl+clic para (des)seleccionar</span>

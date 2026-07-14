@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, UserPlus, RotateCcw, Copy, Minus, Languages, Hash, Lightbulb, Paperclip } from 'lucide-react'
+import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, Trash2, Edit3, Check, ChevronDown, ChevronRight, Calendar, Star, Users, ShoppingCart, Upload, Search, Tag, FileText, GripVertical, Layers, DollarSign, Globe, Award, Sparkles, UserPlus, RotateCcw, Copy, Minus, Languages, Hash, Lightbulb } from 'lucide-react'
+import DuplicateIcon from '../DuplicateIcon'
 import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
 import ColorInput from '../ColorInput'
@@ -868,7 +869,7 @@ function CreacionGroupCard({ group, tags, groups, save, panels, onUpdateGroup, o
         {group.tag && <span className="creacion-group-tag"><Tag size={10} /> {group.tag}</span>}
         <span className="creacion-group-count">{groupPanels.length}{subgroups.length > 0 ? ` · ${subgroups.length} sub` : ''}</span>
         <button className="preset-icon-btn" onClick={() => setEditing(e => !e)} title="Editar grupo">{editing ? <Check size={13} /> : <Edit3 size={13} />}</button>
-        <button className="preset-icon-btn" onClick={() => onDuplicateGroup(group.id)} title="Duplicar grupo"><Copy size={13} /></button>
+        <button className="preset-icon-btn" onClick={() => onDuplicateGroup(group.id)} title="Duplicar grupo"><DuplicateIcon size={13} /></button>
         <button className="preset-icon-btn del" onClick={() => onRemoveGroup(group.id)} title="Eliminar grupo"><Trash2 size={13} /></button>
       </div>
       {editing && (
@@ -1685,7 +1686,7 @@ function PredeterminadasTab({ store, onUpdate }: { store: StoreData; onUpdate: (
           </span>
           <button className="preset-copy" onClick={() => copyMsg(m)} title="Copiar mensaje">{copied === m.id ? <Check size={14} /> : <Copy size={14} />}</button>
           <button className="preset-icon-btn" onClick={() => { setEditId(editing ? null : m.id); if (!editing) setCollapsedMsgs(s => { const n = new Set(s); n.delete(m.id); return n }) }} title={editing ? 'Listo' : 'Editar'}>{editing ? <Check size={14} /> : <Edit3 size={14} />}</button>
-          <button className="preset-icon-btn" onClick={() => dupMsg(m.id)} title="Duplicar"><Paperclip size={13} /></button>
+          <button className="preset-icon-btn" onClick={() => dupMsg(m.id)} title="Duplicar"><DuplicateIcon size={13} /></button>
           <select className="preset-move" value={m.groupId || ''} onChange={e => updateMsg(m.id, { groupId: e.target.value || undefined })} title="Mover a grupo"><option value="">Sin grupo</option>{pgroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
           <button className="preset-icon-btn del" onClick={() => removeMsg(m.id)} title="Eliminar"><Trash2 size={13} /></button>
         </div>
