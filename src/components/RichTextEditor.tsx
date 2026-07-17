@@ -103,54 +103,75 @@ function BlockRow({ block, placeholder, selected, onInput, onEnter, onBackspaceE
       sel!.removeAllRanges(); sel!.addRange(range)
       document.execCommand('insertHTML', false, '<hr class="rte-hr">')
     }
+    // Red de seguridad: cualquier <li> de checklist creado por cualquier vía (incluida la
+    // nativa del navegador) debe tener data-checked para que se dibuje su casilla.
+    ref.current?.querySelectorAll('.rte-checklist li:not([data-checked])').forEach(li => li.setAttribute('data-checked', 'false'))
     onInput(ref.current?.innerHTML || '')
   }
+
+  // Resuelve el <li> de checklist en el caret (con fallback si el caret quedó a nivel del
+  // <ul> o del bloque) y, si estamos dentro de una checklist, crea otra casilla debajo
+  // (o sale de la checklist si la casilla está vacía). Devuelve true si lo manejó.
+  const tryChecklistEnter = (): boolean => {
+    const sel = window.getSelection()
+    let n: Node | null = sel?.anchorNode || null
+    let li: HTMLElement | null = null
+    while (n && n !== ref.current) { if (n.nodeName === 'LI') { li = n as HTMLElement; break } n = n.parentNode }
+    if (!li && ref.current) {
+      const ul = ref.current.querySelector('.rte-checklist') as HTMLElement | null
+      if (ul) {
+        const a = sel?.anchorNode
+        if (a === ul) {
+          const kids = Array.from(ul.children) as HTMLElement[]
+          li = kids[Math.max(0, (sel?.anchorOffset ?? kids.length) - 1)] || (ul.lastElementChild as HTMLElement | null)
+        } else if (a === ref.current || (a && ul.contains(a))) {
+          li = ul.lastElementChild as HTMLElement | null
+        }
+      }
+    }
+    if (!(li && li.closest('.rte-checklist'))) return false
+    if ((li.textContent || '').trim() === '') {
+      // Casilla vacía + Enter → salir de la checklist y crear un bloque normal debajo.
+      const ul = li.parentElement
+      li.remove()
+      if (ul && !ul.querySelector('li')) ul.remove()
+      onInput(ref.current?.innerHTML || '')
+      onEnter()
+      return true
+    }
+    const nli = document.createElement('li')
+    nli.setAttribute('data-checked', 'false')
+    nli.innerHTML = '<br>'
+    li.after(nli)
+    const range = document.createRange()
+    range.setStart(nli, 0); range.collapse(true)
+    sel?.removeAllRanges(); sel?.addRange(range)
+    onInput(ref.current?.innerHTML || '')
+    return true
+  }
+
+  // Enter también llega como beforeinput 'insertParagraph'. Capturarlo acá hace que la
+  // creación de casillas funcione aunque el keydown no traiga key='Enter' (algunos IME
+  // /teclados/entornos). Si el keydown ya lo manejó (preventDefault), esto no se dispara.
+  const handleBeforeInput = (e: React.FormEvent<HTMLDivElement>) => {
+    const ne = e.nativeEvent as InputEvent
+    if (ne.inputType === 'insertParagraph' && !ne.isComposing) {
+      if (tryChecklistEnter()) e.preventDefault()
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); onSelectAll(); return }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); onDuplicate(); return }
-    if (e.key === 'Enter' && !e.shiftKey) {
+    const isEnter = e.key === 'Enter' || e.code === 'Enter' || e.keyCode === 13
+    if (isEnter && !e.shiftKey) {
+      // En una checklist, Enter crea explícitamente otra casilla (desmarcada) debajo.
+      if (tryChecklistEnter()) { e.preventDefault(); return }
+      // Otras listas (ul/ol normales): Enter nativo sigue creando ítems.
       const sel = window.getSelection()
       let n: Node | null = sel?.anchorNode || null
       let li: HTMLElement | null = null
       while (n && n !== ref.current) { if (n.nodeName === 'LI') { li = n as HTMLElement; break } n = n.parentNode }
-      // Fallback: Chromium a veces deja el caret a nivel del <ul> o del bloque (típico
-      // de una casilla vacía o recién creada). Sin esto, Enter no encontraba el <li> y
-      // creaba un párrafo en vez de otra casilla (bug reportado). Resolvemos el <li> igual.
-      if (!li && ref.current) {
-        const ul = ref.current.querySelector('.rte-checklist') as HTMLElement | null
-        if (ul) {
-          const a = sel?.anchorNode
-          if (a === ul) {
-            const kids = Array.from(ul.children) as HTMLElement[]
-            li = kids[Math.max(0, (sel?.anchorOffset ?? kids.length) - 1)] || (ul.lastElementChild as HTMLElement | null)
-          } else if (a === ref.current || (a && ul.contains(a))) {
-            li = ul.lastElementChild as HTMLElement | null
-          }
-        }
-      }
-      // En una checklist, Enter crea explícitamente otra casilla (desmarcada) debajo.
-      if (li && li.closest('.rte-checklist')) {
-        e.preventDefault()
-        if ((li.textContent || '').trim() === '') {
-          // Casilla vacía + Enter → salir de la checklist y crear un bloque normal debajo.
-          const ul = li.parentElement
-          li.remove()
-          if (ul && !ul.querySelector('li')) ul.remove()
-          onInput(ref.current?.innerHTML || '')
-          onEnter()
-          return
-        }
-        const nli = document.createElement('li')
-        nli.setAttribute('data-checked', 'false')
-        nli.innerHTML = '<br>'
-        li.after(nli)
-        const range = document.createRange()
-        range.setStart(nli, 0); range.collapse(true)
-        sel?.removeAllRanges(); sel?.addRange(range)
-        onInput(ref.current?.innerHTML || '')
-        return
-      }
-      // Otras listas (ul/ol normales): Enter nativo sigue creando ítems.
       if (li) return
       e.preventDefault(); onEnter()
     } else if (e.key === 'Backspace' && (ref.current?.textContent || '') === '' && !/(<hr|<img|<details)/i.test(ref.current?.innerHTML || '')) {
@@ -195,6 +216,7 @@ function BlockRow({ block, placeholder, selected, onInput, onEnter, onBackspaceE
         lang="es-419"
         data-ph={placeholder}
         onInput={handleInput}
+        onBeforeInput={handleBeforeInput}
         onKeyDown={handleKeyDown}
         onClick={handleClick}
         onFocus={onFocus}
