@@ -257,27 +257,17 @@ export default function NotasSection() {
         </div>
 
         <div className="notas-date-filter">
-          <input
-            type="date"
-            value={filterDateFrom}
-            onChange={e => setFilterDateFrom(e.target.value)}
-            placeholder="Desde..."
-            title="Filtrar desde esta fecha"
-          />
-          <input
-            type="date"
-            value={filterDateTo}
-            onChange={e => setFilterDateTo(e.target.value)}
-            placeholder="Hasta..."
-            title="Filtrar hasta esta fecha"
-          />
+          <label className="notas-date-field">
+            <span>Desde</span>
+            <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} title="Filtrar desde esta fecha" />
+          </label>
+          <label className="notas-date-field">
+            <span>Hasta</span>
+            <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} title="Filtrar hasta esta fecha" />
+          </label>
           {(filterDateFrom || filterDateTo) && (
-            <button
-              onClick={() => { setFilterDateFrom(''); setFilterDateTo('') }}
-              title="Limpiar filtro de fechas"
-              style={{ padding: '2px 8px', fontSize: '0.8em' }}
-            >
-              ✕
+            <button className="notas-date-clear" onClick={() => { setFilterDateFrom(''); setFilterDateTo('') }} title="Limpiar filtro de fechas">
+              <X size={13} />
             </button>
           )}
         </div>

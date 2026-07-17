@@ -77,6 +77,59 @@
 }
 .notas-add:hover { border-color: var(--accent); color: var(--accent); }
 
+/* ─── Filtro por fecha ─── */
+.notas-date-filter {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.notas-date-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.notas-date-field > span {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+  padding-left: 2px;
+}
+.notas-date-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+.notas-date-field input:focus { border-color: var(--accent); }
+.notas-date-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background: none;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.notas-date-clear:hover { border-color: #ef4444; color: #ef4444; }
+
 /* ─── Folders ─── */
 .notas-folders {
   padding: 8px;
