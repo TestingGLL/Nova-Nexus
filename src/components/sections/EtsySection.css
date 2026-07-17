@@ -555,7 +555,17 @@
 .creacion-group-select select:focus { border-color: var(--accent); }
 
 /* ===== Creaciones: grupos con ícono de color, edición y tags ===== */
-.creaciones-toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+.creaciones-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.creaciones-count { margin-left: auto; font-size: 11px; color: var(--text-secondary); }
+.creaciones-filterbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.creaciones-search { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); color: var(--text-secondary); flex: 1; min-width: 180px; }
+.creaciones-search input { border: none; background: none; outline: none; font-size: 13px; color: var(--text-primary); font-family: inherit; flex: 1; min-width: 0; }
+.creaciones-search-clear { display: flex; padding: 2px; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-radius: 4px; }
+.creaciones-search-clear:hover { color: var(--accent); }
+.creaciones-tag-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.creaciones-tag-chip { padding: 5px 12px; border: 1px solid var(--border); background: none; border-radius: 20px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-family: inherit; transition: all 0.15s; }
+.creaciones-tag-chip:hover { border-color: var(--accent); color: var(--accent); }
+.creaciones-tag-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .creaciones-new-group { padding: 14px !important; display: flex; flex-direction: column; gap: 10px; animation: slideDown 0.2s ease; }
 .creaciones-new-group input, .creaciones-new-group textarea, .creaciones-new-group select { padding: 8px 12px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); outline: none; font-family: inherit; resize: none; }
 .creaciones-new-group input:focus, .creaciones-new-group textarea:focus, .creaciones-new-group select:focus { border-color: var(--accent); }

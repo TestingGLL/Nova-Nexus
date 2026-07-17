@@ -161,6 +161,28 @@
 .transfer-copy-btn { border: none; background: var(--bg-hover); color: var(--accent); font-size: 10px; padding: 1px 8px; border-radius: 6px; cursor: pointer; font-family: inherit; }
 .transfer-copy-btn:hover { background: var(--accent-soft); }
 
+/* Header: URL + acciones (QR circular + detener) */
+.transfer-header-actions { display: flex; align-items: center; gap: 8px; }
+.transfer-header-url { font-family: 'Consolas', monospace; font-size: 12px; background: var(--bg-hover); padding: 1px 7px; border-radius: 5px; }
+.transfer-qr-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); cursor: pointer; transition: background 0.15s; flex-shrink: 0; }
+.transfer-qr-icon-btn:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.transfer-qr-icon-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Chat único: burbujas enviadas a la derecha, recibidas a la izquierda */
+.transfer-msg.sent { justify-content: flex-end; }
+.transfer-msg.sent .transfer-msg-bubble { border-radius: 12px 12px 4px 12px; background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.transfer-msg.sent .transfer-msg-text { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* Composer: adjuntar + escribir + enviar, dentro del propio chat */
+.transfer-composer { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.transfer-composer input { flex: 1; padding: 9px 12px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 20px; font-size: 13px; color: var(--text-primary); font-family: inherit; }
+.transfer-composer input:focus { outline: none; border-color: var(--accent); }
+.transfer-attach-btn, .transfer-send-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; flex-shrink: 0; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); transition: all 0.15s; }
+.transfer-attach-btn:hover { border-color: var(--accent); color: var(--accent); }
+.transfer-send-btn { border-color: var(--accent); background: var(--accent); color: #fff; }
+.transfer-send-btn:hover:not(:disabled) { opacity: 0.9; }
+.transfer-send-btn:disabled { opacity: 0.4; cursor: default; }
+
 @media (max-width: 700px) {
   .transfer-grid { grid-template-columns: 1fr; }
 }

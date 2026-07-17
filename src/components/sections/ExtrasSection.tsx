@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Plus, Trash2, Edit3, X, RotateCcw, Save, Settings, Eye, EyeOff } from 'lucide-react'
+import { Plus, Trash2, Edit3, X, RotateCcw, Save, Settings, Eye, EyeOff, Check, Search, ArrowLeft, Image as ImageIcon, Star, BarChart3, Tag } from 'lucide-react'
 import ColorInput from '../ColorInput'
+import { useConfirm } from '../ConfirmDialog'
+import { uploadImage } from '../../lib/imageStore'
 import './ExtrasSection.css'
 
 // High-contrast saturated tones — white labels read clearly on all of them.
@@ -10,7 +12,7 @@ interface WheelOption { id: string; label: string; color: string }
 interface WheelConfig { id: string; name: string; options: WheelOption[] }
 
 interface RatingItem { id: string; name: string; brand?: string; mRating: number; rRating: number; createdAt: string }
-interface RatingPanel { id: string; name: string; image?: string; items: RatingItem[]; createdAt: string }
+interface RatingPanel { id: string; name: string; image?: string; color?: string; items: RatingItem[]; createdAt: string }
 
 function loadRatings(): RatingPanel[] {
   try { const s = localStorage.getItem('nn-ratings'); return s ? JSON.parse(s) : [] } catch { return [] }
@@ -207,159 +209,322 @@ function GridRandom({ options, onResult }: { options: WheelOption[]; onResult: (
 
 // ============ RATINGS ============
 
+const RATING_PANEL_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#22c55e', '#06b6d4', '#ef4444', '#14b8a6']
+const clampRating = (n: number) => Math.min(10, Math.max(1, Math.round(n) || 1))
+const mean = (nums: number[]) => (nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0)
+const fmtAvg = (n: number) => (n > 0 ? n.toFixed(1) : '—')
+
 function RatingsPanel() {
   const [panels, setPanels] = useState<RatingPanel[]>(loadRatings)
   const [activePanelId, setActivePanelId] = useState<string | null>(null)
-  const [showNewPanel, setShowNewPanel] = useState(false)
-  const [newPanelName, setNewPanelName] = useState('')
-  const [filterBrand, setFilterBrand] = useState('')
-  const [searchText, setSearchText] = useState('')
 
-  const addPanel = () => {
-    if (!newPanelName.trim()) return
-    const p: RatingPanel = {
-      id: 'panel-' + Date.now(),
-      name: newPanelName.trim(),
-      items: [],
-      createdAt: new Date().toLocaleDateString('es-AR')
-    }
-    setPanels(prev => { const next = [...prev, p]; saveRatings(next); return next })
-    setNewPanelName('')
-    setShowNewPanel(false)
-    setActivePanelId(p.id)
-  }
-
-  const deletePanel = (id: string) => {
-    setPanels(prev => { const next = prev.filter(p => p.id !== id); saveRatings(next); return next })
-    if (activePanelId === id) setActivePanelId(null)
-  }
-
-  const updatePanel = (id: string, upd: Partial<RatingPanel>) => {
-    setPanels(prev => {
-      const next = prev.map(p => p.id === id ? { ...p, ...upd } : p)
-      saveRatings(next)
-      return next
-    })
-  }
-
-  const deleteItem = (panelId: string, itemId: string) => {
-    const panel = panels.find(p => p.id === panelId)
-    if (panel) {
-      updatePanel(panelId, { items: panel.items.filter(it => it.id !== itemId) })
-    }
-  }
-
-  const updateItem = (panelId: string, itemId: string, upd: Partial<RatingItem>) => {
-    const panel = panels.find(p => p.id === panelId)
-    if (panel) {
-      updatePanel(panelId, {
-        items: panel.items.map(it => it.id === itemId ? { ...it, ...upd } : it)
-      })
-    }
-  }
+  const savePanels = (next: RatingPanel[]) => { setPanels(next); saveRatings(next) }
+  const updatePanel = (id: string, upd: Partial<RatingPanel>) => savePanels(panels.map(p => p.id === id ? { ...p, ...upd } : p))
 
   const activePanel = panels.find(p => p.id === activePanelId)
-
-  // Dashboard stats
-  const allItems = panels.flatMap(p => p.items)
-  const avgM = allItems.length > 0 ? (allItems.reduce((sum, it) => sum + it.mRating, 0) / allItems.length).toFixed(1) : '—'
-  const avgR = allItems.length > 0 ? (allItems.reduce((sum, it) => sum + it.rRating, 0) / allItems.length).toFixed(1) : '—'
-
   if (activePanel) {
-    const filtered = activePanel.items.filter(it =>
-      (!filterBrand || !it.brand || it.brand.toLowerCase().includes(filterBrand.toLowerCase())) &&
-      (!searchText || it.name.toLowerCase().includes(searchText.toLowerCase()))
-    )
-    const brands = Array.from(new Set(activePanel.items.map(it => it.brand).filter(b => b)))
-
     return (
-      <div className="card ratings-panel">
-        <button className="ratings-back" onClick={() => setActivePanelId(null)}>← Volver a paneles</button>
-        <h3>{activePanel.name}</h3>
-        <div className="ratings-filters">
-          <input placeholder="Buscar..." value={searchText} onChange={e => setSearchText(e.target.value)} />
-          <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)}>
-            <option value="">Todas las marcas</option>
-            {brands.map(b => <option key={b} value={b}>{b}</option>)}
-          </select>
-        </div>
-        <RatingsTable panel={activePanel} items={filtered} onDeleteItem={deleteItem} onUpdateItem={updateItem} />
-        <button onClick={() => alert('Modal: Agregar item (no implementado aún)')} className="btn btn-primary">+ Agregar item</button>
-      </div>
+      <RatingsDetail
+        panel={activePanel}
+        onBack={() => setActivePanelId(null)}
+        onUpdate={upd => updatePanel(activePanel.id, upd)}
+      />
     )
   }
 
   return (
-    <div className="ratings-main">
-      <div className="ratings-stats">
-        <div className="stat-tile">
-          <div className="stat-label">Promedio M</div>
-          <div className="stat-value">{avgM}</div>
+    <RatingsHome
+      panels={panels}
+      onOpen={setActivePanelId}
+      onSave={savePanels}
+    />
+  )
+}
+
+// ---- Home: grid de paneles + dashboard + búsqueda ----
+function RatingsHome({ panels, onOpen, onSave }: { panels: RatingPanel[]; onOpen: (id: string) => void; onSave: (next: RatingPanel[]) => void }) {
+  const confirm = useConfirm()
+  const [search, setSearch] = useState('')
+  const [showNew, setShowNew] = useState(false)
+  const [newName, setNewName] = useState('')
+
+  const allItems = panels.flatMap(p => p.items)
+  const avgM = mean(allItems.map(i => i.mRating))
+  const avgR = mean(allItems.map(i => i.rRating))
+  // Distribución 1-10 (promedio por ítem, redondeado) para el mini-dashboard.
+  const dist = Array.from({ length: 10 }, (_, i) => {
+    const bucket = i + 1
+    return allItems.filter(it => Math.round((it.mRating + it.rRating) / 2) === bucket).length
+  })
+  const maxBucket = Math.max(1, ...dist)
+
+  const addPanel = () => {
+    if (!newName.trim()) return
+    const p: RatingPanel = {
+      id: 'rp-' + Date.now(),
+      name: newName.trim(),
+      color: RATING_PANEL_COLORS[panels.length % RATING_PANEL_COLORS.length],
+      items: [],
+      createdAt: new Date().toLocaleDateString('es-AR'),
+    }
+    onSave([...panels, p])
+    setNewName(''); setShowNew(false)
+    onOpen(p.id)
+  }
+  const deletePanel = async (id: string) => {
+    const p = panels.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar panel', message: `¿Eliminar «${p?.name}» y todas sus puntuaciones?`, confirmLabel: 'Eliminar' })) return
+    onSave(panels.filter(x => x.id !== id))
+  }
+
+  const q = search.trim().toLowerCase()
+  const shown = q ? panels.filter(p => p.name.toLowerCase().includes(q)) : panels
+
+  return (
+    <div className="ratings-home">
+      {/* Mini-dashboard de análisis */}
+      <div className="ratings-dash">
+        <div className="ratings-dash-tiles">
+          <div className="ratings-tile ratings-tile-m">
+            <span className="ratings-tile-label"><Star size={12} /> Promedio M</span>
+            <span className="ratings-tile-value">{fmtAvg(avgM)}</span>
+          </div>
+          <div className="ratings-tile ratings-tile-r">
+            <span className="ratings-tile-label"><Star size={12} /> Promedio R</span>
+            <span className="ratings-tile-value">{fmtAvg(avgR)}</span>
+          </div>
+          <div className="ratings-tile">
+            <span className="ratings-tile-label"><BarChart3 size={12} /> Ítems</span>
+            <span className="ratings-tile-value">{allItems.length}</span>
+          </div>
+          <div className="ratings-tile">
+            <span className="ratings-tile-label">Paneles</span>
+            <span className="ratings-tile-value">{panels.length}</span>
+          </div>
         </div>
-        <div className="stat-tile">
-          <div className="stat-label">Promedio R</div>
-          <div className="stat-value">{avgR}</div>
+        {allItems.length > 0 && (
+          <div className="ratings-dist" title="Distribución de puntuación promedio (M+R) por ítem">
+            {dist.map((c, i) => (
+              <div key={i} className="ratings-dist-col">
+                <div className="ratings-dist-bar-wrap">
+                  <div className="ratings-dist-bar" style={{ height: `${(c / maxBucket) * 100}%` }} title={`${c} ítem(s) en ${i + 1}`} />
+                </div>
+                <span className="ratings-dist-num">{i + 1}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="ratings-home-toolbar">
+        <div className="ratings-search">
+          <Search size={13} />
+          <input placeholder="Buscar panel..." value={search} onChange={e => setSearch(e.target.value)} />
+          {search && <button className="ratings-search-clear" onClick={() => setSearch('')}><X size={12} /></button>}
         </div>
+        {showNew ? (
+          <div className="ratings-new-inline">
+            <input autoFocus placeholder="Nombre del panel..." value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addPanel(); if (e.key === 'Escape') { setShowNew(false); setNewName('') } }} />
+            <button className="ratings-btn-ok" onClick={addPanel} disabled={!newName.trim()} title="Crear panel"><Check size={14} /></button>
+            <button className="ratings-btn-cancel" onClick={() => { setShowNew(false); setNewName('') }} title="Cancelar"><X size={14} /></button>
+          </div>
+        ) : (
+          <button className="ratings-add-panel" onClick={() => setShowNew(true)}><Plus size={14} /> Nuevo panel</button>
+        )}
       </div>
 
       {panels.length === 0 ? (
-        <div className="ratings-empty">
-          <p>Sin paneles de puntuaciones. Creá uno nuevo.</p>
-        </div>
+        <div className="ratings-empty"><Star size={30} /><p>Sin paneles de puntuaciones.</p><p className="ratings-empty-hint">Creá uno con «Nuevo panel».</p></div>
       ) : (
         <div className="ratings-grid">
-          {panels.map(p => (
-            <div key={p.id} className="ratings-card" onClick={() => setActivePanelId(p.id)}>
-              <div className="ratings-card-image" style={{ background: '#ddd', height: '120px' }}>
-                {p.image && <img src={p.image} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+          {shown.map(p => {
+            const pm = mean(p.items.map(i => i.mRating))
+            const pr = mean(p.items.map(i => i.rRating))
+            return (
+              <div key={p.id} className="ratings-banner" onClick={() => onOpen(p.id)} title="Abrir panel">
+                <div className="ratings-banner-img" style={{ background: p.image ? undefined : `linear-gradient(135deg, ${p.color || '#6366f1'}, ${p.color || '#6366f1'}99)` }}>
+                  {p.image && <img src={p.image} alt={p.name} />}
+                  <button className="ratings-banner-del" onClick={e => { e.stopPropagation(); deletePanel(p.id) }} title="Eliminar panel"><Trash2 size={13} /></button>
+                </div>
+                <div className="ratings-banner-body">
+                  <h4>{p.name}</h4>
+                  <div className="ratings-banner-meta">
+                    <span className="ratings-banner-count">{p.items.length} ítem{p.items.length === 1 ? '' : 's'}</span>
+                    <span className="ratings-banner-avgs">
+                      <span className="ratings-avg-m">M {fmtAvg(pm)}</span>
+                      <span className="ratings-avg-r">R {fmtAvg(pr)}</span>
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="ratings-card-body">
-                <h4>{p.name}</h4>
-                <p>{p.items.length} items</p>
-                <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); deletePanel(p.id) }}>Eliminar</button>
-              </div>
-            </div>
-          ))}
+            )
+          })}
+          {shown.length === 0 && <p className="ratings-no-results">Ningún panel coincide con «{search}».</p>}
         </div>
-      )}
-
-      {showNewPanel ? (
-        <div className="ratings-new">
-          <input placeholder="Nombre del panel..." value={newPanelName} onChange={e => setNewPanelName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPanel()} />
-          <button onClick={addPanel}>Crear</button>
-          <button onClick={() => setShowNewPanel(false)}>Cancelar</button>
-        </div>
-      ) : (
-        <button className="btn btn-primary" onClick={() => setShowNewPanel(true)}>+ Nuevo panel</button>
       )}
     </div>
   )
 }
 
-function RatingsTable({ panel, items, onDeleteItem, onUpdateItem }: { panel: RatingPanel; items: RatingItem[]; onDeleteItem: (id: string, itemId: string) => void; onUpdateItem: (id: string, itemId: string, upd: Partial<RatingItem>) => void }) {
+// ---- Detalle de un panel: items, add-form, edición confirmada, filtros, imagen ----
+function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack: () => void; onUpdate: (upd: Partial<RatingPanel>) => void }) {
+  const confirm = useConfirm()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [search, setSearch] = useState('')
+  const [filterBrand, setFilterBrand] = useState('')
+  const [sortBy, setSortBy] = useState<'brand' | 'name' | 'm' | 'r'>('brand')
+  // Formulario de alta (requiere presionar el check para guardar).
+  const [naName, setNaName] = useState('')
+  const [naBrand, setNaBrand] = useState('')
+  const [naM, setNaM] = useState(5)
+  const [naR, setNaR] = useState(5)
+  // Edición inline (requiere confirmar con el check).
+  const [editId, setEditId] = useState<string | null>(null)
+  const [edName, setEdName] = useState('')
+  const [edBrand, setEdBrand] = useState('')
+  const [edM, setEdM] = useState(5)
+  const [edR, setEdR] = useState(5)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(panel.name)
+
+  const setItems = (items: RatingItem[]) => onUpdate({ items })
+
+  const addItem = () => {
+    if (!naName.trim()) return
+    const it: RatingItem = { id: 'ri-' + Date.now(), name: naName.trim(), brand: naBrand.trim() || undefined, mRating: clampRating(naM), rRating: clampRating(naR), createdAt: new Date().toLocaleDateString('es-AR') }
+    setItems([...panel.items, it])
+    setNaName(''); setNaBrand(''); setNaM(5); setNaR(5)
+  }
+  const removeItem = async (id: string) => {
+    const it = panel.items.find(x => x.id === id)
+    if (!await confirm({ title: 'Eliminar ítem', message: `¿Eliminar «${it?.name}»?`, confirmLabel: 'Eliminar' })) return
+    setItems(panel.items.filter(x => x.id !== id))
+  }
+  const startEdit = (it: RatingItem) => { setEditId(it.id); setEdName(it.name); setEdBrand(it.brand || ''); setEdM(it.mRating); setEdR(it.rRating) }
+  const commitEdit = () => {
+    if (!editId || !edName.trim()) return
+    setItems(panel.items.map(x => x.id === editId ? { ...x, name: edName.trim(), brand: edBrand.trim() || undefined, mRating: clampRating(edM), rRating: clampRating(edR) } : x))
+    setEditId(null)
+  }
+  const pickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (!f) return
+    const url = await uploadImage(f, 'ratings')
+    onUpdate({ image: url })
+    if (fileRef.current) fileRef.current.value = ''
+  }
+  const commitTitle = () => { if (titleDraft.trim()) onUpdate({ name: titleDraft.trim() }); setEditingTitle(false) }
+
+  const brands = Array.from(new Set(panel.items.map(i => i.brand).filter((b): b is string => !!b))).sort((a, b) => a.localeCompare(b, 'es'))
+  const q = search.trim().toLowerCase()
+  const filtered = panel.items
+    .filter(it => (!filterBrand || it.brand === filterBrand) && (!q || it.name.toLowerCase().includes(q) || (it.brand || '').toLowerCase().includes(q)))
+    .sort((a, b) => {
+      if (sortBy === 'm') return b.mRating - a.mRating
+      if (sortBy === 'r') return b.rRating - a.rRating
+      if (sortBy === 'name') return a.name.localeCompare(b.name, 'es')
+      // 'brand' (default): Marca → Nombre
+      return (a.brand || '￿').localeCompare(b.brand || '￿', 'es') || a.name.localeCompare(b.name, 'es')
+    })
+  const pm = mean(panel.items.map(i => i.mRating))
+  const pr = mean(panel.items.map(i => i.rRating))
+
   return (
-    <table className="ratings-table">
-      <thead>
-        <tr>
-          <th>Marca</th>
-          <th>Nombre</th>
-          <th>M (1-10)</th>
-          <th>R (1-10)</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map(it => (
-          <tr key={it.id}>
-            <td>{it.brand || '—'}</td>
-            <td>{it.name}</td>
-            <td><input type="number" min="1" max="10" value={it.mRating} onChange={e => onUpdateItem(panel.id, it.id, { mRating: Number(e.target.value) })} /></td>
-            <td><input type="number" min="1" max="10" value={it.rRating} onChange={e => onUpdateItem(panel.id, it.id, { rRating: Number(e.target.value) })} /></td>
-            <td><button className="btn btn-danger btn-sm" onClick={() => onDeleteItem(panel.id, it.id)}>Eliminar</button></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="ratings-detail">
+      <div className="ratings-detail-head" style={{ background: panel.image ? undefined : `linear-gradient(135deg, ${panel.color || '#6366f1'}, ${panel.color || '#6366f1'}88)` }}>
+        {panel.image && <img className="ratings-detail-bg" src={panel.image} alt="" />}
+        <div className="ratings-detail-head-inner">
+          <button className="ratings-back" onClick={onBack}><ArrowLeft size={15} /> Paneles</button>
+          {editingTitle ? (
+            <div className="ratings-title-edit">
+              <input autoFocus value={titleDraft} onChange={e => setTitleDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') commitTitle(); if (e.key === 'Escape') { setTitleDraft(panel.name); setEditingTitle(false) } }} />
+              <button className="ratings-btn-ok" onClick={commitTitle} title="Guardar"><Check size={14} /></button>
+            </div>
+          ) : (
+            <h3 className="ratings-detail-title" onDoubleClick={() => { setTitleDraft(panel.name); setEditingTitle(true) }} title="Doble clic para renombrar">{panel.name} <Edit3 size={12} /></h3>
+          )}
+          <div className="ratings-detail-avgs">
+            <span className="ratings-avg-m">M {fmtAvg(pm)}</span>
+            <span className="ratings-avg-r">R {fmtAvg(pr)}</span>
+            <button className="ratings-img-btn" onClick={() => fileRef.current?.click()} title="Cambiar imagen del panel"><ImageIcon size={14} /></button>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickImage} />
+          </div>
+        </div>
+      </div>
+
+      {/* Alta de ítem: se guarda al presionar el check */}
+      <div className="ratings-add-form">
+        <input className="ratings-in-name" placeholder="Nombre del ítem" value={naName} onChange={e => setNaName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} />
+        <input className="ratings-in-brand" placeholder="Marca (opcional)" value={naBrand} onChange={e => setNaBrand(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} list="ratings-brands" />
+        <datalist id="ratings-brands">{brands.map(b => <option key={b} value={b} />)}</datalist>
+        <label className="ratings-in-rating ratings-in-m">M <input type="number" min={1} max={10} value={naM} onChange={e => setNaM(clampRating(Number(e.target.value)))} /></label>
+        <label className="ratings-in-rating ratings-in-r">R <input type="number" min={1} max={10} value={naR} onChange={e => setNaR(clampRating(Number(e.target.value)))} /></label>
+        <button className="ratings-btn-ok" onClick={addItem} disabled={!naName.trim()} title="Agregar ítem"><Plus size={15} /></button>
+      </div>
+
+      {panel.items.length > 0 && (
+        <div className="ratings-detail-toolbar">
+          <div className="ratings-search">
+            <Search size={13} />
+            <input placeholder="Buscar ítem..." value={search} onChange={e => setSearch(e.target.value)} />
+            {search && <button className="ratings-search-clear" onClick={() => setSearch('')}><X size={12} /></button>}
+          </div>
+          <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)} className="ratings-brand-filter" title="Filtrar por marca">
+            <option value="">Todas las marcas</option>
+            {brands.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)} className="ratings-sort" title="Ordenar por">
+            <option value="brand">Orden: Marca</option>
+            <option value="name">Orden: Nombre</option>
+            <option value="m">Orden: M (mayor)</option>
+            <option value="r">Orden: R (mayor)</option>
+          </select>
+        </div>
+      )}
+
+      {panel.items.length === 0 ? (
+        <div className="ratings-empty"><Star size={26} /><p>Sin ítems. Agregá el primero arriba.</p></div>
+      ) : (
+        <div className="ratings-table-wrap">
+          <table className="ratings-table">
+            <thead>
+              <tr>
+                <th className="ratings-th-brand"><Tag size={11} /> Marca</th>
+                <th>Nombre</th>
+                <th className="ratings-th-num">M</th>
+                <th className="ratings-th-num">R</th>
+                <th className="ratings-th-act"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(it => editId === it.id ? (
+                <tr key={it.id} className="ratings-row-edit">
+                  <td><input value={edBrand} onChange={e => setEdBrand(e.target.value)} placeholder="Marca" list="ratings-brands" /></td>
+                  <td><input value={edName} onChange={e => setEdName(e.target.value)} placeholder="Nombre" onKeyDown={e => e.key === 'Enter' && commitEdit()} /></td>
+                  <td><input type="number" min={1} max={10} value={edM} onChange={e => setEdM(clampRating(Number(e.target.value)))} /></td>
+                  <td><input type="number" min={1} max={10} value={edR} onChange={e => setEdR(clampRating(Number(e.target.value)))} /></td>
+                  <td className="ratings-row-actions">
+                    <button className="ratings-btn-ok" onClick={commitEdit} disabled={!edName.trim()} title="Guardar cambios"><Check size={13} /></button>
+                    <button className="ratings-btn-cancel" onClick={() => setEditId(null)} title="Cancelar"><X size={13} /></button>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={it.id}>
+                  <td className="ratings-cell-brand">{it.brand || <span className="ratings-nobrand">—</span>}</td>
+                  <td className="ratings-cell-name">{it.name}</td>
+                  <td className="ratings-cell-num"><span className="ratings-badge ratings-badge-m">{it.mRating}</span></td>
+                  <td className="ratings-cell-num"><span className="ratings-badge ratings-badge-r">{it.rRating}</span></td>
+                  <td className="ratings-row-actions">
+                    <button className="ratings-icon-btn" onClick={() => startEdit(it)} title="Editar"><Edit3 size={12} /></button>
+                    <button className="ratings-icon-btn danger" onClick={() => removeItem(it.id)} title="Eliminar"><Trash2 size={12} /></button>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && <tr><td colSpan={5} className="ratings-no-results">Ningún ítem coincide con los filtros.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   )
 }
 

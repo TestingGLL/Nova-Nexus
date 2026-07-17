@@ -1553,13 +1553,8 @@ function WishlistTab() {
   const ordered = wishSort === 'alpha' ? [...pending].sort((a, b) => a.name.localeCompare(b.name, 'es')) : pending
   const grouped = cats.reduce<Record<string, WishItem[]>>((acc, c) => { acc[c] = ordered.filter(i => i.category === c); return acc }, {})
 
-  // Agrupar compras conseguidas por mes (desde doneAt)
-  const achievedByMonth = achieved.reduce<Record<string, WishItem[]>>((acc, item) => {
-    const month = item.doneAt ? new Date(item.doneAt).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }) : 'Sin fecha'
-    if (!acc[month]) acc[month] = []
-    acc[month].push(item)
-    return acc
-  }, {})
+  // Las conseguidas se dividen por categoría de origen (General, Tecnología, etc.).
+  const achievedByCat = cats.reduce<Record<string, WishItem[]>>((acc, c) => { acc[c] = achieved.filter(i => i.category === c); return acc }, {})
 
   return (
     <div className="wishlist-content wishlist-split">
@@ -1623,18 +1618,22 @@ function WishlistTab() {
           <Trophy size={16} /> Compras Conseguidas {achieved.length > 0 && `(${achieved.length})`}
         </div>
         {achieved.length === 0 ? (
-          <p className="wishlist-achieved-empty">Cuando marques una compra, aparece acá.</p>
+          <p className="wishlist-achieved-empty">Cuando marques una compra, aparece acá dividida por categoría.</p>
         ) : (
-          <div className="wishlist-achieved-by-month">
-            {Object.entries(achievedByMonth).map(([month, items]) => (
-              <div key={month} className="wishlist-month-group">
-                <div className="wishlist-month-header">{month}</div>
+          <div className="wishlist-achieved-by-cat">
+            {cats.filter(c => achievedByCat[c]?.length > 0).map(c => (
+              <div key={c} className="wishlist-achieved-cat-group">
+                <div className="wishlist-achieved-cat-header">
+                  <span className="wishlist-achieved-dot" style={{ background: wishCatColors[c] || '#f59e0b' }} />
+                  <span className="wishlist-achieved-cat-name">{c}</span>
+                  <span className="wishlist-achieved-cat-count">{achievedByCat[c].length}</span>
+                </div>
                 <div className="wishlist-achieved-items-list">
-                  {items.map(item => (
+                  {achievedByCat[c].map(item => (
                     <div key={item.id} className="wishlist-achieved-item-compact">
-                      <span className="wishlist-achieved-dot" style={{ background: wishCatColors[item.category] || '#f59e0b' }} />
                       <span className="wishlist-achieved-name-compact">{item.name}</span>
-                      <span className="wishlist-achieved-cat">{item.category}</span>
+                      {item.doneAt && <span className="wishlist-achieved-when">{new Date(item.doneAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>}
+                      <button className="wishlist-achieved-undo-mini" onClick={() => toggle(item.id)} title="Volver a la lista"><RotateCcw size={11} /></button>
                     </div>
                   ))}
                 </div>

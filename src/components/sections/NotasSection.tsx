@@ -80,7 +80,7 @@ export default function NotasSection() {
   const [seedVersion, setSeedVersion] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFolder, setActiveFolder] = useState<string | null>('__all')
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['__all']))
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => { try { const s = localStorage.getItem('nn-notas-folders-expanded'); return new Set(s ? JSON.parse(s) : ['__all']) } catch { return new Set(['__all']) } })
   const [tagInput, setTagInput] = useState('')
   const [showTagInput, setShowTagInput] = useState(false)
   const confirm = useConfirm()
@@ -99,6 +99,8 @@ export default function NotasSection() {
 
   useEffect(() => { saveNotes(notes) }, [notes])
   useEffect(() => { saveFolders(folders) }, [folders])
+  // Persistir qué carpetas quedaron desplegadas (se mantiene al cambiar de pestaña/cerrar).
+  useEffect(() => { try { localStorage.setItem('nn-notas-folders-expanded', JSON.stringify([...expandedFolders])) } catch {} }, [expandedFolders])
   useEffect(() => { if (showTagInput) tagInputRef.current?.focus() }, [showTagInput])
   useEffect(() => { if (showNewFolder) newFolderRef.current?.focus() }, [showNewFolder])
 

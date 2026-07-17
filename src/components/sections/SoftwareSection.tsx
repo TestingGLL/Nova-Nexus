@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, ChevronDown, ChevronRight, Image as ImageIcon, Film, Music, File as FileIcon } from 'lucide-react'
+import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, Image as ImageIcon, Film, Music, File as FileIcon } from 'lucide-react'
 import { useToast } from '../Toast'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { copyToClipboard } from '../../lib/clipboard'
@@ -299,7 +299,6 @@ function TransferenciasTab() {
   const [pcMessages, setPcMessages] = useState<{ id: string; text: string; ts: number }[]>([])
   const [pcText, setPcText] = useState('')
   const [dragOver, setDragOver] = useState(false)
-  const [receivedOpen, setReceivedOpen] = useState(true)
   const [qrOpen, setQrOpen] = useState(false)               // modal del QR ampliado
   const [chatFilter, setChatFilter] = useState<'all' | 'received' | 'sent'>('all')  // filtro del chat único
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -460,67 +459,32 @@ function TransferenciasTab() {
         </div>
       )}
       <div className="transfer-header">
-        <div className="transfer-status"><span className="transfer-dot" /> Servidor activo</div>
-        <button className="system-btn-sm danger" onClick={stop}>Detener</button>
-      </div>
-
-      <div className="transfer-grid">
-        <div className="card transfer-qr-card">
-          <div className="transfer-qr-head">
-            <h4><QrCode size={14} /> Escaneá con tu celular</h4>
-            {/* El QR permanece oculto: se muestra ampliado en un desplegable al tocar el botón. */}
-            <button className="transfer-qr-icon-btn" onClick={() => setQrOpen(true)} title="Mostrar el código QR" disabled={!qrDataUrl}>
-              <QrCode size={18} />
-            </button>
-          </div>
-          <span className="transfer-url">{ip}:{port}</span>
-          <p className="transfer-hint">Tocá el icono QR y escanealo con la cámara de tu Android.</p>
-        </div>
-
-        <div className="card transfer-shared-card">
-          <div className="transfer-card-head">
-            <h4>📤 Compartir desde la PC</h4>
-            <button className="system-btn-sm" onClick={addFiles}><Plus size={12} /> Agregar</button>
-          </div>
-          {shared.length === 0 && <p className="transfer-empty">Arrastrá archivos o imágenes a cualquier parte, o hacé clic en Agregar.</p>}
-          <div className="transfer-file-list">
-            {shared.map(f => (
-              <div key={f.id} className="transfer-file">
-                {fileExt(f.name) && <span className="transfer-file-ext">{fileExt(f.name)}</span>}
-                <span className="transfer-file-name">{f.name}</span>
-                <span className="transfer-file-size">{fmt(f.size)}</span>
-                <button className="queue-remove" onClick={() => removeFile(f.id)}><X size={12} /></button>
-              </div>
-            ))}
-          </div>
-          <div className="transfer-sendtext">
-            <input value={pcText} onChange={e => setPcText(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendText()} placeholder="Enviar texto al celular…" />
-            <button className="system-btn-sm" onClick={sendText} disabled={!pcText.trim()}><Send size={12} /> Enviar</button>
-          </div>
+        <div className="transfer-status"><span className="transfer-dot" /> Servidor activo · <code className="transfer-header-url">{ip}:{port}</code></div>
+        <div className="transfer-header-actions">
+          <button className="transfer-qr-icon-btn" onClick={() => setQrOpen(true)} title="Mostrar código QR para escanear con el celular" disabled={!qrDataUrl}>
+            <QrCode size={16} />
+          </button>
+          <button className="system-btn-sm danger" onClick={stop}>Detener</button>
         </div>
       </div>
 
+      {/* Chat único: compartir (enviar) y recibir conviven en la misma conversación. */}
       <div className="card transfer-received-card">
         <div className="transfer-card-head">
-          <button className="transfer-received-toggle" onClick={() => setReceivedOpen(o => !o)}>
-            {receivedOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            <h4><MessageSquare size={14} /> Chat ({chat.length})</h4>
-          </button>
+          <h4><MessageSquare size={14} /> Chat ({chat.length})</h4>
           <div className="transfer-received-actions">
             {received.some(f => f.type !== 'text') && <button className="system-btn-sm" onClick={downloadAll}><Download size={12} /> Descargar todos</button>}
             {dir && <button className="system-btn-sm" onClick={openFolder}><FolderOpen size={12} /> Abrir carpeta</button>}
             <button className="system-btn-sm danger" onClick={clearHistory}><Trash2 size={12} /> Borrar historial</button>
           </div>
         </div>
-        {receivedOpen && (
-          <div className="transfer-chat-filter">
-            <button className={chatFilter === 'all' ? 'active' : ''} onClick={() => setChatFilter('all')}>Todos</button>
-            <button className={chatFilter === 'received' ? 'active' : ''} onClick={() => setChatFilter('received')}>Recibidos</button>
-            <button className={chatFilter === 'sent' ? 'active' : ''} onClick={() => setChatFilter('sent')}>Enviados</button>
-          </div>
-        )}
-        {receivedOpen && visibleChat.length === 0 && <p className="transfer-empty">{chat.length === 0 ? 'Todavía no hay mensajes. Los textos y archivos enviados y recibidos aparecen acá; se limpian a las 2 horas.' : 'Sin mensajes para este filtro.'}</p>}
-        {receivedOpen && <div className="transfer-file-list transfer-chat-style">
+        <div className="transfer-chat-filter">
+          <button className={chatFilter === 'all' ? 'active' : ''} onClick={() => setChatFilter('all')}>Todos</button>
+          <button className={chatFilter === 'received' ? 'active' : ''} onClick={() => setChatFilter('received')}>Recibidos</button>
+          <button className={chatFilter === 'sent' ? 'active' : ''} onClick={() => setChatFilter('sent')}>Enviados</button>
+        </div>
+        {visibleChat.length === 0 && <p className="transfer-empty">{chat.length === 0 ? 'Todavía no hay mensajes. Adjuntá un archivo o escribí un texto abajo: lo enviado y lo recibido aparece acá y se limpia a las 2 horas.' : 'Sin mensajes para este filtro.'}</p>}
+        <div className="transfer-file-list transfer-chat-style">
           {visibleChat.map(entry => (
             <div key={entry.id} className={`transfer-msg ${entry.dir}`}>
               {entry.kind === 'text' ? (
@@ -542,14 +506,21 @@ function TransferenciasTab() {
                     <span className="transfer-msg-meta">
                       {fileExt(entry.file.name || '') && <span className="transfer-file-ext-sm">{fileExt(entry.file.name || '')}</span>}
                       {fmt(entry.file.size || 0)} · {chatTime(entry.ts)}
+                      {entry.scope === 'shared' && <button className="transfer-copy-btn" onClick={() => removeFile(entry.file.id!)} title="Dejar de compartir">Quitar</button>}
                     </span>
                   </div>
                 </div>
               )}
             </div>
           ))}
-        </div>}
-        {receivedOpen && dir && <p className="transfer-dir">Guardado en: <code>{dir}</code></p>}
+        </div>
+        {/* Composer: adjuntar archivo + enviar texto, todo al mismo chat */}
+        <div className="transfer-composer">
+          <button className="transfer-attach-btn" onClick={addFiles} title="Adjuntar archivo para compartir"><Plus size={16} /></button>
+          <input value={pcText} onChange={e => setPcText(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendText()} placeholder="Escribí un mensaje o adjuntá un archivo…" />
+          <button className="transfer-send-btn" onClick={sendText} disabled={!pcText.trim()} title="Enviar"><Send size={14} /></button>
+        </div>
+        {dir && <p className="transfer-dir">Guardado en: <code>{dir}</code></p>}
       </div>
 
       {qrOpen && qrDataUrl && (

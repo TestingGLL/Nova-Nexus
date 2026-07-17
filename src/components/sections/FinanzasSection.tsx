@@ -74,17 +74,22 @@ function AlquilerView() {
   const [editingMaint, setEditingMaint] = useState<string | null>(null)
   const [newExtraName, setNewExtraName] = useState('')
   const [newExtraAmount, setNewExtraAmount] = useState('')
-  const [expandedSvc, setExpandedSvc] = useState<string | null>(null)
+  const [expandedSvc, setExpandedSvc] = useState<string | null>(() => { try { return localStorage.getItem('nn-rent-expanded-svc') || null } catch { return null } })
   const [histFilter, setHistFilter] = useState<'all' | 'alquiler' | 'servicio'>('all')
+  // Mantener el servicio desplegado al cambiar de pestaña o cerrar la app.
+  useEffect(() => { try { if (expandedSvc) localStorage.setItem('nn-rent-expanded-svc', expandedSvc); else localStorage.removeItem('nn-rent-expanded-svc') } catch {} }, [expandedSvc])
 
   const save = (d: RentData) => { setData(d); saveRent(d) }
-  const totalServices = data.categories.reduce((a, c) => a + c.amount, 0)
+  // Servicios marcados "No tomar para estadísticas" no influyen en dinero/gastos
+  // (siguen guardados y aparecen en la lista y en el widget de Servicios para pagar).
+  const statServices = data.categories.filter(c => !c.excludeFromStats)
+  const totalServices = statServices.reduce((a, c) => a + c.amount, 0)
   const totalExtras = data.extras.reduce((a, e) => a + e.amount, 0)
   const grandTotal = data.monthlyRent + totalServices + totalExtras
   const perPerson = data.people > 1 ? grandTotal / data.people : 0
   const themeColor = data.themeColor || '#6366f1'
-  // Distribution now includes the rent value itself.
-  const distItems = [{ id: '__rent', name: 'Alquiler', amount: data.monthlyRent, color: themeColor }, ...data.categories]
+  // Distribution now includes the rent value itself (excluye los no-estadísticos).
+  const distItems = [{ id: '__rent', name: 'Alquiler', amount: data.monthlyRent, color: themeColor }, ...statServices]
   const maxAmount = Math.max(...distItems.map(c => c.amount), 1)
 
   // Food-budget dashboard: how much of the total budget is left for food, and
@@ -109,7 +114,7 @@ function AlquilerView() {
   useEffect(() => {
     if (!data.activePeriod) { save({ ...data, activePeriod: currentPeriod }); return }
     if (data.activePeriod !== currentPeriod) {
-      const svc = data.categories.reduce((a, c) => a + c.amount, 0)
+      const svc = data.categories.filter(c => !c.excludeFromStats).reduce((a, c) => a + c.amount, 0)
       const ext = data.extras.reduce((a, e) => a + e.amount, 0)
       const total = data.monthlyRent + svc + ext
       if (total > 0) {
@@ -295,7 +300,7 @@ function AlquilerView() {
                 {splitOpen && (
                   <div className="alquiler-split-detail">
                     <div className="alquiler-split-row"><span>Alquiler</span><span>${(data.monthlyRent / data.people).toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span></div>
-                    {data.categories.filter(c => c.amount > 0).map(c => (
+                    {statServices.filter(c => c.amount > 0).map(c => (
                       <div key={c.id} className="alquiler-split-row"><span style={{ color: c.color }}>{c.name}</span><span>${(c.amount / data.people).toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span></div>
                     ))}
                   </div>
@@ -351,6 +356,7 @@ function AlquilerView() {
                   </button>
                   <div className="alquiler-cat-dot" style={{ background: cat.color }} />
                   <input className="svc-name-input" value={cat.name} onChange={e => updateCategory(cat.id, { name: e.target.value })} />
+                  {cat.excludeFromStats && <span className="svc-nostat-badge" title="No se toma para estadísticas">sin stats</span>}
                   <div className="alquiler-cat-input-wrap">
                     <span>$</span>
                     <input type="number" value={cat.amount || ''} onChange={e => updateCategory(cat.id, { amount: Number(e.target.value) })} onBlur={e => setServiceAmount(cat.id, Number(e.target.value))} placeholder="0" />
@@ -787,7 +793,7 @@ function IngresosView() {
   // Totals of each associable expense tab (read once from their keys on mount,
   // not on every keystroke/render).
   const gastosTotal = useMemo(() => loadOwnExpenses().reduce((a, e) => a + (e.amount || 0), 0), [])
-  const alquilerTotal = useMemo(() => { const d = loadRent(); return d.monthlyRent + d.categories.reduce((a, c) => a + c.amount, 0) + d.extras.reduce((a, e) => a + e.amount, 0) }, [])
+  const alquilerTotal = useMemo(() => { const d = loadRent(); return d.monthlyRent + d.categories.filter(c => !c.excludeFromStats).reduce((a, c) => a + c.amount, 0) + d.extras.reduce((a, e) => a + e.amount, 0) }, [])
   // USD deduction applies ONLY to the monthly USD expenses ("Gastos fijos"),
   // not to pendientes ni proyectos futuros; normalized to a monthly cost.
   const usdTotal = useMemo(() => loadUsdExpenses().filter(e => e.tab === 'fijos').reduce((a, e) => a + e.amountUsd * (usdPayTypes.find(p => p.v === e.payType)?.perMonth || 0), 0), [])

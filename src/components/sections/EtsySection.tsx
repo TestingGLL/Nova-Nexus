@@ -926,6 +926,8 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
   const [ngColor, setNgColor] = useState(CREACION_GROUP_COLORS[0])
   const [ngTag, setNgTag] = useState('')       // etiqueta existente elegida
   const [ngNewTag, setNgNewTag] = useState('')  // etiqueta nueva escrita
+  const [query, setQuery] = useState('')
+  const [filterTag, setFilterTag] = useState<string | null>(null)
   const confirm = useConfirm()
 
   const save = (p: PromptPanel[]) => onUpdate({ ...store, [fields.panels]: p })
@@ -973,15 +975,51 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
   }
 
   // Solo grupos de nivel superior; los subgrupos los renderiza cada tarjeta padre.
-  const topGroups = [...groups].filter(g => !g.parentId || !groups.some(x => x.id === g.parentId)).sort((a, b) => byName(a.name, b.name))
-  const ungrouped = panels.filter(p => !p.groupId || !groups.some(g => g.id === p.groupId))
+  const allTopGroups = [...groups].filter(g => !g.parentId || !groups.some(x => x.id === g.parentId)).sort((a, b) => byName(a.name, b.name))
+  const allUngrouped = panels.filter(p => !p.groupId || !groups.some(g => g.id === p.groupId))
+
+  // Búsqueda + filtro por etiqueta (mejora de UX de la página).
+  const q = query.trim().toLowerCase()
+  // Un grupo (o cualquiera de sus descendientes) coincide con el texto si su nombre
+  // o el título de alguno de sus paneles contiene la búsqueda.
+  const descendantIds = (rootId: string): string[] => {
+    const kids = groups.filter(g => g.parentId === rootId)
+    return [rootId, ...kids.flatMap(k => descendantIds(k.id))]
+  }
+  const groupMatchesQuery = (g: CreacionGroup): boolean => {
+    if (!q) return true
+    const ids = descendantIds(g.id)
+    if (ids.some(id => (groups.find(x => x.id === id)?.name || '').toLowerCase().includes(q))) return true
+    return panels.some(p => p.groupId && ids.includes(p.groupId) && p.title.toLowerCase().includes(q))
+  }
+  const topGroups = allTopGroups.filter(g => (!filterTag || g.tag === filterTag) && groupMatchesQuery(g))
+  const ungrouped = allUngrouped.filter(p => (!filterTag) && (!q || p.title.toLowerCase().includes(q)))
+  const hasFilter = !!q || !!filterTag
+  const noMatches = hasFilter && topGroups.length === 0 && ungrouped.length === 0
 
   return (
     <div className="creaciones-tab">
       <div className="creaciones-toolbar">
         <button className="articles-add-btn-big" onClick={() => setShowNew(s => !s)}><Plus size={14} /> Nuevo panel</button>
         <button className="articles-add-btn-secondary" onClick={() => setShowNewGroup(s => !s)}><Layers size={14} /> Nuevo grupo</button>
+        <span className="creaciones-count">{panels.length} panel{panels.length === 1 ? '' : 'es'} · {groups.length} grupo{groups.length === 1 ? '' : 's'}</span>
       </div>
+      {(panels.length > 0 || groups.length > 0) && (
+        <div className="creaciones-filterbar">
+          <div className="creaciones-search">
+            <Search size={13} />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar panel o grupo..." />
+            {query && <button className="creaciones-search-clear" onClick={() => setQuery('')}><X size={12} /></button>}
+          </div>
+          {tags.length > 0 && (
+            <div className="creaciones-tag-chips">
+              {tags.map(t => (
+                <button key={t} className={`creaciones-tag-chip ${filterTag === t ? 'active' : ''}`} onClick={() => setFilterTag(filterTag === t ? null : t)}>{t}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {showNew && (<div className="card creaciones-new"><input value={newPanelTitle} onChange={e => setNewPanelTitle(e.target.value)} placeholder="Título del panel..." onKeyDown={e => e.key === 'Enter' && addPanel()} autoFocus /><button className="modal-submit" onClick={addPanel} disabled={!newPanelTitle.trim()}>Crear</button></div>)}
       {showNewGroup && (
         <div className="card creaciones-new-group">
@@ -1001,6 +1039,7 @@ function CreacionesTab({ store, onUpdate, fields = CREACIONES_FIELDS }: { store:
         </div>
       )}
       {panels.length === 0 && groups.length === 0 && !showNew && !showNewGroup && <div className="articles-empty"><Sparkles size={24} /><p>Registrá tus prompts de creación</p></div>}
+      {noMatches && <div className="articles-empty"><Search size={22} /><p>Nada coincide con la búsqueda o el filtro.</p></div>}
       {topGroups.map(g => (
         <CreacionGroupCard key={g.id} group={g} tags={tags} groups={groups} save={save} panels={panels} onUpdateGroup={updateGroup} onRemoveGroup={removeGroup} onDuplicateGroup={duplicateGroup} onAddTag={addTagToPool} onAddSubgroup={addSubgroup} />
       ))}
