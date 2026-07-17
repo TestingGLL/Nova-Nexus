@@ -1512,7 +1512,6 @@ function WishlistTab() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(() => { try { const s = localStorage.getItem('nn-wishlist-collapsed'); return new Set(s ? JSON.parse(s) : []) } catch { return new Set() } })
   const [wishSort, setWishSort] = useState<'manual' | 'alpha'>(() => { try { return localStorage.getItem('nn-wishlist-sort') === 'manual' ? 'manual' : 'alpha' } catch { return 'alpha' } })
-  const [showAchieved, setShowAchieved] = useState(false)
   const dragWish = useRef<string | null>(null)
   const [dragOverWish, setDragOverWish] = useState<string | null>(null)
   const cats = ['General', 'Tecnología', 'Ropa', 'Hogar', 'Juegos', 'Otros']
@@ -1554,9 +1553,18 @@ function WishlistTab() {
   const ordered = wishSort === 'alpha' ? [...pending].sort((a, b) => a.name.localeCompare(b.name, 'es')) : pending
   const grouped = cats.reduce<Record<string, WishItem[]>>((acc, c) => { acc[c] = ordered.filter(i => i.category === c); return acc }, {})
 
+  // Agrupar compras conseguidas por mes (desde doneAt)
+  const achievedByMonth = achieved.reduce<Record<string, WishItem[]>>((acc, item) => {
+    const month = item.doneAt ? new Date(item.doneAt).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }) : 'Sin fecha'
+    if (!acc[month]) acc[month] = []
+    acc[month].push(item)
+    return acc
+  }, {})
+
   return (
-    <div className="wishlist-content">
-      <div className="wishlist-add">
+    <div className="wishlist-content wishlist-split">
+      <div className="wishlist-main">
+        <div className="wishlist-add">
         <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Artículo que deseo comprar (pegá varios separados por coma)..." onKeyDown={e => e.key === 'Enter' && add()} onPaste={onPasteWish} />
         <select value={newCat} onChange={e => setNewCat(e.target.value)}>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>
         <button onClick={add} disabled={!newName.trim()}><Plus size={14} /></button>
@@ -1569,9 +1577,6 @@ function WishlistTab() {
               <button className={wishSort === 'alpha' ? 'active' : ''} onClick={() => setWishSortMode('alpha')} title="Orden alfabético">A-Z</button>
             </div>
           )}
-          <button className="wishlist-trophy-btn" onClick={() => setShowAchieved(true)} title="Ver las compras que ya conseguiste">
-            <Trophy size={13} /> Compras Conseguidas{achieved.length ? ` (${achieved.length})` : ''}
-          </button>
         </div>
       )}
       {cats.filter(c => grouped[c]?.length > 0).map(c => {
@@ -1609,33 +1614,35 @@ function WishlistTab() {
       )})}
       {items.length === 0 && <div className="shopping-empty"><ShoppingBag size={28} /><p>Sin artículos en la lista de deseos</p></div>}
       {items.length > 0 && pending.length === 0 && (
-        <div className="shopping-empty"><Trophy size={28} /><p>¡Conseguiste todo lo que querías!</p><p className="shopping-empty-hint">Miralas en «Compras Conseguidas» 🏆</p></div>
+        <div className="shopping-empty"><Trophy size={28} /><p>¡Conseguiste todo lo que querías!</p><p className="shopping-empty-hint">Miralas al costado 🏆</p></div>
       )}
+      </div>
 
-      {showAchieved && (
-        <div className="wishlist-achieved-backdrop" onClick={() => setShowAchieved(false)}>
-          <div className="wishlist-achieved-drawer" onClick={e => e.stopPropagation()}>
-            <div className="wishlist-achieved-head">
-              <span className="wishlist-achieved-title"><Trophy size={18} /> Compras Conseguidas</span>
-              <button className="wishlist-achieved-close" onClick={() => setShowAchieved(false)}><X size={16} /></button>
-            </div>
-            <p className="wishlist-achieved-sub">{achieved.length ? `${achieved.length} ${achieved.length === 1 ? 'compra lograda' : 'compras logradas'}. ¡Bien ahí! 🎉` : 'Todavía no conseguiste ninguna. Cuando marques una compra, aparece acá.'}</p>
-            <div className="wishlist-achieved-list">
-              {achieved.map(item => (
-                <div key={item.id} className="wishlist-achieved-item">
-                  <span className="wishlist-achieved-dot" style={{ background: wishCatColors[item.category] || '#f59e0b' }} />
-                  <div className="wishlist-achieved-info">
-                    <span className="wishlist-achieved-name">{item.name}</span>
-                    {item.doneAt && <span className="wishlist-achieved-date">{new Date(item.doneAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
-                  </div>
-                  <button className="wishlist-achieved-undo" onClick={() => toggle(item.id)} title="Volver a la lista"><RotateCcw size={13} /></button>
-                  <button className="wishlist-achieved-del" onClick={() => remove(item.id)} title="Eliminar"><Trash2 size={13} /></button>
-                </div>
-              ))}
-            </div>
-          </div>
+      <div className="wishlist-achieved-side">
+        <div className="wishlist-achieved-side-header">
+          <Trophy size={16} /> Compras Conseguidas {achieved.length > 0 && `(${achieved.length})`}
         </div>
-      )}
+        {achieved.length === 0 ? (
+          <p className="wishlist-achieved-empty">Cuando marques una compra, aparece acá.</p>
+        ) : (
+          <div className="wishlist-achieved-by-month">
+            {Object.entries(achievedByMonth).map(([month, items]) => (
+              <div key={month} className="wishlist-month-group">
+                <div className="wishlist-month-header">{month}</div>
+                <div className="wishlist-achieved-items-list">
+                  {items.map(item => (
+                    <div key={item.id} className="wishlist-achieved-item-compact">
+                      <span className="wishlist-achieved-dot" style={{ background: wishCatColors[item.category] || '#f59e0b' }} />
+                      <span className="wishlist-achieved-name-compact">{item.name}</span>
+                      <span className="wishlist-achieved-cat">{item.category}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

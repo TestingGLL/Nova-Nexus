@@ -9,7 +9,7 @@ import './FinanzasSection.css'
 // ============ DATA MODEL ============
 interface PriceChange { id: string; date: string; prevAmount: number; amount: number }
 interface ServiceCustomField { id: string; title: string; desc: string }
-interface ServiceRecord { id: string; name: string; amount: number; color: string; dueDay: number; history: PriceChange[]; company?: string; account?: string; dni?: string; contact?: string; fields?: ServiceCustomField[] }
+interface ServiceRecord { id: string; name: string; amount: number; color: string; dueDay: number; history: PriceChange[]; company?: string; account?: string; dni?: string; contact?: string; fields?: ServiceCustomField[]; excludeFromStats?: boolean }
 type MaintType = 'revisar' | 'arreglar' | 'obligacion'
 interface MaintenanceItem { id: string; text: string; type: MaintType; done: boolean }
 const maintColors: Record<MaintType, string> = { revisar: '#3b82f6', arreglar: '#f59e0b', obligacion: '#ef4444' }
@@ -366,6 +366,10 @@ function AlquilerView() {
                       <label className="svc-info-field"><span>DNI del titular</span><input value={cat.dni || ''} onChange={e => updateCategory(cat.id, { dni: e.target.value })} placeholder="DNI" /></label>
                       <label className="svc-info-field"><span>N° de contacto</span><input value={cat.contact || ''} onChange={e => updateCategory(cat.id, { contact: e.target.value })} placeholder="Teléfono" /></label>
                     </div>
+                    <label className="svc-checkbox">
+                      <input type="checkbox" checked={cat.excludeFromStats || false} onChange={e => updateCategory(cat.id, { excludeFromStats: e.target.checked })} />
+                      <span>No tomar para estadísticas</span>
+                    </label>
                     <div className="svc-custom-fields">
                       <div className="svc-custom-head"><span className="svc-history-label">Campos personalizados</span><button className="svc-field-add" onClick={() => addSvcField(cat.id)}><Plus size={11} /> Agregar campo</button></div>
                       {(cat.fields || []).map(f => (

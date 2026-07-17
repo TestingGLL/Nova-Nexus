@@ -1461,8 +1461,11 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
     // Warn if a client with the same name AND country already exists.
     const dupe = clients.some(c => c.name.trim().toLowerCase() === name.trim().toLowerCase() && c.country === country)
     if (dupe && !await confirm({ title: 'Cliente duplicado', message: `Ya existe un cliente llamado «${name.trim()}» en ${country}. ¿Crearlo de todos modos?`, confirmLabel: 'Crear igual' })) return
-    const c: ClientInfo = { id: 'cli-' + Date.now(), name: name.trim(), gender, country, favGroupId: favGroupId || undefined, recurring: false, createdTs: Date.now() }
-    onUpdate({ ...store, clientList: [c, ...clients] }); setName('')
+    const clientName = name.trim()
+    const c: ClientInfo = { id: 'cli-' + Date.now(), name: clientName, gender, country, favGroupId: favGroupId || undefined, recurring: false, createdTs: Date.now() }
+    onUpdate({ ...store, clientList: [c, ...clients] })
+    await confirm({ title: '✓ Cliente creado', message: `"${clientName}" ha sido agregado correctamente`, confirmLabel: 'OK' })
+    setName('')
   }
   const remove = async (id: string) => {
     const c = clients.find(x => x.id === id)

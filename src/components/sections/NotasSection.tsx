@@ -63,6 +63,16 @@ function fmtTs(iso?: string): string {
   try { return new Date(iso).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) } catch { return '—' }
 }
 
+// Parsea un createdAt con formato "17/7/2026" a Date (asume el locale es es-AR).
+function parseNoteDate(dateStr: string): Date {
+  try {
+    const [day, month, year] = dateStr.split('/').map(Number)
+    return new Date(year, month - 1, day, 0, 0, 0, 0)
+  } catch {
+    return new Date()
+  }
+}
+
 export default function NotasSection() {
   const [notes, setNotes] = useState<Note[]>(loadNotes)
   const [folders, setFolders] = useState<NoteFolder[]>(loadFolders)
@@ -75,6 +85,8 @@ export default function NotasSection() {
   const [showTagInput, setShowTagInput] = useState(false)
   const confirm = useConfirm()
   const [filterTag, setFilterTag] = useState<string | null>(null)
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [dragNoteId, setDragNoteId] = useState<string | null>(null)
@@ -201,6 +213,18 @@ export default function NotasSection() {
   const filtered = notes.filter(n => {
     if (filterTag && !n.tags.includes(filterTag)) return false
     if (activeFolder && activeFolder !== '__all' && n.folderId !== activeFolder) return false
+    // Filtrado por fecha (createdAt es "17/7/2026" formato)
+    if (filterDateFrom) {
+      const fromDate = new Date(filterDateFrom)
+      const nDate = parseNoteDate(n.createdAt)
+      if (nDate < fromDate) return false
+    }
+    if (filterDateTo) {
+      const toDate = new Date(filterDateTo)
+      toDate.setHours(23, 59, 59, 999)
+      const nDate = parseNoteDate(n.createdAt)
+      if (nDate > toDate) return false
+    }
     if (!searchQuery.trim()) return true
     const q = searchQuery.toLowerCase()
     return n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q) || n.tags.some(t => t.includes(q))
@@ -228,6 +252,32 @@ export default function NotasSection() {
             <input className="notas-search" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar notas..." />
           </div>
           <button className="notas-add" onClick={addNote} title="Nueva nota"><Plus size={18} /></button>
+        </div>
+
+        <div className="notas-date-filter">
+          <input
+            type="date"
+            value={filterDateFrom}
+            onChange={e => setFilterDateFrom(e.target.value)}
+            placeholder="Desde..."
+            title="Filtrar desde esta fecha"
+          />
+          <input
+            type="date"
+            value={filterDateTo}
+            onChange={e => setFilterDateTo(e.target.value)}
+            placeholder="Hasta..."
+            title="Filtrar hasta esta fecha"
+          />
+          {(filterDateFrom || filterDateTo) && (
+            <button
+              onClick={() => { setFilterDateFrom(''); setFilterDateTo('') }}
+              title="Limpiar filtro de fechas"
+              style={{ padding: '2px 8px', fontSize: '0.8em' }}
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         <div className="notas-folders">
@@ -300,7 +350,10 @@ export default function NotasSection() {
             >
               <span className="nota-title">{n.title}</span>
               <div className="nota-meta">
-                <span className="nota-date">{n.createdAt}</span>
+                <span className="nota-date">
+                  {n.createdAt}
+                  {n.lastSavedAt && ` · Editado: ${fmtTs(n.lastSavedAt)}`}
+                </span>
                 {n.tags.length > 0 && <span className="nota-tag-dots">{n.tags.map(t => <span key={t} className="nota-tag-dot" style={{ background: tagColor(t) }} title={t} />)}</span>}
               </div>
             </div>

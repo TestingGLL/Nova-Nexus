@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, ChevronDown, ChevronRight, Maximize2, Image as ImageIcon, Film, Music, File as FileIcon } from 'lucide-react'
+import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, ChevronDown, ChevronRight, Image as ImageIcon, Film, Music, File as FileIcon } from 'lucide-react'
 import { useToast } from '../Toast'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { copyToClipboard } from '../../lib/clipboard'
@@ -466,13 +466,15 @@ function TransferenciasTab() {
 
       <div className="transfer-grid">
         <div className="card transfer-qr-card">
-          <h4><QrCode size={14} /> Escaneá con tu celular</h4>
-          {/* El QR permanece oculto: se muestra ampliado en un desplegable al tocar el botón. */}
-          <button className="transfer-qr-reveal" onClick={() => setQrOpen(true)} title="Mostrar el código QR" disabled={!qrDataUrl}>
-            <QrCode size={22} /> Mostrar código QR <Maximize2 size={13} />
-          </button>
+          <div className="transfer-qr-head">
+            <h4><QrCode size={14} /> Escaneá con tu celular</h4>
+            {/* El QR permanece oculto: se muestra ampliado en un desplegable al tocar el botón. */}
+            <button className="transfer-qr-icon-btn" onClick={() => setQrOpen(true)} title="Mostrar el código QR" disabled={!qrDataUrl}>
+              <QrCode size={18} />
+            </button>
+          </div>
           <span className="transfer-url">{ip}:{port}</span>
-          <p className="transfer-hint">Tocá «Mostrar código QR» y escanealo con la cámara de tu Android.</p>
+          <p className="transfer-hint">Tocá el icono QR y escanealo con la cámara de tu Android.</p>
         </div>
 
         <div className="card transfer-shared-card">

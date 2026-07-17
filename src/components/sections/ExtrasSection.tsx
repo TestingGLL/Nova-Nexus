@@ -9,6 +9,14 @@ const DEFAULT_COLORS = ['#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '
 interface WheelOption { id: string; label: string; color: string }
 interface WheelConfig { id: string; name: string; options: WheelOption[] }
 
+interface RatingItem { id: string; name: string; brand?: string; mRating: number; rRating: number; createdAt: string }
+interface RatingPanel { id: string; name: string; image?: string; items: RatingItem[]; createdAt: string }
+
+function loadRatings(): RatingPanel[] {
+  try { const s = localStorage.getItem('nn-ratings'); return s ? JSON.parse(s) : [] } catch { return [] }
+}
+function saveRatings(r: RatingPanel[]) { localStorage.setItem('nn-ratings', JSON.stringify(r)) }
+
 function makeId() { return 'opt-' + Date.now() + Math.random().toString(36).slice(2, 5) }
 function makeConfigId() { return 'cfg-' + Date.now() }
 
@@ -197,7 +205,166 @@ function GridRandom({ options, onResult }: { options: WheelOption[]; onResult: (
 
 // ============ MAIN ============
 
+// ============ RATINGS ============
+
+function RatingsPanel() {
+  const [panels, setPanels] = useState<RatingPanel[]>(loadRatings)
+  const [activePanelId, setActivePanelId] = useState<string | null>(null)
+  const [showNewPanel, setShowNewPanel] = useState(false)
+  const [newPanelName, setNewPanelName] = useState('')
+  const [filterBrand, setFilterBrand] = useState('')
+  const [searchText, setSearchText] = useState('')
+
+  const addPanel = () => {
+    if (!newPanelName.trim()) return
+    const p: RatingPanel = {
+      id: 'panel-' + Date.now(),
+      name: newPanelName.trim(),
+      items: [],
+      createdAt: new Date().toLocaleDateString('es-AR')
+    }
+    setPanels(prev => { const next = [...prev, p]; saveRatings(next); return next })
+    setNewPanelName('')
+    setShowNewPanel(false)
+    setActivePanelId(p.id)
+  }
+
+  const deletePanel = (id: string) => {
+    setPanels(prev => { const next = prev.filter(p => p.id !== id); saveRatings(next); return next })
+    if (activePanelId === id) setActivePanelId(null)
+  }
+
+  const updatePanel = (id: string, upd: Partial<RatingPanel>) => {
+    setPanels(prev => {
+      const next = prev.map(p => p.id === id ? { ...p, ...upd } : p)
+      saveRatings(next)
+      return next
+    })
+  }
+
+  const deleteItem = (panelId: string, itemId: string) => {
+    const panel = panels.find(p => p.id === panelId)
+    if (panel) {
+      updatePanel(panelId, { items: panel.items.filter(it => it.id !== itemId) })
+    }
+  }
+
+  const updateItem = (panelId: string, itemId: string, upd: Partial<RatingItem>) => {
+    const panel = panels.find(p => p.id === panelId)
+    if (panel) {
+      updatePanel(panelId, {
+        items: panel.items.map(it => it.id === itemId ? { ...it, ...upd } : it)
+      })
+    }
+  }
+
+  const activePanel = panels.find(p => p.id === activePanelId)
+
+  // Dashboard stats
+  const allItems = panels.flatMap(p => p.items)
+  const avgM = allItems.length > 0 ? (allItems.reduce((sum, it) => sum + it.mRating, 0) / allItems.length).toFixed(1) : '—'
+  const avgR = allItems.length > 0 ? (allItems.reduce((sum, it) => sum + it.rRating, 0) / allItems.length).toFixed(1) : '—'
+
+  if (activePanel) {
+    const filtered = activePanel.items.filter(it =>
+      (!filterBrand || !it.brand || it.brand.toLowerCase().includes(filterBrand.toLowerCase())) &&
+      (!searchText || it.name.toLowerCase().includes(searchText.toLowerCase()))
+    )
+    const brands = Array.from(new Set(activePanel.items.map(it => it.brand).filter(b => b)))
+
+    return (
+      <div className="card ratings-panel">
+        <button className="ratings-back" onClick={() => setActivePanelId(null)}>← Volver a paneles</button>
+        <h3>{activePanel.name}</h3>
+        <div className="ratings-filters">
+          <input placeholder="Buscar..." value={searchText} onChange={e => setSearchText(e.target.value)} />
+          <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)}>
+            <option value="">Todas las marcas</option>
+            {brands.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </div>
+        <RatingsTable panel={activePanel} items={filtered} onDeleteItem={deleteItem} onUpdateItem={updateItem} />
+        <button onClick={() => alert('Modal: Agregar item (no implementado aún)')} className="btn btn-primary">+ Agregar item</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="ratings-main">
+      <div className="ratings-stats">
+        <div className="stat-tile">
+          <div className="stat-label">Promedio M</div>
+          <div className="stat-value">{avgM}</div>
+        </div>
+        <div className="stat-tile">
+          <div className="stat-label">Promedio R</div>
+          <div className="stat-value">{avgR}</div>
+        </div>
+      </div>
+
+      {panels.length === 0 ? (
+        <div className="ratings-empty">
+          <p>Sin paneles de puntuaciones. Creá uno nuevo.</p>
+        </div>
+      ) : (
+        <div className="ratings-grid">
+          {panels.map(p => (
+            <div key={p.id} className="ratings-card" onClick={() => setActivePanelId(p.id)}>
+              <div className="ratings-card-image" style={{ background: '#ddd', height: '120px' }}>
+                {p.image && <img src={p.image} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+              </div>
+              <div className="ratings-card-body">
+                <h4>{p.name}</h4>
+                <p>{p.items.length} items</p>
+                <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); deletePanel(p.id) }}>Eliminar</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showNewPanel ? (
+        <div className="ratings-new">
+          <input placeholder="Nombre del panel..." value={newPanelName} onChange={e => setNewPanelName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPanel()} />
+          <button onClick={addPanel}>Crear</button>
+          <button onClick={() => setShowNewPanel(false)}>Cancelar</button>
+        </div>
+      ) : (
+        <button className="btn btn-primary" onClick={() => setShowNewPanel(true)}>+ Nuevo panel</button>
+      )}
+    </div>
+  )
+}
+
+function RatingsTable({ panel, items, onDeleteItem, onUpdateItem }: { panel: RatingPanel; items: RatingItem[]; onDeleteItem: (id: string, itemId: string) => void; onUpdateItem: (id: string, itemId: string, upd: Partial<RatingItem>) => void }) {
+  return (
+    <table className="ratings-table">
+      <thead>
+        <tr>
+          <th>Marca</th>
+          <th>Nombre</th>
+          <th>M (1-10)</th>
+          <th>R (1-10)</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map(it => (
+          <tr key={it.id}>
+            <td>{it.brand || '—'}</td>
+            <td>{it.name}</td>
+            <td><input type="number" min="1" max="10" value={it.mRating} onChange={e => onUpdateItem(panel.id, it.id, { mRating: Number(e.target.value) })} /></td>
+            <td><input type="number" min="1" max="10" value={it.rRating} onChange={e => onUpdateItem(panel.id, it.id, { rRating: Number(e.target.value) })} /></td>
+            <td><button className="btn btn-danger btn-sm" onClick={() => onDeleteItem(panel.id, it.id)}>Eliminar</button></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 export default function ExtrasSection() {
+  const [activeSubtab, setActiveSubtab] = useState<'aleatorio' | 'puntuaciones'>('aleatorio')
   const [options, setOptions] = useState<WheelOption[]>(loadOptions)
   const [result, setResult] = useState<WheelOption | null>(null)
   const [elimination, setElimination] = useState(false)
@@ -250,9 +417,13 @@ export default function ExtrasSection() {
   return (
     <div className="extras-section">
       <div className="extras-subtabs">
-        <button className="extras-subtab active"><Settings size={13} /> Aleatorio</button>
+        <button className={`extras-subtab ${activeSubtab === 'aleatorio' ? 'active' : ''}`} onClick={() => setActiveSubtab('aleatorio')}><Settings size={13} /> Aleatorio</button>
+        <button className={`extras-subtab ${activeSubtab === 'puntuaciones' ? 'active' : ''}`} onClick={() => setActiveSubtab('puntuaciones')}>⭐ Puntuaciones</button>
       </div>
 
+      {activeSubtab === 'puntuaciones' && <RatingsPanel />}
+
+      {activeSubtab === 'aleatorio' && (<>
       <div className="extras-toolbar">
         <button className={`personal-toolbar-btn ${elimination ? 'active' : ''}`} onClick={() => setElimination(!elimination)}>
           <Trash2 size={13} /> Modo eliminación {elimination ? 'ON' : 'OFF'}
@@ -337,6 +508,7 @@ export default function ExtrasSection() {
           ))}
         </div>
       </div>
+      </>)}
     </div>
   )
 }
