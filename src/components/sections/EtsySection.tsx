@@ -3,6 +3,7 @@ import { Store, Package, TrendingUp, X, Palette, Type, Image, ArrowLeft, Plus, T
 import DuplicateIcon from '../DuplicateIcon'
 import { useDolarBlue, fmtUsdArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
+import { useToast } from '../Toast'
 import ColorInput from '../ColorInput'
 import RichTextEditor from '../RichTextEditor'
 import { copyToClipboard } from '../../lib/clipboard'
@@ -766,8 +767,24 @@ function LaunchesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
 
 // ============ CREACIONES TAB ============
 
+// Persistencia del estado abierto/cerrado de grupos y paneles de Creaciones, para que
+// se mantenga tal cual al cambiar de pestaña/sección y volver (clave nn- → sincroniza).
+const CREACIONES_OPEN_KEY = 'nn-etsy-creaciones-open'
+function loadCreacionesOpen(): Record<string, boolean> {
+  try { return JSON.parse(localStorage.getItem(CREACIONES_OPEN_KEY) || '{}') } catch { return {} }
+}
+function persistCreacionesOpen(id: string, open: boolean) {
+  try { const m = loadCreacionesOpen(); m[id] = open; localStorage.setItem(CREACIONES_OPEN_KEY, JSON.stringify(m)) } catch {}
+}
+// Devuelve el estado guardado o el default si nunca se tocó.
+function creacionesOpenOr(id: string, def: boolean): boolean {
+  const m = loadCreacionesOpen()
+  return id in m ? m[id] : def
+}
+
 function CreacionesPanel({ panel, save, panels, groups }: { panel: PromptPanel; save: (p: PromptPanel[]) => void; panels: PromptPanel[]; groups: CreacionGroup[] }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(() => creacionesOpenOr(panel.id, false))
+  const toggleExpanded = () => setExpanded(v => { const nv = !v; persistCreacionesOpen(panel.id, nv); return nv })
   const [activeSub, setActiveSub] = useState<string>('__main')
   const [copied, setCopied] = useState(false)
 
@@ -788,7 +805,7 @@ function CreacionesPanel({ panel, save, panels, groups }: { panel: PromptPanel; 
 
   return (
     <div className="card creacion-panel">
-      <div className="creacion-header" onClick={() => setExpanded(!expanded)}>
+      <div className="creacion-header" onClick={toggleExpanded}>
         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <span className="creacion-title">{panel.title}</span>
         <span className="creacion-count">{panel.prompts.length + 1} prompts</span>
@@ -852,7 +869,8 @@ function CreacionGroupCard({ group, tags, groups, save, panels, onUpdateGroup, o
   onRemoveGroup: (id: string) => void; onDuplicateGroup: (id: string) => void; onAddTag: (t: string) => void
   onAddSubgroup: (parentId: string) => void; depth?: number
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(() => creacionesOpenOr(group.id, true))
+  const toggleOpen = () => setOpen(v => { const nv = !v; persistCreacionesOpen(group.id, nv); return nv })
   const [editing, setEditing] = useState(false)
   const [newTag, setNewTag] = useState('')
   const color = group.color || CREACION_GROUP_COLORS[0]
@@ -863,7 +881,7 @@ function CreacionGroupCard({ group, tags, groups, save, panels, onUpdateGroup, o
   return (
     <div className={`creacion-group card ${depth > 0 ? 'creacion-subgroup' : ''}`}>
       <div className="creacion-group-head">
-        <button className="creacion-group-toggle" onClick={() => setOpen(o => !o)} title={open ? 'Minimizar' : 'Expandir'}>{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
+        <button className="creacion-group-toggle" onClick={toggleOpen} title={open ? 'Minimizar' : 'Expandir'}>{open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
         <span className="creacion-group-dot" style={{ background: color }} />
         <span className="creacion-group-name">{group.name}</span>
         {group.tag && <span className="creacion-group-tag"><Tag size={10} /> {group.tag}</span>}
@@ -1494,6 +1512,7 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const [subtab, setSubtab] = useState<'lista' | 'gestion'>('lista')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const confirm = useConfirm()
+  const toast = useToast()
 
   const add = async () => {
     if (!name.trim()) return
@@ -1503,7 +1522,8 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
     const clientName = name.trim()
     const c: ClientInfo = { id: 'cli-' + Date.now(), name: clientName, gender, country, favGroupId: favGroupId || undefined, recurring: false, createdTs: Date.now() }
     onUpdate({ ...store, clientList: [c, ...clients] })
-    await confirm({ title: '✓ Cliente creado', message: `"${clientName}" ha sido agregado correctamente`, confirmLabel: 'OK' })
+    // Confirmación positiva (toast verde con check), no una alerta.
+    toast.success(`Cliente «${clientName}» agregado correctamente`)
     setName('')
   }
   const remove = async (id: string) => {

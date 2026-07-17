@@ -12,7 +12,7 @@ interface WheelOption { id: string; label: string; color: string }
 interface WheelConfig { id: string; name: string; options: WheelOption[] }
 
 interface RatingItem { id: string; name: string; brand?: string; mRating: number; rRating: number; createdAt: string }
-interface RatingPanel { id: string; name: string; image?: string; color?: string; items: RatingItem[]; createdAt: string }
+interface RatingPanel { id: string; name: string; image?: string; color?: string; brands?: string[]; items: RatingItem[]; createdAt: string }
 
 function loadRatings(): RatingPanel[] {
   try { const s = localStorage.getItem('nn-ratings'); return s ? JSON.parse(s) : [] } catch { return [] }
@@ -278,7 +278,7 @@ function RatingsHome({ panels, onOpen, onSave }: { panels: RatingPanel[]; onOpen
   }
 
   const q = search.trim().toLowerCase()
-  const shown = q ? panels.filter(p => p.name.toLowerCase().includes(q)) : panels
+  const shown = [...(q ? panels.filter(p => p.name.toLowerCase().includes(q)) : panels)].sort((a, b) => a.name.localeCompare(b.name, 'es'))
 
   return (
     <div className="ratings-home">
@@ -372,12 +372,15 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
   const fileRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
   const [filterBrand, setFilterBrand] = useState('')
-  const [sortBy, setSortBy] = useState<'brand' | 'name' | 'm' | 'r'>('brand')
+  const [sortBy, setSortBy] = useState<'name' | 'brand' | 'm' | 'r'>('name')
   // Formulario de alta (requiere presionar el check para guardar).
   const [naName, setNaName] = useState('')
   const [naBrand, setNaBrand] = useState('')
   const [naM, setNaM] = useState(5)
   const [naR, setNaR] = useState(5)
+  // Alta de marca nueva (se guarda como tag reutilizable del panel).
+  const [showNewBrand, setShowNewBrand] = useState(false)
+  const [newBrandVal, setNewBrandVal] = useState('')
   // Edición inline (requiere confirmar con el check).
   const [editId, setEditId] = useState<string | null>(null)
   const [edName, setEdName] = useState('')
@@ -413,8 +416,19 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
     if (fileRef.current) fileRef.current.value = ''
   }
   const commitTitle = () => { if (titleDraft.trim()) onUpdate({ name: titleDraft.trim() }); setEditingTitle(false) }
-
-  const brands = Array.from(new Set(panel.items.map(i => i.brand).filter((b): b is string => !!b))).sort((a, b) => a.localeCompare(b, 'es'))
+  // Marcas guardadas del panel (tags) ∪ las que ya usan los ítems.
+  const brands = Array.from(new Set([...(panel.brands || []), ...panel.items.map(i => i.brand).filter((b): b is string => !!b)])).sort((a, b) => a.localeCompare(b, 'es'))
+  const addBrand = (raw: string): string | null => {
+    const b = raw.trim()
+    if (!b) return null
+    if (!brands.some(x => x.toLowerCase() === b.toLowerCase())) onUpdate({ brands: [...(panel.brands || []), b] })
+    return b
+  }
+  const confirmNewBrand = () => {
+    const b = addBrand(newBrandVal)
+    if (b) setNaBrand(b)
+    setNewBrandVal(''); setShowNewBrand(false)
+  }
   const q = search.trim().toLowerCase()
   const filtered = panel.items
     .filter(it => (!filterBrand || it.brand === filterBrand) && (!q || it.name.toLowerCase().includes(q) || (it.brand || '').toLowerCase().includes(q)))
@@ -454,8 +468,21 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
       {/* Alta de ítem: se guarda al presionar el check */}
       <div className="ratings-add-form">
         <input className="ratings-in-name" placeholder="Nombre del ítem" value={naName} onChange={e => setNaName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} />
-        <input className="ratings-in-brand" placeholder="Marca (opcional)" value={naBrand} onChange={e => setNaBrand(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} list="ratings-brands" />
-        <datalist id="ratings-brands">{brands.map(b => <option key={b} value={b} />)}</datalist>
+        {showNewBrand ? (
+          <div className="ratings-brand-new">
+            <input autoFocus placeholder="Nueva marca…" value={newBrandVal} onChange={e => setNewBrandVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmNewBrand(); if (e.key === 'Escape') { setShowNewBrand(false); setNewBrandVal('') } }} />
+            <button className="ratings-btn-ok" onClick={confirmNewBrand} disabled={!newBrandVal.trim()} title="Guardar marca"><Check size={13} /></button>
+            <button className="ratings-btn-cancel" onClick={() => { setShowNewBrand(false); setNewBrandVal('') }} title="Cancelar"><X size={13} /></button>
+          </div>
+        ) : (
+          <div className="ratings-brand-pick">
+            <select className="ratings-in-brand" value={naBrand} onChange={e => setNaBrand(e.target.value)}>
+              <option value="">Sin marca</option>
+              {brands.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+            <button className="ratings-brand-add" onClick={() => setShowNewBrand(true)} title="Agregar marca nueva"><Tag size={13} /><Plus size={11} /></button>
+          </div>
+        )}
         <label className="ratings-in-rating ratings-in-m">M <input type="number" min={1} max={10} value={naM} onChange={e => setNaM(clampRating(Number(e.target.value)))} /></label>
         <label className="ratings-in-rating ratings-in-r">R <input type="number" min={1} max={10} value={naR} onChange={e => setNaR(clampRating(Number(e.target.value)))} /></label>
         <button className="ratings-btn-ok" onClick={addItem} disabled={!naName.trim()} title="Agregar ítem"><Plus size={15} /></button>
@@ -473,8 +500,8 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
             {brands.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
           <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)} className="ratings-sort" title="Ordenar por">
+            <option value="name">Orden: Nombre (A-Z)</option>
             <option value="brand">Orden: Marca</option>
-            <option value="name">Orden: Nombre</option>
             <option value="m">Orden: M (mayor)</option>
             <option value="r">Orden: R (mayor)</option>
           </select>
@@ -498,7 +525,14 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
             <tbody>
               {filtered.map(it => editId === it.id ? (
                 <tr key={it.id} className="ratings-row-edit">
-                  <td><input value={edBrand} onChange={e => setEdBrand(e.target.value)} placeholder="Marca" list="ratings-brands" /></td>
+                  <td>
+                    <select value={brands.includes(edBrand) ? edBrand : (edBrand ? '__custom' : '')} onChange={e => { if (e.target.value === '__new') { const b = window.prompt('Nueva marca:'); const added = b ? addBrand(b) : null; if (added) setEdBrand(added) } else setEdBrand(e.target.value === '__custom' ? edBrand : e.target.value) }}>
+                      <option value="">Sin marca</option>
+                      {edBrand && !brands.includes(edBrand) && <option value="__custom">{edBrand}</option>}
+                      {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                      <option value="__new">+ Nueva marca…</option>
+                    </select>
+                  </td>
                   <td><input value={edName} onChange={e => setEdName(e.target.value)} placeholder="Nombre" onKeyDown={e => e.key === 'Enter' && commitEdit()} /></td>
                   <td><input type="number" min={1} max={10} value={edM} onChange={e => setEdM(clampRating(Number(e.target.value)))} /></td>
                   <td><input type="number" min={1} max={10} value={edR} onChange={e => setEdR(clampRating(Number(e.target.value)))} /></td>
@@ -583,7 +617,7 @@ export default function ExtrasSection() {
     <div className="extras-section">
       <div className="extras-subtabs">
         <button className={`extras-subtab ${activeSubtab === 'aleatorio' ? 'active' : ''}`} onClick={() => setActiveSubtab('aleatorio')}><Settings size={13} /> Aleatorio</button>
-        <button className={`extras-subtab ${activeSubtab === 'puntuaciones' ? 'active' : ''}`} onClick={() => setActiveSubtab('puntuaciones')}>⭐ Puntuaciones</button>
+        <button className={`extras-subtab ${activeSubtab === 'puntuaciones' ? 'active' : ''}`} onClick={() => setActiveSubtab('puntuaciones')}><Star size={13} /> Puntuaciones</button>
       </div>
 
       {activeSubtab === 'puntuaciones' && <RatingsPanel />}

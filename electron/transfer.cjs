@@ -86,133 +86,159 @@ function uniqueName(name) {
 function pageHtml() {
   return `<!DOCTYPE html>
 <html lang="es"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Nova Nexus · Transferencia</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: dark; --accent:#38bdf8; --recv:#22c55e; }
   * { box-sizing: border-box; }
-  body { margin:0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background:#16161a; color:#e8e8ed; padding:18px; }
-  h1 { font-size:18px; display:flex; align-items:center; gap:8px; margin:0 0 4px; }
-  .sub { color:#8a8a92; font-size:13px; margin-bottom:18px; }
-  .card { background:#222228; border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:16px; margin-bottom:14px; }
-  .card h2 { font-size:14px; margin:0 0 12px; color:#c7c7cf; }
-  .file { display:flex; align-items:center; gap:10px; padding:10px 12px; background:#1a1a1f; border:1px solid rgba(255,255,255,.06); border-radius:10px; margin-bottom:8px; text-decoration:none; color:#e8e8ed; }
-  .file .nm { flex:1; font-size:14px; word-break:break-all; }
-  .file .sz { font-size:12px; color:#8a8a92; }
-  .dl { background:#38bdf8; color:#001018; border:none; padding:7px 14px; border-radius:8px; font-weight:600; font-size:13px; text-decoration:none; }
-  .empty { color:#8a8a92; font-size:13px; text-align:center; padding:14px 0; }
-  .uploadbox { border:2px dashed rgba(255,255,255,.15); border-radius:12px; padding:22px; text-align:center; }
-  .uploadbox label { display:inline-block; background:#38bdf8; color:#001018; padding:11px 20px; border-radius:10px; font-weight:600; cursor:pointer; }
+  html, body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background:#16161a; color:#e8e8ed; display:flex; flex-direction:column; }
+  header { padding:12px 16px calc(12px); border-bottom:1px solid rgba(255,255,255,.08); background:#1b1b20; position:sticky; top:0; z-index:5; }
+  header .ttl { font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px; }
+  header .status { display:flex; align-items:center; gap:6px; font-size:12px; color:#8a8a92; margin-top:3px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--recv); box-shadow:0 0 0 3px rgba(34,197,94,.2); }
+  .filter { display:flex; gap:6px; margin-top:10px; }
+  .filter button { flex:1; padding:6px 8px; border:1px solid rgba(255,255,255,.12); background:transparent; color:#8a8a92; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer; }
+  .filter button.active { background:var(--accent); border-color:var(--accent); color:#001018; }
+  #chat { flex:1; overflow-y:auto; padding:14px 12px 8px; display:flex; flex-direction:column; gap:8px; }
+  .empty { color:#8a8a92; font-size:13px; text-align:center; padding:32px 12px; }
+  .msg { display:flex; }
+  .msg.recv { justify-content:flex-start; }
+  .msg.sent { justify-content:flex-end; }
+  .bub { max-width:82%; padding:9px 12px; border-radius:14px; font-size:14px; word-break:break-word; }
+  .msg.recv .bub { background:rgba(34,197,94,.10); border:1px solid rgba(34,197,94,.28); border-bottom-left-radius:4px; }
+  .msg.sent .bub { background:rgba(56,189,248,.12); border:1px solid rgba(56,189,248,.32); border-bottom-right-radius:4px; }
+  .bub .txt { white-space:pre-wrap; }
+  .bub .meta { display:flex; align-items:center; gap:8px; margin-top:5px; font-size:10px; color:#8a8a92; }
+  .bub .fname { font-weight:600; display:flex; align-items:center; gap:6px; }
+  .bub img.thumb { max-width:100%; border-radius:8px; margin-bottom:6px; display:block; }
+  .lnk { color:var(--accent); text-decoration:none; font-weight:700; font-size:11px; padding:2px 8px; border:1px solid rgba(56,189,248,.4); border-radius:6px; }
+  .cbtn { background:rgba(255,255,255,.08); color:var(--accent); border:none; font-size:11px; padding:2px 8px; border-radius:6px; cursor:pointer; }
+  .composer { display:flex; align-items:center; gap:8px; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid rgba(255,255,255,.08); background:#1b1b20; position:sticky; bottom:0; }
+  .composer input[type=text] { flex:1; min-width:0; padding:11px 14px; border:1px solid rgba(255,255,255,.12); background:#111116; color:#e8e8ed; border-radius:22px; font-size:15px; font-family:inherit; }
+  .composer input[type=text]:focus { outline:none; border-color:var(--accent); }
+  .cir { width:42px; height:42px; flex-shrink:0; border-radius:50%; border:1px solid rgba(255,255,255,.14); background:#26262c; color:#c7c7cf; font-size:20px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .cir.send { background:var(--accent); border-color:var(--accent); color:#001018; }
+  .cir:disabled { opacity:.45; }
   input[type=file]{ display:none; }
-  .prog { margin-top:10px; font-size:13px; }
-  .row { display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px; }
-  .ok { color:#22c55e; } .err { color:#ef4444; }
-  .bar { height:5px; background:#333; border-radius:3px; overflow:hidden; margin-top:4px; }
-  .bar > div { height:100%; background:#38bdf8; width:0; transition:width .15s; }
+  #toast { position:fixed; left:50%; transform:translateX(-50%); bottom:80px; background:#26262c; border:1px solid rgba(255,255,255,.14); color:#e8e8ed; padding:8px 16px; border-radius:20px; font-size:13px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:10; }
+  #toast.show { opacity:1; }
+  #toast.err { color:#ef4444; }
 </style></head>
 <body>
-  <h1>🔄 Nova Nexus</h1>
-  <div class="sub">Transferencia por WiFi · misma red</div>
-
-  <div class="card">
-    <h2>📥 Archivos compartidos desde la PC</h2>
-    <div id="files"><div class="empty">Cargando…</div></div>
-    <button id="dlall" class="dl" style="width:100%;margin-top:6px;padding:11px;display:none">⬇ Descargar todo</button>
-  </div>
-
-  <div class="card" id="pcmsgcard" style="display:none">
-    <h2>💬 Mensajes desde la PC</h2>
-    <div id="pcmsgs"></div>
-  </div>
-
-  <div class="card">
-    <h2>📤 Enviar archivos a la PC</h2>
-    <div class="uploadbox">
-      <label for="up">Elegir archivos</label>
-      <input id="up" type="file" multiple>
-      <div id="prog" class="prog"></div>
+  <header>
+    <div class="ttl">🔄 Nova Nexus</div>
+    <div class="status"><span class="dot"></span> Transferencia por WiFi · misma red</div>
+    <div class="filter">
+      <button data-f="all" class="active">Todos</button>
+      <button data-f="recv">Recibidos</button>
+      <button data-f="sent">Enviados</button>
     </div>
-  </div>
+  </header>
 
-  <div class="card">
-    <h2>💬 Enviar texto a la PC</h2>
-    <textarea id="txt" rows="3" style="width:100%;background:#1a1a1f;color:#e8e8ed;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px;font-family:inherit;font-size:14px;resize:vertical"></textarea>
-    <button id="sendtxt" class="dl" style="width:100%;margin-top:8px;padding:11px">Enviar texto</button>
-    <div id="txtstatus" class="prog"></div>
+  <div id="chat"><div class="empty">Cargando…</div></div>
+
+  <div class="composer">
+    <label class="cir" for="up" title="Adjuntar archivo">＋</label>
+    <input id="up" type="file" multiple>
+    <input id="txt" type="text" placeholder="Escribí un mensaje o adjuntá un archivo…" autocomplete="off">
+    <button id="sendtxt" class="cir send" title="Enviar" disabled>➤</button>
   </div>
+  <div id="toast"></div>
 
 <script>
   const T = new URLSearchParams(location.search).get('t') || '';
   const fmt = b => b < 1024 ? b+' B' : b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(1)+' MB';
+  const esc = s => String(s).replace(/[<>&]/g, c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+  const tm = ts => { try { return new Date(ts).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}); } catch { return ''; } };
+  let filter = 'all';
+  let chat = [];
 
-  async function loadFiles() {
-    try {
-      const r = await fetch('/api/files?t='+T);
-      const list = await r.json();
-      const el = document.getElementById('files');
-      if (!list.length) { el.innerHTML = '<div class="empty">No hay archivos compartidos.</div>'; return; }
-      el.innerHTML = list.map(f =>
-        '<div class="file"><span class="nm">'+f.name+'</span><span class="sz">'+fmt(f.size)+'</span>'+
-        '<a class="dl" href="/download/'+f.id+'?t='+T+'">Bajar</a></div>'
-      ).join('');
-      const dlall = document.getElementById('dlall');
-      dlall.style.display = list.length ? 'block' : 'none';
-      dlall.onclick = () => { list.forEach((f, i) => setTimeout(() => { const a = document.createElement('a'); a.href = '/download/'+f.id+'?t='+T; a.download=''; document.body.appendChild(a); a.click(); a.remove(); }, i*400)); };
-    } catch(e) { document.getElementById('files').innerHTML = '<div class="empty err">Error al cargar.</div>'; }
+  function toast(msg, err) { const t = document.getElementById('toast'); t.textContent = msg; t.className = 'show' + (err?' err':''); setTimeout(()=>t.className='',2200); }
+
+  function fileBubble(it, scope) {
+    const isImg = it.fkind === 'image';
+    const thumb = isImg ? '<img class="thumb" src="/file/'+scope+'/'+it.id+'?t='+T+'" alt="">' : '';
+    const dl = scope==='shared' ? '<a class="lnk" href="/download/'+it.id+'?t='+T+'">Bajar</a>' : '';
+    return thumb + '<div class="fname">📎 '+esc(it.name)+'</div>' +
+      '<div class="meta">'+fmt(it.size||0)+' · '+tm(it.ts)+(dl?' ':'')+dl+'</div>';
   }
-  loadFiles();
-  setInterval(loadFiles, 4000);
-
-  async function loadPcMessages() {
-    try {
-      const r = await fetch('/api/pcmessages?t='+T);
-      const list = await r.json();
-      const card = document.getElementById('pcmsgcard');
-      const el = document.getElementById('pcmsgs');
-      if (!list.length) { card.style.display='none'; return; }
-      card.style.display='block';
-      el.innerHTML = list.map(m =>
-        '<div class="file"><span class="nm">'+m.text.replace(/[<>&]/g, c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]))+'</span>'+
-        '<button class="dl copybtn" data-t="'+encodeURIComponent(m.text)+'">Copiar</button></div>'
-      ).join('');
-      el.querySelectorAll('.copybtn').forEach(b => b.onclick = () => { navigator.clipboard.writeText(decodeURIComponent(b.dataset.t)); b.textContent='✓'; setTimeout(()=>b.textContent='Copiar',1200); });
-    } catch(e) {}
+  function textBubble(text, ts, showCopy) {
+    const copy = showCopy ? '<button class="cbtn" data-copy="'+encodeURIComponent(text)+'">Copiar</button>' : '';
+    return '<div class="txt">'+esc(text)+'</div><div class="meta">'+copy+tm(ts)+'</div>';
   }
-  loadPcMessages();
-  setInterval(loadPcMessages, 4000);
 
-  document.getElementById('sendtxt').addEventListener('click', async () => {
-    const ta = document.getElementById('txt'); const st = document.getElementById('txtstatus');
-    if (!ta.value.trim()) return;
+  function render() {
+    const el = document.getElementById('chat');
+    const vis = filter==='all' ? chat : chat.filter(m => m.dir===filter);
+    if (!vis.length) { el.innerHTML = '<div class="empty">'+(chat.length? 'Sin mensajes para este filtro.' : 'Todavía no hay mensajes. Adjuntá un archivo o escribí un texto abajo.')+'</div>'; return; }
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    el.innerHTML = vis.map(m => {
+      const inner = m.kind==='file' ? fileBubble(m, m.dir==='recv'?'shared':'received') : textBubble(m.text, m.ts, m.dir==='recv');
+      return '<div class="msg '+m.dir+'"><div class="bub">'+inner+'</div></div>';
+    }).join('');
+    el.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => { navigator.clipboard.writeText(decodeURIComponent(b.dataset.copy)); b.textContent='✓'; setTimeout(()=>b.textContent='Copiar',1200); });
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  }
+
+  async function load() {
     try {
-      const r = await fetch('/sendtext?t='+T, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ text: ta.value }) });
-      if (r.ok) { ta.value=''; st.innerHTML='<span class="ok">✓ Texto enviado</span>'; setTimeout(()=>st.innerHTML='',2000); } else st.innerHTML='<span class="err">✗ Error</span>';
-    } catch { st.innerHTML='<span class="err">✗ Error</span>'; }
+      const [files, msgs, sent] = await Promise.all([
+        fetch('/api/files?t='+T).then(r=>r.json()),
+        fetch('/api/pcmessages?t='+T).then(r=>r.json()),
+        fetch('/api/sent?t='+T).then(r=>r.json()),
+      ]);
+      const merged = [];
+      // Recibidos (desde la PC): archivos compartidos + mensajes de texto de la PC.
+      files.forEach(f => merged.push({ dir:'recv', kind:'file', id:f.id, name:f.name, size:f.size, ts:f.ts||0, fkind:f.kind }));
+      msgs.forEach(m => merged.push({ dir:'recv', kind:'text', text:m.text, ts:m.ts }));
+      // Enviados (desde el celular): texto y archivos que este teléfono mandó a la PC.
+      sent.forEach(s => s.type==='text'
+        ? merged.push({ dir:'sent', kind:'text', text:s.text, ts:s.ts })
+        : merged.push({ dir:'sent', kind:'file', id:s.id, name:s.name, size:s.size, ts:s.ts, fkind:s.kind }));
+      chat = merged.sort((a,b)=>a.ts-b.ts);
+      render();
+    } catch(e) { /* red intermitente: reintenta en el próximo tick */ }
+  }
+  load(); setInterval(load, 3000);
+
+  document.querySelectorAll('.filter button').forEach(b => b.onclick = () => {
+    filter = b.dataset.f;
+    document.querySelectorAll('.filter button').forEach(x=>x.classList.toggle('active', x===b));
+    render();
   });
+
+  const txt = document.getElementById('txt');
+  const sendBtn = document.getElementById('sendtxt');
+  txt.addEventListener('input', () => sendBtn.disabled = !txt.value.trim());
+  async function sendText() {
+    if (!txt.value.trim()) return;
+    const val = txt.value;
+    try {
+      const r = await fetch('/sendtext?t='+T, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ text: val }) });
+      if (r.ok) { txt.value=''; sendBtn.disabled=true; load(); } else toast('No se pudo enviar', true);
+    } catch { toast('No se pudo enviar', true); }
+  }
+  sendBtn.addEventListener('click', sendText);
+  txt.addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); sendText(); } });
 
   document.getElementById('up').addEventListener('change', async (e) => {
     const files = Array.from(e.target.files);
-    const prog = document.getElementById('prog');
-    prog.innerHTML = '';
     for (const file of files) {
-      const row = document.createElement('div'); row.className = 'row';
-      row.innerHTML = '<span style="flex:1">'+file.name+'</span><span class="st">…</span>';
-      const bar = document.createElement('div'); bar.className='bar'; const fill=document.createElement('div'); bar.appendChild(fill);
-      prog.appendChild(row); prog.appendChild(bar);
       try {
         await new Promise((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open('POST', '/upload?t='+T);
           xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
-          xhr.upload.onprogress = ev => { if (ev.lengthComputable) fill.style.width = (ev.loaded/ev.total*100)+'%'; };
           xhr.onload = () => xhr.status===200 ? resolve() : reject();
           xhr.onerror = reject;
           xhr.send(file);
         });
-        row.querySelector('.st').innerHTML = '<span class="ok">✓ Enviado</span>';
-      } catch { row.querySelector('.st').innerHTML = '<span class="err">✗ Error</span>'; }
+        toast('✓ '+file.name+' enviado');
+      } catch { toast('✗ Error con '+file.name, true); }
     }
     e.target.value = '';
+    load();
   });
 </script>
 </body></html>`;
@@ -230,13 +256,20 @@ function handle(req, res) {
   }
   if (req.method === 'GET' && pathname === '/api/files') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(sharedFiles.map(f => ({ id: f.id, name: f.name, size: f.size }))));
+    res.end(JSON.stringify(sharedFiles.map(f => ({ id: f.id, name: f.name, size: f.size, ts: f.ts || 0, kind: kindOf(f.name) }))));
     return;
   }
   if (req.method === 'GET' && pathname === '/api/pcmessages') {
     pruneHistory();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(pcMessages.map(m => ({ id: m.id, text: m.text, ts: m.ts }))));
+    return;
+  }
+  // Lo que el celular envió a la PC (texto y archivos) — para el chat único del celular.
+  if (req.method === 'GET' && pathname === '/api/sent') {
+    pruneHistory();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(getReceived()));
     return;
   }
   if (req.method === 'GET' && pathname.startsWith('/download/')) {

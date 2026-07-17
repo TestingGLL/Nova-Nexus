@@ -169,6 +169,13 @@
 .ratings-in-m { color: #6366f1; }
 .ratings-in-r { color: #ec4899; }
 .ratings-in-rating input { width: 52px; padding: 6px 8px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); outline: none; font-family: inherit; text-align: center; }
+/* Selector de marca + agregar marca nueva (tag) */
+.ratings-brand-pick { display: flex; gap: 5px; align-items: center; flex: 1; min-width: 130px; }
+.ratings-brand-pick select.ratings-in-brand { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); outline: none; font-family: inherit; cursor: pointer; }
+.ratings-brand-add { display: inline-flex; align-items: center; gap: 1px; padding: 7px 9px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); border-radius: 8px; cursor: pointer; flex-shrink: 0; }
+.ratings-brand-add:hover { border-color: var(--accent); color: var(--accent); }
+.ratings-brand-new { display: flex; gap: 5px; align-items: center; flex: 1; min-width: 130px; }
+.ratings-brand-new input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--accent); background: var(--bg-primary); border-radius: 8px; font-size: 13px; color: var(--text-primary); outline: none; font-family: inherit; }
 
 /* Detail toolbar selects */
 .ratings-brand-filter, .ratings-sort { padding: 7px 10px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 8px; font-size: 12px; color: var(--text-primary); font-family: inherit; cursor: pointer; }

@@ -113,6 +113,21 @@ function BlockRow({ block, placeholder, selected, onInput, onEnter, onBackspaceE
       let n: Node | null = sel?.anchorNode || null
       let li: HTMLElement | null = null
       while (n && n !== ref.current) { if (n.nodeName === 'LI') { li = n as HTMLElement; break } n = n.parentNode }
+      // Fallback: Chromium a veces deja el caret a nivel del <ul> o del bloque (típico
+      // de una casilla vacía o recién creada). Sin esto, Enter no encontraba el <li> y
+      // creaba un párrafo en vez de otra casilla (bug reportado). Resolvemos el <li> igual.
+      if (!li && ref.current) {
+        const ul = ref.current.querySelector('.rte-checklist') as HTMLElement | null
+        if (ul) {
+          const a = sel?.anchorNode
+          if (a === ul) {
+            const kids = Array.from(ul.children) as HTMLElement[]
+            li = kids[Math.max(0, (sel?.anchorOffset ?? kids.length) - 1)] || (ul.lastElementChild as HTMLElement | null)
+          } else if (a === ref.current || (a && ul.contains(a))) {
+            li = ul.lastElementChild as HTMLElement | null
+          }
+        }
+      }
       // En una checklist, Enter crea explícitamente otra casilla (desmarcada) debajo.
       if (li && li.closest('.rte-checklist')) {
         e.preventDefault()
