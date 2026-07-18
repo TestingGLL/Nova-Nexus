@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, type CSSProperties } from 'react'
 import { Plus, Trash2, Edit3, X, RotateCcw, Save, Settings, Eye, EyeOff, Check, Search, ArrowLeft, Image as ImageIcon, Star, BarChart3, Tag } from 'lucide-react'
 import ColorInput from '../ColorInput'
 import { useConfirm } from '../ConfirmDialog'
@@ -11,7 +11,7 @@ const DEFAULT_COLORS = ['#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '
 interface WheelOption { id: string; label: string; color: string }
 interface WheelConfig { id: string; name: string; options: WheelOption[] }
 
-interface RatingItem { id: string; name: string; brand?: string; mRating: number; rRating: number; createdAt: string }
+interface RatingItem { id: string; name: string; brand?: string; mRating: number | null; rRating: number | null; createdAt: string }
 interface RatingPanel { id: string; name: string; image?: string; color?: string; brands?: string[]; items: RatingItem[]; createdAt: string }
 
 function loadRatings(): RatingPanel[] {
@@ -210,9 +210,25 @@ function GridRandom({ options, onResult }: { options: WheelOption[]; onResult: (
 // ============ RATINGS ============
 
 const RATING_PANEL_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#22c55e', '#06b6d4', '#ef4444', '#14b8a6']
-const clampRating = (n: number) => Math.min(10, Math.max(1, Math.round(n) || 1))
 const mean = (nums: number[]) => (nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0)
 const fmtAvg = (n: number) => (n > 0 ? n.toFixed(1) : '—')
+// Un puntaje puede quedar vacío (sin puntuar = null). Se admite 1 decimal; escala 1–10.
+function parseRating(s: string): number | null {
+  const t = (s ?? '').toString().trim().replace(',', '.')
+  if (t === '') return null
+  const n = parseFloat(t)
+  if (!isFinite(n)) return null
+  return Math.round(Math.min(10, Math.max(1, n)) * 10) / 10
+}
+const fmtRating = (n: number | null): string => (n == null ? '' : (n % 1 === 0 ? String(n) : n.toFixed(1)))
+// De una lista de puntajes, deja solo los cargados (ignora "sin puntuar").
+const scored = (nums: (number | null)[]) => nums.filter((n): n is number => n != null)
+const itemAvg = (it: RatingItem): number | null => { const v = scored([it.mRating, it.rRating]); return v.length ? mean(v) : null }
+// Color del badge según el valor: rojo (bajo) → verde (alto).
+function ratingStyle(n: number): CSSProperties {
+  const t = Math.max(0, Math.min(1, (n - 1) / 9)); const hue = Math.round(t * 120)
+  return { background: `hsla(${hue},70%,50%,0.16)`, color: `hsl(${hue},72%,38%)`, borderColor: `hsla(${hue},70%,50%,0.45)` }
+}
 
 function RatingsPanel() {
   const [panels, setPanels] = useState<RatingPanel[]>(loadRatings)
@@ -249,12 +265,13 @@ function RatingsHome({ panels, onOpen, onSave }: { panels: RatingPanel[]; onOpen
   const [newName, setNewName] = useState('')
 
   const allItems = panels.flatMap(p => p.items)
-  const avgM = mean(allItems.map(i => i.mRating))
-  const avgR = mean(allItems.map(i => i.rRating))
+  const avgM = mean(scored(allItems.map(i => i.mRating)))
+  const avgR = mean(scored(allItems.map(i => i.rRating)))
+  const unratedCount = allItems.filter(it => itemAvg(it) == null).length
   // Distribución 1-10 (promedio por ítem, redondeado) para el mini-dashboard.
   const dist = Array.from({ length: 10 }, (_, i) => {
     const bucket = i + 1
-    return allItems.filter(it => Math.round((it.mRating + it.rRating) / 2) === bucket).length
+    return allItems.filter(it => { const a = itemAvg(it); return a != null && Math.round(a) === bucket }).length
   })
   const maxBucket = Math.max(1, ...dist)
 
@@ -295,7 +312,7 @@ function RatingsHome({ panels, onOpen, onSave }: { panels: RatingPanel[]; onOpen
           </div>
           <div className="ratings-tile">
             <span className="ratings-tile-label"><BarChart3 size={12} /> Ítems</span>
-            <span className="ratings-tile-value">{allItems.length}</span>
+            <span className="ratings-tile-value">{allItems.length}{unratedCount > 0 && <span className="ratings-tile-sub">{unratedCount} sin puntuar</span>}</span>
           </div>
           <div className="ratings-tile">
             <span className="ratings-tile-label">Paneles</span>
@@ -338,8 +355,8 @@ function RatingsHome({ panels, onOpen, onSave }: { panels: RatingPanel[]; onOpen
       ) : (
         <div className="ratings-grid">
           {shown.map(p => {
-            const pm = mean(p.items.map(i => i.mRating))
-            const pr = mean(p.items.map(i => i.rRating))
+            const pm = mean(scored(p.items.map(i => i.mRating)))
+            const pr = mean(scored(p.items.map(i => i.rRating)))
             return (
               <div key={p.id} className="ratings-banner" onClick={() => onOpen(p.id)} title="Abrir panel">
                 <div className="ratings-banner-img" style={{ background: p.image ? undefined : `linear-gradient(135deg, ${p.color || '#6366f1'}, ${p.color || '#6366f1'}99)` }}>
@@ -376,8 +393,8 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
   // Formulario de alta (requiere presionar el check para guardar).
   const [naName, setNaName] = useState('')
   const [naBrand, setNaBrand] = useState('')
-  const [naM, setNaM] = useState(5)
-  const [naR, setNaR] = useState(5)
+  const [naM, setNaM] = useState('')   // vacío = sin puntuar
+  const [naR, setNaR] = useState('')
   // Alta de marca nueva (se guarda como tag reutilizable del panel).
   const [showNewBrand, setShowNewBrand] = useState(false)
   const [newBrandVal, setNewBrandVal] = useState('')
@@ -385,8 +402,8 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
   const [editId, setEditId] = useState<string | null>(null)
   const [edName, setEdName] = useState('')
   const [edBrand, setEdBrand] = useState('')
-  const [edM, setEdM] = useState(5)
-  const [edR, setEdR] = useState(5)
+  const [edM, setEdM] = useState('')
+  const [edR, setEdR] = useState('')
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(panel.name)
 
@@ -394,19 +411,19 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
 
   const addItem = () => {
     if (!naName.trim()) return
-    const it: RatingItem = { id: 'ri-' + Date.now(), name: naName.trim(), brand: naBrand.trim() || undefined, mRating: clampRating(naM), rRating: clampRating(naR), createdAt: new Date().toLocaleDateString('es-AR') }
+    const it: RatingItem = { id: 'ri-' + Date.now(), name: naName.trim(), brand: naBrand.trim() || undefined, mRating: parseRating(naM), rRating: parseRating(naR), createdAt: new Date().toLocaleDateString('es-AR') }
     setItems([...panel.items, it])
-    setNaName(''); setNaBrand(''); setNaM(5); setNaR(5)
+    setNaName(''); setNaBrand(''); setNaM(''); setNaR('')
   }
   const removeItem = async (id: string) => {
     const it = panel.items.find(x => x.id === id)
     if (!await confirm({ title: 'Eliminar ítem', message: `¿Eliminar «${it?.name}»?`, confirmLabel: 'Eliminar' })) return
     setItems(panel.items.filter(x => x.id !== id))
   }
-  const startEdit = (it: RatingItem) => { setEditId(it.id); setEdName(it.name); setEdBrand(it.brand || ''); setEdM(it.mRating); setEdR(it.rRating) }
+  const startEdit = (it: RatingItem) => { setEditId(it.id); setEdName(it.name); setEdBrand(it.brand || ''); setEdM(fmtRating(it.mRating)); setEdR(fmtRating(it.rRating)) }
   const commitEdit = () => {
     if (!editId || !edName.trim()) return
-    setItems(panel.items.map(x => x.id === editId ? { ...x, name: edName.trim(), brand: edBrand.trim() || undefined, mRating: clampRating(edM), rRating: clampRating(edR) } : x))
+    setItems(panel.items.map(x => x.id === editId ? { ...x, name: edName.trim(), brand: edBrand.trim() || undefined, mRating: parseRating(edM), rRating: parseRating(edR) } : x))
     setEditId(null)
   }
   const pickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -433,14 +450,14 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
   const filtered = panel.items
     .filter(it => (!filterBrand || it.brand === filterBrand) && (!q || it.name.toLowerCase().includes(q) || (it.brand || '').toLowerCase().includes(q)))
     .sort((a, b) => {
-      if (sortBy === 'm') return b.mRating - a.mRating
-      if (sortBy === 'r') return b.rRating - a.rRating
+      if (sortBy === 'm') return (b.mRating ?? -Infinity) - (a.mRating ?? -Infinity)
+      if (sortBy === 'r') return (b.rRating ?? -Infinity) - (a.rRating ?? -Infinity)
       if (sortBy === 'name') return a.name.localeCompare(b.name, 'es')
       // 'brand' (default): Marca → Nombre
       return (a.brand || '￿').localeCompare(b.brand || '￿', 'es') || a.name.localeCompare(b.name, 'es')
     })
-  const pm = mean(panel.items.map(i => i.mRating))
-  const pr = mean(panel.items.map(i => i.rRating))
+  const pm = mean(scored(panel.items.map(i => i.mRating)))
+  const pr = mean(scored(panel.items.map(i => i.rRating)))
 
   return (
     <div className="ratings-detail">
@@ -483,8 +500,8 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
             <button className="ratings-brand-add" onClick={() => setShowNewBrand(true)} title="Agregar marca nueva"><Tag size={13} /><Plus size={11} /></button>
           </div>
         )}
-        <label className="ratings-in-rating ratings-in-m">M <input type="number" min={1} max={10} value={naM} onChange={e => setNaM(clampRating(Number(e.target.value)))} /></label>
-        <label className="ratings-in-rating ratings-in-r">R <input type="number" min={1} max={10} value={naR} onChange={e => setNaR(clampRating(Number(e.target.value)))} /></label>
+        <label className="ratings-in-rating ratings-in-m">M <input type="text" inputMode="decimal" placeholder="—" value={naM} onChange={e => setNaM(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} title="Puntaje M (ej. 7.5). Vacío = sin puntuar" /></label>
+        <label className="ratings-in-rating ratings-in-r">R <input type="text" inputMode="decimal" placeholder="—" value={naR} onChange={e => setNaR(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} title="Puntaje R (ej. 7.5). Vacío = sin puntuar" /></label>
         <button className="ratings-btn-ok" onClick={addItem} disabled={!naName.trim()} title="Agregar ítem"><Plus size={15} /></button>
       </div>
 
@@ -519,6 +536,7 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
                 <th>Nombre</th>
                 <th className="ratings-th-num">M</th>
                 <th className="ratings-th-num">R</th>
+                <th className="ratings-th-num">Prom.</th>
                 <th className="ratings-th-act"></th>
               </tr>
             </thead>
@@ -534,8 +552,9 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
                     </select>
                   </td>
                   <td><input value={edName} onChange={e => setEdName(e.target.value)} placeholder="Nombre" onKeyDown={e => e.key === 'Enter' && commitEdit()} /></td>
-                  <td><input type="number" min={1} max={10} value={edM} onChange={e => setEdM(clampRating(Number(e.target.value)))} /></td>
-                  <td><input type="number" min={1} max={10} value={edR} onChange={e => setEdR(clampRating(Number(e.target.value)))} /></td>
+                  <td><input type="text" inputMode="decimal" placeholder="—" value={edM} onChange={e => setEdM(e.target.value)} onKeyDown={e => e.key === 'Enter' && commitEdit()} title="Vacío = sin puntuar" /></td>
+                  <td><input type="text" inputMode="decimal" placeholder="—" value={edR} onChange={e => setEdR(e.target.value)} onKeyDown={e => e.key === 'Enter' && commitEdit()} title="Vacío = sin puntuar" /></td>
+                  <td className="ratings-cell-num">{(() => { const a = mean(scored([parseRating(edM), parseRating(edR)])); return <span className="ratings-badge ratings-badge-avg" style={a > 0 ? ratingStyle(a) : undefined}>{fmtAvg(a)}</span> })()}</td>
                   <td className="ratings-row-actions">
                     <button className="ratings-btn-ok" onClick={commitEdit} disabled={!edName.trim()} title="Guardar cambios"><Check size={13} /></button>
                     <button className="ratings-btn-cancel" onClick={() => setEditId(null)} title="Cancelar"><X size={13} /></button>
@@ -545,15 +564,16 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
                 <tr key={it.id}>
                   <td className="ratings-cell-brand">{it.brand || <span className="ratings-nobrand">—</span>}</td>
                   <td className="ratings-cell-name">{it.name}</td>
-                  <td className="ratings-cell-num"><span className="ratings-badge ratings-badge-m">{it.mRating}</span></td>
-                  <td className="ratings-cell-num"><span className="ratings-badge ratings-badge-r">{it.rRating}</span></td>
+                  <td className="ratings-cell-num">{it.mRating != null ? <span className="ratings-badge" style={ratingStyle(it.mRating)}>{fmtRating(it.mRating)}</span> : <span className="ratings-badge ratings-unrated" title="Sin puntuar">s/p</span>}</td>
+                  <td className="ratings-cell-num">{it.rRating != null ? <span className="ratings-badge" style={ratingStyle(it.rRating)}>{fmtRating(it.rRating)}</span> : <span className="ratings-badge ratings-unrated" title="Sin puntuar">s/p</span>}</td>
+                  <td className="ratings-cell-num">{(() => { const a = itemAvg(it); return a != null ? <span className="ratings-badge ratings-badge-avg" style={ratingStyle(a)}>{a.toFixed(1)}</span> : <span className="ratings-badge ratings-unrated" title="Sin puntuar">—</span> })()}</td>
                   <td className="ratings-row-actions">
                     <button className="ratings-icon-btn" onClick={() => startEdit(it)} title="Editar"><Edit3 size={12} /></button>
                     <button className="ratings-icon-btn danger" onClick={() => removeItem(it.id)} title="Eliminar"><Trash2 size={12} /></button>
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={5} className="ratings-no-results">Ningún ítem coincide con los filtros.</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={6} className="ratings-no-results">Ningún ítem coincide con los filtros.</td></tr>}
             </tbody>
           </table>
         </div>

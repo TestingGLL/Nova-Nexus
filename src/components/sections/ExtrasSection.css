@@ -194,9 +194,12 @@
 .ratings-nobrand { opacity: 0.4; }
 .ratings-cell-name { font-weight: 600; }
 .ratings-cell-num { text-align: center; }
-.ratings-badge { display: inline-block; min-width: 26px; padding: 3px 8px; border-radius: 7px; font-weight: 800; font-size: 13px; }
+.ratings-badge { display: inline-block; min-width: 30px; padding: 3px 8px; border-radius: 7px; font-weight: 800; font-size: 13px; border: 1px solid transparent; }
 .ratings-badge-m { color: #6366f1; background: color-mix(in srgb, #6366f1 15%, transparent); }
 .ratings-badge-r { color: #ec4899; background: color-mix(in srgb, #ec4899 15%, transparent); }
+.ratings-badge-avg { font-weight: 800; }
+.ratings-unrated { color: var(--text-secondary); background: var(--bg-hover); font-weight: 600; font-size: 11px; letter-spacing: 0.3px; opacity: 0.8; }
+.ratings-tile-sub { display: block; font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-top: 2px; }
 .ratings-row-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .ratings-icon-btn { display: flex; padding: 5px; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-radius: 6px; }
 .ratings-icon-btn:hover { color: var(--accent); background: var(--bg-hover); }
