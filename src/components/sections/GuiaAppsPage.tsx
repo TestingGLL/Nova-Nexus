@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Plus, Copy, Trash2, ChevronDown, Settings, Image as ImageIcon, Palette, X, ArrowLeft, Check } from 'lucide-react'
+import { Plus, Copy, Trash2, ChevronDown, Settings, Image as ImageIcon, Palette, X, ArrowLeft, Check, ClipboardCopy } from 'lucide-react'
 import RichTextEditor from '../RichTextEditor'
 import { useToast } from '../Toast'
 import { useConfirm } from '../ConfirmDialog'
@@ -67,6 +67,46 @@ function loadBanners(): GuiaBanner[] {
   return []
 }
 
+// ---- Copiar contenido al portapapeles (texto plano, recursivo) ----
+const EMPTY_NOTE = '(no hay especificaciones ni que aplicar ningún cambio)'
+
+// Convierte el HTML del editor a texto legible (listas, checklists, saltos de línea).
+function htmlToText(html: string): string {
+  if (!html) return ''
+  let s = html
+    .replace(/<li[^>]*data-checked="true"[^>]*>/gi, '\n[x] ')
+    .replace(/<li[^>]*data-checked="false"[^>]*>/gi, '\n[ ] ')
+    .replace(/<li[^>]*>/gi, '\n• ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<hr[^>]*>/gi, '\n———\n')
+    .replace(/<\/(div|p|h[1-6]|ul|ol|blockquote)>/gi, '\n')
+  const div = document.createElement('div')
+  div.innerHTML = s
+  const text = (div.textContent || '').replace(/ /g, ' ')
+  return text.split('\n').map(l => l.replace(/\s+$/, '')).join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+const indentLines = (s: string, pad: string) => s.split('\n').map(l => (l ? pad + l : l)).join('\n')
+
+function serializeSub(sub: GuiaSub, depth: number, parentPath: string[]): string {
+  const pad = '  '.repeat(depth)
+  const branch = [...parentPath, sub.name]
+  const body = htmlToText(sub.html) || EMPTY_NOTE
+  let out = `${pad}${sub.name} (${branch.join(' > ')})\n${indentLines(body, pad)}\n`
+  for (const cs of sub.subs) out += '\n' + serializeSub(cs, depth + 1, branch)
+  return out
+}
+function serializePanel(panel: GuiaPanel): string {
+  let out = `${panel.name}\n`
+  if (!panel.subs.length) return out + EMPTY_NOTE + '\n'
+  for (const s of panel.subs) out += '\n' + serializeSub(s, 1, [panel.name])
+  return out
+}
+async function copyText(text: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(text); return true } catch {
+    try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok } catch { return false }
+  }
+}
+
 // Clonado con ids nuevos (para "duplicar").
 function cloneSub(s: GuiaSub): GuiaSub { return { ...s, id: uid('s'), subs: s.subs.map(cloneSub) } }
 function clonePanel(p: GuiaPanel): GuiaPanel { return { ...p, id: uid('p'), subs: p.subs.map(cloneSub) } }
@@ -104,7 +144,12 @@ function SubPanel({ sub, parentPath, onChange, onDuplicate, onDelete }: {
   onChange: (s: GuiaSub) => void; onDuplicate: () => void; onDelete: () => void
 }) {
   const confirm = useConfirm()
+  const toast = useToast()
   const branch = [...parentPath, sub.name]                 // ramificación jerárquica (auto)
+  const onCopy = async () => {
+    if (await copyText(serializeSub(sub, 0, parentPath))) toast.success('Contenido copiado')
+    else toast.error('No se pudo copiar')
+  }
   const setSubs = (subs: GuiaSub[]) => onChange({ ...sub, subs })
   const addNested = () => setSubs([...sub.subs, { id: uid('s'), name: 'Nuevo subpanel', color: lighten(sub.color), html: '', open: true, subs: [] }])
   const dupNested = (i: number) => setSubs([...sub.subs.slice(0, i + 1), cloneSub(sub.subs[i]), ...sub.subs.slice(i + 1)])
@@ -120,6 +165,7 @@ function SubPanel({ sub, parentPath, onChange, onDuplicate, onDelete }: {
         <EditableName value={sub.name} onChange={v => onChange({ ...sub, name: v })} placeholder="Subpanel" />
         <span className="guia-branch" title="Ramificación (automática)">({branch.join(' > ')})</span>
         <div className="guia-actions" onClick={e => e.stopPropagation()}>
+          <button className="guia-icon-btn" title="Copiar contenido (con sus subpaneles)" onClick={onCopy}><ClipboardCopy size={13} /></button>
           <button className="guia-icon-btn" title="Duplicar subpanel" onClick={onDuplicate}><Copy size={13} /></button>
           <button className="guia-icon-btn danger" title="Eliminar subpanel" onClick={onDelete}><Trash2 size={13} /></button>
         </div>
@@ -145,6 +191,11 @@ function PanelCard({ panel, onChange, onDuplicate, onDelete }: {
   onChange: (p: GuiaPanel) => void; onDuplicate: () => void; onDelete: () => void
 }) {
   const confirm = useConfirm()
+  const toast = useToast()
+  const onCopy = async () => {
+    if (await copyText(serializePanel(panel))) toast.success('Contenido copiado')
+    else toast.error('No se pudo copiar')
+  }
   const setSubs = (subs: GuiaSub[]) => onChange({ ...panel, subs })
   const addSub = () => setSubs([...panel.subs, { id: uid('s'), name: 'Nuevo subpanel', color: lighten(panel.color), html: '', open: true, subs: [] }])
   const dupSub = (i: number) => setSubs([...panel.subs.slice(0, i + 1), cloneSub(panel.subs[i]), ...panel.subs.slice(i + 1)])
@@ -160,6 +211,7 @@ function PanelCard({ panel, onChange, onDuplicate, onDelete }: {
         <EditableName value={panel.name} onChange={v => onChange({ ...panel, name: v })} className="guia-panel-name" placeholder="Panel" />
         <span className="guia-count">{panel.subs.length}</span>
         <div className="guia-actions" onClick={e => e.stopPropagation()}>
+          <button className="guia-icon-btn" title="Copiar todo el panel (títulos y textos)" onClick={onCopy}><ClipboardCopy size={14} /></button>
           <button className="guia-icon-btn" title="Duplicar panel" onClick={onDuplicate}><Copy size={14} /></button>
           <button className="guia-icon-btn danger" title="Eliminar panel" onClick={onDelete}><Trash2 size={14} /></button>
         </div>
