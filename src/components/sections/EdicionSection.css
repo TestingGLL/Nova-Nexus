@@ -1,5 +1,11 @@
 .edicion-section { display: flex; flex-direction: column; gap: 0; }
 
+/* Tabs (Conversor / Guía de Apps) */
+.edicion-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+.edicion-tab { display: flex; align-items: center; gap: 6px; padding: 8px 18px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-secondary); border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.edicion-tab:hover { color: var(--text-primary); }
+.edicion-tab.active { background: var(--bg-card); color: var(--accent); border-bottom-color: var(--bg-card); box-shadow: var(--shadow-soft); }
+
 /* Converter */
 .converter-card { max-width: 480px; }
 .converter-card.converter-wide { max-width: 640px; }

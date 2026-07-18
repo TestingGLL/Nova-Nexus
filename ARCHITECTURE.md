@@ -63,7 +63,7 @@ listan sus sub-áreas para saltar directo.
 | Etsy | `EtsySection.tsx` | Types · AddArticleModal · BrandPanel · Artículos (ArticleItem, GroupPanel) · Lanzamientos (LaunchSelectorModal, LaunchesTab) · Creaciones · Finanzas · Planificación · Clientes · StoreView |
 | Criptomonedas | `CriptomonedasSection.tsx` | Precios y gráficos (CoinGecko). Se usa dentro de Finanzas. |
 | Software | `SoftwareSection.tsx` | Navegador · Dispositivos (BT) · Papelera · AppData · Transferencias WiFi |
-| Edición | `EdicionSection.tsx` | Editor gráfico (canvas, capas, guías) |
+| Edición | `EdicionSection.tsx` | Pestañas: Conversor de imágenes · **Guía de Apps** (`GuiaAppsPage.tsx`: banners-acordeón con paneles General/Visual y subpaneles desplegables, cada uno con RichTextEditor) |
 | Notas | `NotasSection.tsx` | Notas con carpetas, tags, búsqueda, auto-borrado |
 | Proyectos | `ProyectosSection.tsx` | Proyectos (lista / kanban) |
 | Extras | `ExtrasSection.tsx` | Aleatorio: ruleta (SpinWheel) y grilla random |
@@ -139,6 +139,12 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 | `nn-projects` | Proyectos |
 | `nn-notifications` / `nn-alertas-config` | Alertas y su configuración |
 | `nn-wheel-configs` / `nn-wheel-options` | Ruleta de Extras |
+
+### Edición
+| Clave | Contenido |
+|---|---|
+| `nn-edicion-guia-apps` | Guía de Apps: banners (imagen/color, nombre, abierto/cerrado) → paneles → subpaneles desplegables con contenido del editor |
+| `nn-edicion-tab` | Pestaña activa de la sección Edición (`conversor`/`guia`) |
 
 > Nota: `__nn_outbox` (cola de sync) NO lleva prefijo `nn-` a propósito, para no sincronizarse a sí misma.
 
