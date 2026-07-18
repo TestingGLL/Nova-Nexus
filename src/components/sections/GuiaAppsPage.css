@@ -3,14 +3,12 @@
 
 .guia-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .guia-intro h3 { margin: 0 0 4px; font-size: 16px; color: var(--text-primary); }
-.guia-intro p { margin: 0; font-size: 13px; color: var(--text-secondary); max-width: 640px; line-height: 1.5; }
+.guia-intro p { margin: 0; font-size: 13px; color: var(--text-secondary); max-width: 660px; line-height: 1.5; }
 .guia-new-banner { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
 .guia-new-banner:hover { background: var(--accent); color: #fff; }
 
 .guia-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 20px; border: 1.5px dashed var(--border); border-radius: 14px; color: var(--text-secondary); text-align: center; }
 .guia-empty p { margin: 0; font-size: 13px; }
-
-.guia-list { display: flex; flex-direction: column; gap: 14px; }
 
 /* ---- Nombre editable ---- */
 .guia-name { cursor: text; border-radius: 4px; padding: 1px 4px; }
@@ -27,30 +25,27 @@
 .guia-chev { flex-shrink: 0; transition: transform 0.2s; opacity: 0.8; }
 .guia-chev.open { transform: rotate(0deg); }
 .guia-chev:not(.open) { transform: rotate(-90deg); }
-.guia-chev.big { opacity: 0.95; }
 
 /* ---- Swatch de color ---- */
-.guia-color-swatch { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; cursor: pointer; color: rgba(255, 255, 255, 0.85); border: 1px solid rgba(0, 0, 0, 0.15); flex-shrink: 0; }
-.guia-color-swatch.lg { width: 32px; height: 26px; }
+.guia-color-swatch { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; cursor: pointer; color: rgba(255, 255, 255, 0.9); border: 1px solid rgba(0, 0, 0, 0.18); flex-shrink: 0; }
 .guia-color-swatch input[type=color] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
-/* ============ BANNER ============ */
-.guia-banner { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--bg-card); box-shadow: var(--shadow-soft); }
-.guia-banner-strip { display: flex; align-items: center; gap: 10px; padding: 16px 18px; min-height: 64px; cursor: pointer; user-select: none; }
-.guia-banner-name { font-size: 17px; font-weight: 700; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18); }
-.guia-banner-strip .guia-name:hover { background: rgba(255, 255, 255, 0.18); }
-.guia-strip-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: none; background: rgba(0, 0, 0, 0.16); color: inherit; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
-.guia-strip-btn:hover { background: rgba(0, 0, 0, 0.3); }
+/* ============ GALERÍA DE APPS (tarjetas altas, click para entrar) ============ */
+.guia-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.guia-card { position: relative; min-height: 260px; display: flex; align-items: flex-end; padding: 20px; border: 1px solid var(--border); border-radius: 16px; cursor: pointer; overflow: hidden; box-shadow: var(--shadow-soft); transition: transform 0.15s, box-shadow 0.15s; }
+.guia-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); }
+.guia-card-name { font-size: 22px; font-weight: 800; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); word-break: break-word; }
+.guia-card-gear { position: absolute; top: 12px; right: 12px; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; background: rgba(0, 0, 0, 0.28); color: #fff; border-radius: 10px; cursor: pointer; transition: all 0.15s; }
+.guia-card-gear:hover { background: rgba(0, 0, 0, 0.5); transform: rotate(30deg); }
+.guia-card-gear.inline { position: static; width: 36px; height: 36px; }
 
-.guia-banner-edit { padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-hover); }
-.guia-edit-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.guia-edit-label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
-.guia-seg { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
-.guia-seg:hover { color: var(--text-primary); }
-.guia-seg.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-.guia-seg.danger { color: #ef4444; border-color: rgba(239, 68, 68, 0.4); }
-
-.guia-banner-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--border); }
+/* ============ VISTA DE DETALLE (dentro de una app) ============ */
+.guia-detail-head { display: flex; align-items: center; gap: 12px; padding: 22px 20px; min-height: 96px; border-radius: 14px; box-shadow: var(--shadow-soft); }
+.guia-back { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border: none; background: rgba(0, 0, 0, 0.28); color: #fff; border-radius: 10px; cursor: pointer; transition: all 0.15s; flex-shrink: 0; }
+.guia-back:hover { background: rgba(0, 0, 0, 0.5); }
+.guia-detail-name { font-size: 24px; font-weight: 800; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+.guia-detail-head .guia-card-gear.inline { margin-left: auto; }
+.guia-detail-body { display: flex; flex-direction: column; gap: 12px; }
 
 /* ============ PANEL ============ */
 .guia-panel { border: 1px solid var(--border); border-radius: 11px; overflow: hidden; background: var(--bg-card); }
@@ -59,12 +54,14 @@
 .guia-count { font-size: 11px; color: var(--text-secondary); background: rgba(127, 127, 127, 0.14); border-radius: 10px; padding: 1px 8px; }
 .guia-panel-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 9px; }
 
-/* ============ SUBPANEL ============ */
+/* ============ SUBPANEL (recursivo) ============ */
 .guia-sub { border: 1px solid var(--border); border-left-width: 3px; border-radius: 9px; overflow: hidden; background: var(--bg-card); }
 .guia-sub-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; user-select: none; color: var(--text-primary); }
-.guia-sub-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .guia-sub-head .guia-name { font-size: 13px; font-weight: 500; }
-.guia-sub-body { padding: 4px 12px 12px; }
+.guia-branch { font-size: 11px; color: var(--text-secondary); font-style: italic; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.guia-sub-body { padding: 6px 12px 12px; display: flex; flex-direction: column; gap: 9px; }
+/* Subpaneles anidados: leve sangría a la izquierda para leer la jerarquía. */
+.guia-sub-body .guia-sub { margin-left: 10px; }
 
 /* ---- Botón agregar ---- */
 .guia-add-btn { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 7px 14px; border: 1px dashed var(--border); background: transparent; color: var(--text-secondary); border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
@@ -72,3 +69,20 @@
 
 /* ---- Editor embebido ---- */
 .guia-rte { border: 1px solid var(--border); border-radius: 8px; }
+
+/* ============ MODAL DE EDICIÓN (engranaje) ============ */
+.guia-modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+.guia-modal { width: 100%; max-width: 460px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35); display: flex; flex-direction: column; gap: 8px; }
+.guia-modal-head { display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+.guia-modal-head span { display: inline-flex; align-items: center; gap: 8px; }
+.guia-field-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-top: 6px; }
+.guia-field-input { padding: 9px 12px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-primary); border-radius: 8px; font-size: 14px; }
+.guia-field-input:focus { outline: none; border-color: var(--accent); }
+.guia-edit-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.guia-seg { display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-secondary); border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+.guia-seg:hover { color: var(--text-primary); }
+.guia-seg.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.guia-seg.danger { color: #ef4444; border-color: rgba(239, 68, 68, 0.4); }
+.guia-modal-preview { display: flex; align-items: flex-end; min-height: 90px; border-radius: 10px; padding: 12px 14px; font-size: 17px; font-weight: 700; margin-top: 8px; box-shadow: var(--shadow-soft); }
+.guia-modal-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.guia-modal-done { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: none; background: var(--accent); color: #fff; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
