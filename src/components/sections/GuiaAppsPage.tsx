@@ -1,6 +1,7 @@
 import { useState, useRef, type DragEvent, type MouseEvent } from 'react'
-import { Plus, Copy, Trash2, ChevronDown, Settings, Image as ImageIcon, Palette, X, ArrowLeft, Check, ClipboardCopy, GripVertical, GitBranch } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, Settings, Image as ImageIcon, Palette, X, ArrowLeft, Check, ClipboardCopy, GripVertical, GitBranch } from 'lucide-react'
 import RichTextEditor from '../RichTextEditor'
+import DuplicateIcon from '../DuplicateIcon'
 import { useToast } from '../Toast'
 import { useConfirm } from '../ConfirmDialog'
 import { uploadImage, fileToDataUrl } from '../../lib/imageStore'
@@ -14,6 +15,7 @@ import './GuiaAppsPage.css'
 
 const KEY = 'nn-edicion-guia-apps'
 const CFLAG = 'nn-edicion-guia-colors-v1'   // marca de la recoloración retroactiva (una vez)
+const SFLAG = 'nn-edicion-guia-struct-v1'   // marca de la estructura por defecto aplicada a apps existentes (una vez)
 
 interface GuiaSub { id: string; name: string; color: string; html: string; open: boolean; isBranch: boolean; subs: GuiaSub[] }
 interface GuiaPanel { id: string; name: string; color: string; open: boolean; subs: GuiaSub[] }
@@ -77,6 +79,31 @@ function normBanner(b: any): GuiaBanner {
     panels: (b.panels || []).map((p: any) => ({ id: p.id || uid('p'), name: p.name || 'Panel', color: p.color || '#3b82f6', open: p.open !== false, subs: (p.subs || []).map((s: any) => normSub(s, p.color || '#3b82f6')) })),
   }
 }
+// Lleva una app existente a la plantilla por defecto (agrega lo que falte, sin duplicar).
+function migrateStructure(b: GuiaBanner): GuiaBanner {
+  let panels = [...b.panels]
+  // 1) Panel «Anotaciones e Ideas» arriba de todo (si falta).
+  if (!panels.some(p => p.name === 'Anotaciones e Ideas')) {
+    panels = [{ id: uid('p'), name: 'Anotaciones e Ideas', color: '#f59e0b', open: true, subs: [] }, ...panels]
+  }
+  // 2) «General» → subpanel «Conceptos Básicos» primero (si falta).
+  panels = panels.map(p => (p.name === 'General' && !p.subs.some(s => s.name === 'Conceptos Básicos'))
+    ? { ...p, subs: [mkSub('Conceptos Básicos', p.color), ...p.subs] } : p)
+  // 3) «Visual» → colores por nombre (solo si aún tienen el violeta viejo, no pisa customs) + «Navegación» (si falta).
+  const VIS: Record<string, string> = { 'Secciones': '#3b82f6', 'UX/UI': '#8b5cf6', 'Funcionalidades': '#22c55e', 'Widgets': '#f4511e' }
+  panels = panels.map(p => {
+    if (p.name !== 'Visual') return p
+    let subs = p.subs.map(s => (VIS[s.name] && s.color === '#8b5cf6') ? recolorTree({ ...s, color: VIS[s.name] }, VIS[s.name], 0) : s)
+    if (!subs.some(s => s.name === 'Navegación')) {
+      const nav = mkSub('Navegación', '#06b6d4', [mkSub('Top Bar', nestedColor('#06b6d4', 1)), mkSub('Side Bar', nestedColor('#06b6d4', 1))])
+      const wi = subs.findIndex(s => s.name === 'Widgets')
+      subs = wi >= 0 ? [...subs.slice(0, wi), nav, ...subs.slice(wi)] : [...subs, nav]
+    }
+    return { ...p, subs }
+  })
+  return { ...b, panels }
+}
+
 function loadBanners(): GuiaBanner[] {
   let arr: any[] = []
   try { const raw = localStorage.getItem(KEY); if (raw) arr = JSON.parse(raw) } catch {}
@@ -89,6 +116,16 @@ function loadBanners(): GuiaBanner[] {
         localStorage.setItem(KEY, JSON.stringify(banners))
       }
       localStorage.setItem(CFLAG, '1')
+    }
+  } catch {}
+  // Retroactivo (una sola vez): aplica la estructura por defecto a las apps ya creadas.
+  try {
+    if (!localStorage.getItem(SFLAG)) {
+      if (banners.length) {
+        banners = banners.map(migrateStructure)
+        localStorage.setItem(KEY, JSON.stringify(banners))
+      }
+      localStorage.setItem(SFLAG, '1')
     }
   } catch {}
   return banners
@@ -227,7 +264,7 @@ function SubPanel({ sub, parentPath, rootColor, depth, onChange, onDuplicate, on
             <input type="checkbox" checked={sub.isBranch} onChange={e => onChange({ ...sub, isBranch: e.target.checked })} /><GitBranch size={12} />
           </label>
           <button className="guia-icon-btn" title="Copiar contenido (con sus subpaneles)" onClick={onCopy}><ClipboardCopy size={13} /></button>
-          <button className="guia-icon-btn" title="Duplicar subpanel" onClick={onDuplicate}><Copy size={13} /></button>
+          <button className="guia-icon-btn" title="Duplicar subpanel" onClick={onDuplicate}><DuplicateIcon size={13} /></button>
           <button className="guia-icon-btn danger" title="Eliminar subpanel" onClick={onDelete}><Trash2 size={13} /></button>
         </div>
       </div>
@@ -277,7 +314,7 @@ function PanelCard({ panel, onChange, onDuplicate, onDelete, gripProps, dropProp
         <span className="guia-count" title={`${panel.subs.length} subpanel(es) dentro`}>{panel.subs.length}</span>
         <div className="guia-actions" onClick={e => e.stopPropagation()}>
           <button className="guia-icon-btn" title="Copiar todo el panel (títulos y textos)" onClick={onCopy}><ClipboardCopy size={14} /></button>
-          <button className="guia-icon-btn" title="Duplicar panel" onClick={onDuplicate}><Copy size={14} /></button>
+          <button className="guia-icon-btn" title="Duplicar panel" onClick={onDuplicate}><DuplicateIcon size={14} /></button>
           <button className="guia-icon-btn danger" title="Eliminar panel" onClick={onDelete}><Trash2 size={14} /></button>
         </div>
       </div>
@@ -341,7 +378,7 @@ function BannerEditModal({ banner, onChange, onDuplicate, onDelete, onClose }: {
         </div>
 
         <div className="guia-modal-foot">
-          <button className="guia-seg" onClick={onDuplicate}><Copy size={13} /> Duplicar</button>
+          <button className="guia-seg" onClick={onDuplicate}><DuplicateIcon size={13} /> Duplicar</button>
           <button className="guia-seg danger" onClick={onDelete}><Trash2 size={13} /> Eliminar app</button>
           <button className="guia-modal-done" onClick={onClose}><Check size={14} /> Listo</button>
         </div>

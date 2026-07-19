@@ -1,6 +1,6 @@
-// Ícono de "Duplicar" (estilo Material "content_copy": dos hojas superpuestas).
-// Usa currentColor para heredar el color del contexto. Se usa en TODOS los botones
-// de "Duplicar" de la app para que el ícono sea consistente en todos lados.
+// Ícono de "Duplicar" (Material Symbols "tab_group"). Usa currentColor para heredar el
+// color del contexto. Se usa en TODOS los botones de "Duplicar" de la app para que el
+// ícono sea consistente en todos lados.
 export default function DuplicateIcon({ size = 16, className }: { size?: number; className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 -960 960 960" fill="currentColor" className={className} aria-hidden="true">
