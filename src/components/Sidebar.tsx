@@ -16,13 +16,15 @@ import {
   WifiOff,
   UserCircle,
   Puzzle,
+  PlusSquare,
 } from 'lucide-react'
 import type { Section } from '../App'
 import './Sidebar.css'
 
 interface SidebarProps {
   activeSection: Section
-  onSectionChange: (section: Section) => void
+  onNavigate: (section: Section) => void      // clic izquierdo: navega la tab activa
+  onOpenNewTab: (section: Section) => void     // clic derecho/central: abre en tab nueva
   isOpen: boolean
   onToggle: () => void
 }
@@ -139,12 +141,22 @@ function saveProfile(p: ProfileData) {
   localStorage.setItem('nn-profile', JSON.stringify(p))
 }
 
-export default function Sidebar({ activeSection, onSectionChange, isOpen, onToggle }: SidebarProps) {
+export default function Sidebar({ activeSection, onNavigate, onOpenNewTab, isOpen, onToggle }: SidebarProps) {
   const online = useOnlineStatus()
   const [showProfile, setShowProfile] = useState(false)
   const [order, setOrder] = useState<Section[]>(loadSectionOrder)
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [overIdx, setOverIdx] = useState<number | null>(null)
+  const [ctx, setCtx] = useState<{ id: Section; x: number; y: number } | null>(null)
+  useEffect(() => {
+    if (!ctx) return
+    const close = () => setCtx(null)
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtx(null) }
+    window.addEventListener('click', close)
+    window.addEventListener('resize', close)
+    window.addEventListener('keydown', esc)
+    return () => { window.removeEventListener('click', close); window.removeEventListener('resize', close); window.removeEventListener('keydown', esc) }
+  }, [ctx])
   const sectionMap = Object.fromEntries(sections.map(s => [s.id, s]))
   const saveOrder = (o: Section[]) => { setOrder(o); localStorage.setItem('nn-section-order', JSON.stringify(o)) }
   const onDrop = (idx: number) => { if (dragIdx === null || dragIdx === idx) { setOverIdx(null); return } const o = [...order]; const [m] = o.splice(dragIdx, 1); o.splice(idx, 0, m); saveOrder(o); setDragIdx(null); setOverIdx(null) }
@@ -191,7 +203,10 @@ export default function Sidebar({ activeSection, onSectionChange, isOpen, onTogg
               key={id}
               data-section={id}
               className={`nav-item ${activeSection === id ? 'active' : ''} ${overIdx === idx ? 'nav-drag-over' : ''}`}
-              onClick={() => onSectionChange(id)}
+              onClick={() => onNavigate(id)}
+              onAuxClick={e => { if (e.button === 1) { e.preventDefault(); onOpenNewTab(id) } }}
+              onMouseDown={e => { if (e.button === 1) e.preventDefault() }}
+              onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx({ id, x: e.clientX, y: e.clientY }) }}
               title={!isOpen ? sec.label : undefined}
               draggable
               onDragStart={() => setDragIdx(idx)}
@@ -228,6 +243,12 @@ export default function Sidebar({ activeSection, onSectionChange, isOpen, onTogg
           )}
         </button>
       </div>
+
+      {ctx && (
+        <div className="sidebar-ctx" style={{ top: ctx.y, left: ctx.x }} onClick={e => e.stopPropagation()}>
+          <button onClick={() => { onOpenNewTab(ctx.id); setCtx(null) }}><PlusSquare size={14} /> Abrir en nueva pestaña</button>
+        </div>
+      )}
 
       {showProfile && (
         <div className="profile-panel">

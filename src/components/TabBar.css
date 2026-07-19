@@ -1,0 +1,90 @@
+/* ============ BARRA DE TABS ============ */
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 10px 0;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  min-height: 40px;
+}
+.tab-bar::-webkit-scrollbar { height: 0; }
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px 7px 14px;
+  max-width: 200px;
+  min-width: 88px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 9px 9px 0 0;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.tab:hover { color: var(--text-primary); }
+.tab.active {
+  background: var(--bg-card);
+  color: var(--accent);
+  box-shadow: var(--shadow-soft);
+  position: relative;
+}
+.tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px; height: 2px;
+  background: var(--accent);
+}
+.tab-label { overflow: hidden; text-overflow: ellipsis; }
+.tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px; height: 18px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: all 0.15s;
+}
+.tab-close:hover { opacity: 1; background: rgba(127, 127, 127, 0.22); }
+
+/* Menú contextual (clic derecho en una pestaña) */
+.tab-ctx {
+  position: fixed;
+  z-index: 2000;
+  min-width: 160px;
+  padding: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tab-ctx button {
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.tab-ctx button:hover:not(:disabled) { background: var(--bg-hover); color: var(--accent); }
+.tab-ctx button:disabled { opacity: 0.4; cursor: default; }

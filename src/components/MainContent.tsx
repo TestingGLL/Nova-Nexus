@@ -2,13 +2,14 @@ import { useState, useEffect, lazy, Suspense } from 'react'
 import { Lock, Loader } from 'lucide-react'
 import type { Section } from '../App'
 import SectionErrorBoundary from './SectionErrorBoundary'
+import TabBar from './TabBar'
 import { useSecurity, SecurityGate } from '../lib/security'
 import { useToast } from './Toast'
 import './MainContent.css'
 
-// Sections are code-split and only the active one is mounted. This keeps the
-// initial bundle small and stops hidden sections from running their timers,
-// fetches and animations in the background.
+// Sections are code-split. Only the OPEN tabs are mounted (máx 5); the resto queda
+// desmontado. Al cambiar de tab, las abiertas se mantienen montadas (se ocultan con
+// display:none) para no perder su estado.
 const InicioSection = lazy(() => import('./sections/InicioSection'))
 const PersonalSection = lazy(() => import('./sections/PersonalSection'))
 const FinanzasSection = lazy(() => import('./sections/FinanzasSection'))
@@ -22,7 +23,11 @@ const AlertasSection = lazy(() => import('./sections/AlertasSection'))
 const ConfiguracionSection = lazy(() => import('./sections/ConfiguracionSection'))
 
 interface MainContentProps {
-  section: Section
+  openTabs: Section[]
+  active: Section
+  onActivate: (s: Section) => void
+  onClose: (s: Section) => void
+  onCloseOthers: (s: Section) => void
   sidebarOpen: boolean
 }
 
@@ -39,18 +44,19 @@ const sections: { key: Section; title: string; Component: React.LazyExoticCompon
   { key: 'alertas', title: 'Alertas', Component: AlertasSection },
   { key: 'configuracion', title: 'Configuración', Component: ConfiguracionSection },
 ]
+const sectionMap = Object.fromEntries(sections.map(s => [s.key, s]))
 
 function loadLocked(): string[] {
   try { const s = localStorage.getItem('nn-locked-sections'); return s ? JSON.parse(s) : [] } catch { return [] }
 }
 
-export default function MainContent({ section, sidebarOpen }: MainContentProps) {
+export default function MainContent({ openTabs, active, onActivate, onClose, onCloseOthers, sidebarOpen }: MainContentProps) {
   const [locked, setLocked] = useState<string[]>(loadLocked)
   const [unlockedNow, setUnlockedNow] = useState<Set<string>>(new Set())
   const [restoreNonce, setRestoreNonce] = useState(0)
   const toast = useToast()
 
-  // On undo/redo the active section remounts so it re-reads the restored state.
+  // On undo/redo las tabs abiertas se remontan para re-leer el estado restaurado.
   useEffect(() => {
     const onRestore = (e: Event) => {
       const action = (e as CustomEvent).detail?.action
@@ -62,9 +68,7 @@ export default function MainContent({ section, sidebarOpen }: MainContentProps) 
     return () => window.removeEventListener('nn-state-restored', onRestore)
   }, [toast])
 
-  // Locked sections can change from Configuración (same window, so the `storage`
-  // event won't fire). Poll, but only update state when the value actually
-  // changed — otherwise a fresh array every tick re-renders the whole section.
+  // Locked sections can change from Configuración (same window). Poll, solo actualiza si cambió.
   useEffect(() => {
     const sync = () => setLocked(prev => { const next = loadLocked(); return JSON.stringify(prev) === JSON.stringify(next) ? prev : next })
     const id = setInterval(sync, 2000)
@@ -73,37 +77,43 @@ export default function MainContent({ section, sidebarOpen }: MainContentProps) 
   }, [])
 
   const security = useSecurity()
-  const current = sections.find(s => s.key === section) ?? sections[0]
-  const { key, title, Component } = current
-  const isLocked = locked.includes(key) && !unlockedNow.has(key)
-  const secLocked = security.lockedSections.includes(key)
 
   return (
     <main className={`main-content ${sidebarOpen ? '' : 'expanded'}`}>
-      <div key={`${key}-${restoreNonce}`} className="section-wrapper" style={{ display: 'flex' }}>
-        <header className="content-header">
-          <div className="header-title">
-            <h1>{title}{locked.includes(key) && <Lock size={14} className="section-lock-icon" />}</h1>
-          </div>
-        </header>
-        <div className="content-body" style={{ position: 'relative' }}>
-          <div style={isLocked ? { pointerEvents: 'none', opacity: 0.55, filter: 'grayscale(0.3)' } : undefined}>
-            <SectionErrorBoundary name={title}>
-              <Suspense fallback={<div className="section-loading"><Loader size={22} className="section-loading-spin" /></div>}>
-                {secLocked ? <SecurityGate title={title}><Component /></SecurityGate> : <Component />}
-              </Suspense>
-            </SectionErrorBoundary>
-          </div>
-          {isLocked && (
-            <div className="section-lock-overlay">
-              <Lock size={28} />
-              <p>Esta sección está bloqueada</p>
-              <span>Desbloqueala temporalmente para editar, o quitá el bloqueo en Configuración → Adicionales.</span>
-              <button onClick={() => setUnlockedNow(s => new Set(s).add(key))}>Desbloquear temporalmente</button>
+      <TabBar tabs={openTabs} active={active} onActivate={onActivate} onClose={onClose} onCloseOthers={onCloseOthers} />
+      {openTabs.map(tabKey => {
+        const s = sectionMap[tabKey] ?? sections[0]
+        const { key, title, Component } = s
+        const isLocked = locked.includes(key) && !unlockedNow.has(key)
+        const secLocked = security.lockedSections.includes(key)
+        const visible = key === active
+        return (
+          <div key={`${key}-${restoreNonce}`} className="section-wrapper" style={{ display: visible ? 'flex' : 'none' }}>
+            <header className="content-header">
+              <div className="header-title">
+                <h1>{title}{locked.includes(key) && <Lock size={14} className="section-lock-icon" />}</h1>
+              </div>
+            </header>
+            <div className="content-body" style={{ position: 'relative' }}>
+              <div style={isLocked ? { pointerEvents: 'none', opacity: 0.55, filter: 'grayscale(0.3)' } : undefined}>
+                <SectionErrorBoundary name={title}>
+                  <Suspense fallback={<div className="section-loading"><Loader size={22} className="section-loading-spin" /></div>}>
+                    {secLocked ? <SecurityGate title={title}><Component /></SecurityGate> : <Component />}
+                  </Suspense>
+                </SectionErrorBoundary>
+              </div>
+              {isLocked && (
+                <div className="section-lock-overlay">
+                  <Lock size={28} />
+                  <p>Esta sección está bloqueada</p>
+                  <span>Desbloqueala temporalmente para editar, o quitá el bloqueo en Configuración → Adicionales.</span>
+                  <button onClick={() => setUnlockedNow(set => new Set(set).add(key))}>Desbloquear temporalmente</button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        )
+      })}
     </main>
   )
 }
