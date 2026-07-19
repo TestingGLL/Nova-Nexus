@@ -17,7 +17,7 @@ const KEY = 'nn-edicion-guia-apps'
 const CFLAG = 'nn-edicion-guia-colors-v1'   // marca de la recoloración retroactiva (una vez)
 const SFLAG = 'nn-edicion-guia-struct-v1'   // marca de la estructura por defecto aplicada a apps existentes (una vez)
 
-interface GuiaSub { id: string; name: string; color: string; html: string; open: boolean; isBranch: boolean; subs: GuiaSub[] }
+interface GuiaSub { id: string; name: string; color: string; html: string; open: boolean; editorOpen: boolean; isBranch: boolean; subs: GuiaSub[] }
 interface GuiaPanel { id: string; name: string; color: string; open: boolean; subs: GuiaSub[] }
 interface GuiaBanner { id: string; name: string; bgType: 'color' | 'image'; bgColor: string; bgImage?: string; panels: GuiaPanel[] }
 
@@ -50,7 +50,7 @@ function recolorTree(sub: GuiaSub, rootColor: string, depth: number): GuiaSub {
   return { ...sub, color, subs: sub.subs.map(cs => recolorTree(cs, rootColor, depth + 1)) }
 }
 
-const mkSub = (name: string, color: string, subs: GuiaSub[] = []): GuiaSub => ({ id: uid('s'), name, color, html: '', open: false, isBranch: true, subs })
+const mkSub = (name: string, color: string, subs: GuiaSub[] = []): GuiaSub => ({ id: uid('s'), name, color, html: '', open: false, editorOpen: true, isBranch: true, subs })
 
 // Plantilla por defecto de cada app nueva.
 function seedPanels(): GuiaPanel[] {
@@ -70,7 +70,7 @@ function seedPanels(): GuiaPanel[] {
 // Normaliza datos viejos (agrega isBranch/subs/color si faltaban).
 function normSub(s: any, fallback: string): GuiaSub {
   const color = s.color || fallback
-  return { id: s.id || uid('s'), name: s.name || 'Subpanel', color, html: s.html || '', open: !!s.open, isBranch: s.isBranch !== false, subs: Array.isArray(s.subs) ? s.subs.map((x: any) => normSub(x, color)) : [] }
+  return { id: s.id || uid('s'), name: s.name || 'Subpanel', color, html: s.html || '', open: !!s.open, editorOpen: s.editorOpen !== false, isBranch: s.isBranch !== false, subs: Array.isArray(s.subs) ? s.subs.map((x: any) => normSub(x, color)) : [] }
 }
 function normBanner(b: any): GuiaBanner {
   return {
@@ -270,7 +270,12 @@ function SubPanel({ sub, parentPath, rootColor, depth, onChange, onDuplicate, on
       </div>
       {sub.open && (
         <div className="guia-sub-body">
-          <RichTextEditor docKey={sub.id} html={sub.html} onChange={h => onChange({ ...sub, html: h })} placeholder="Escribí el contenido…" minHeight={150} className="guia-rte" />
+          <div className="guia-editor-block">
+            <button className="guia-editor-toggle" onClick={() => onChange({ ...sub, editorOpen: !sub.editorOpen })} title={sub.editorOpen ? 'Ocultar el editor de texto' : 'Mostrar el editor de texto'}>
+              <ChevronDown size={12} className={`guia-chev ${sub.editorOpen ? 'open' : ''}`} /> Contenido
+            </button>
+            {sub.editorOpen && <RichTextEditor docKey={sub.id} html={sub.html} onChange={h => onChange({ ...sub, html: h })} placeholder="Escribí el contenido…" minHeight={150} className="guia-rte" />}
+          </div>
           {sub.subs.map((cs, i) => (
             <SubPanel key={cs.id} sub={cs} parentPath={childPath} rootColor={childRoot} depth={depth + 1}
               gripProps={R.gripProps(i)} dropProps={R.dropProps(i)}
