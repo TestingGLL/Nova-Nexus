@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, type CSSProperties } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Plus, Trash2, Edit3, X, RotateCcw, Save, Settings, Eye, EyeOff, Check, Search, ArrowLeft, Image as ImageIcon, Star, BarChart3, Tag } from 'lucide-react'
 import ColorInput from '../ColorInput'
 import { useConfirm } from '../ConfirmDialog'
@@ -224,11 +224,6 @@ const fmtRating = (n: number | null): string => (n == null ? '' : (n % 1 === 0 ?
 // De una lista de puntajes, deja solo los cargados (ignora "sin puntuar").
 const scored = (nums: (number | null)[]) => nums.filter((n): n is number => n != null)
 const itemAvg = (it: RatingItem): number | null => { const v = scored([it.mRating, it.rRating]); return v.length ? mean(v) : null }
-// Color del badge según el valor: rojo (bajo) → verde (alto).
-function ratingStyle(n: number): CSSProperties {
-  const t = Math.max(0, Math.min(1, (n - 1) / 9)); const hue = Math.round(t * 120)
-  return { background: `hsla(${hue},70%,50%,0.16)`, color: `hsl(${hue},72%,38%)`, borderColor: `hsla(${hue},70%,50%,0.45)` }
-}
 
 function RatingsPanel() {
   const [panels, setPanels] = useState<RatingPanel[]>(loadRatings)
@@ -536,7 +531,6 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
                 <th>Nombre</th>
                 <th className="ratings-th-num">M</th>
                 <th className="ratings-th-num">R</th>
-                <th className="ratings-th-num">Prom.</th>
                 <th className="ratings-th-act"></th>
               </tr>
             </thead>
@@ -554,7 +548,6 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
                   <td><input value={edName} onChange={e => setEdName(e.target.value)} placeholder="Nombre" onKeyDown={e => e.key === 'Enter' && commitEdit()} /></td>
                   <td><input type="text" inputMode="decimal" placeholder="—" value={edM} onChange={e => setEdM(e.target.value)} onKeyDown={e => e.key === 'Enter' && commitEdit()} title="Vacío = sin puntuar" /></td>
                   <td><input type="text" inputMode="decimal" placeholder="—" value={edR} onChange={e => setEdR(e.target.value)} onKeyDown={e => e.key === 'Enter' && commitEdit()} title="Vacío = sin puntuar" /></td>
-                  <td className="ratings-cell-num">{(() => { const a = mean(scored([parseRating(edM), parseRating(edR)])); return <span className="ratings-badge ratings-badge-avg" style={a > 0 ? ratingStyle(a) : undefined}>{fmtAvg(a)}</span> })()}</td>
                   <td className="ratings-row-actions">
                     <button className="ratings-btn-ok" onClick={commitEdit} disabled={!edName.trim()} title="Guardar cambios"><Check size={13} /></button>
                     <button className="ratings-btn-cancel" onClick={() => setEditId(null)} title="Cancelar"><X size={13} /></button>
@@ -564,16 +557,15 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
                 <tr key={it.id}>
                   <td className="ratings-cell-brand">{it.brand || <span className="ratings-nobrand">—</span>}</td>
                   <td className="ratings-cell-name">{it.name}</td>
-                  <td className="ratings-cell-num">{it.mRating != null ? <span className="ratings-badge" style={ratingStyle(it.mRating)}>{fmtRating(it.mRating)}</span> : <span className="ratings-badge ratings-unrated" title="Sin puntuar">s/p</span>}</td>
-                  <td className="ratings-cell-num">{it.rRating != null ? <span className="ratings-badge" style={ratingStyle(it.rRating)}>{fmtRating(it.rRating)}</span> : <span className="ratings-badge ratings-unrated" title="Sin puntuar">s/p</span>}</td>
-                  <td className="ratings-cell-num">{(() => { const a = itemAvg(it); return a != null ? <span className="ratings-badge ratings-badge-avg" style={ratingStyle(a)}>{a.toFixed(1)}</span> : <span className="ratings-badge ratings-unrated" title="Sin puntuar">—</span> })()}</td>
+                  <td className="ratings-cell-num">{it.mRating != null ? <span className="ratings-badge ratings-badge-m">{fmtRating(it.mRating)}</span> : <span className="ratings-badge ratings-unrated" title="Sin puntuar">s/p</span>}</td>
+                  <td className="ratings-cell-num">{it.rRating != null ? <span className="ratings-badge ratings-badge-r">{fmtRating(it.rRating)}</span> : <span className="ratings-badge ratings-unrated" title="Sin puntuar">s/p</span>}</td>
                   <td className="ratings-row-actions">
                     <button className="ratings-icon-btn" onClick={() => startEdit(it)} title="Editar"><Edit3 size={12} /></button>
                     <button className="ratings-icon-btn danger" onClick={() => removeItem(it.id)} title="Eliminar"><Trash2 size={12} /></button>
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={6} className="ratings-no-results">Ningún ítem coincide con los filtros.</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={5} className="ratings-no-results">Ningún ítem coincide con los filtros.</td></tr>}
             </tbody>
           </table>
         </div>
