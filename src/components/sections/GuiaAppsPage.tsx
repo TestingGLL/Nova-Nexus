@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { Plus, Copy, Trash2, ChevronDown, Settings, Image as ImageIcon, Palette, X, ArrowLeft, Check, ClipboardCopy } from 'lucide-react'
+import { useState, useRef, type DragEvent, type MouseEvent } from 'react'
+import { Plus, Copy, Trash2, ChevronDown, Settings, Image as ImageIcon, Palette, X, ArrowLeft, Check, ClipboardCopy, GripVertical, GitBranch } from 'lucide-react'
 import RichTextEditor from '../RichTextEditor'
 import { useToast } from '../Toast'
 import { useConfirm } from '../ConfirmDialog'
@@ -8,19 +8,20 @@ import './GuiaAppsPage.css'
 
 // ============ GUÍA DE APPS ============
 // Página de Edición. Cada "banner" es una app: una tarjeta alta (imagen o color liso) que
-// se CLICKEA para ENTRAR a su vista. Adentro tiene paneles (General / Visual) con subpaneles
-// desplegables, que a su vez pueden contener más subpaneles (anidados). Cada subpanel usa el
-// Editor de Textos unificado (RichTextEditor). Todo el estado vive en la clave nn- (sincroniza).
+// se CLICKEA para ENTRAR a su vista. Adentro tiene paneles con subpaneles desplegables, que
+// a su vez pueden contener más subpaneles (anidados). Todo se puede reordenar por grip.
+// Cada subpanel usa el Editor de Textos unificado. El estado vive en la clave nn- (sincroniza).
 
 const KEY = 'nn-edicion-guia-apps'
+const CFLAG = 'nn-edicion-guia-colors-v1'   // marca de la recoloración retroactiva (una vez)
 
-interface GuiaSub { id: string; name: string; color: string; html: string; open: boolean; subs: GuiaSub[] }
+interface GuiaSub { id: string; name: string; color: string; html: string; open: boolean; isBranch: boolean; subs: GuiaSub[] }
 interface GuiaPanel { id: string; name: string; color: string; open: boolean; subs: GuiaSub[] }
 interface GuiaBanner { id: string; name: string; bgType: 'color' | 'image'; bgColor: string; bgImage?: string; panels: GuiaPanel[] }
 
 const uid = (p: string) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
 
-// Subpanel agregado = color del contenedor, un tono más claro (mezcla con blanco).
+// Mezcla un color con blanco (amt = fracción hacia el blanco).
 function lighten(hex: string, amt = 0.22): string {
   const h = (hex || '#3b82f6').replace('#', '')
   const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16)
@@ -37,23 +38,37 @@ function textOn(hex: string): string {
   const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16)
   return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#1a1a1a' : '#ffffff'
 }
+// Color de un subpanel anidado: el del subpanel principal (nivel 0), 15% más claro por nivel.
+function nestedColor(rootColor: string, depth: number): string {
+  return depth <= 0 ? rootColor : lighten(rootColor, Math.min(0.8, 0.15 * depth))
+}
+// Recolorea la rama: mantiene el color del subpanel raíz (nivel 0) y aclara los descendientes.
+function recolorTree(sub: GuiaSub, rootColor: string, depth: number): GuiaSub {
+  const color = depth === 0 ? sub.color : nestedColor(rootColor, depth)
+  return { ...sub, color, subs: sub.subs.map(cs => recolorTree(cs, rootColor, depth + 1)) }
+}
 
-// Cada app nueva nace con los dos paneles por defecto y sus subpaneles.
+const mkSub = (name: string, color: string, subs: GuiaSub[] = []): GuiaSub => ({ id: uid('s'), name, color, html: '', open: false, isBranch: true, subs })
+
+// Plantilla por defecto de cada app nueva.
 function seedPanels(): GuiaPanel[] {
-  const mk = (name: string, color: string, subs: string[]): GuiaPanel => ({
-    id: uid('p'), name, color, open: true,
-    subs: subs.map(n => ({ id: uid('s'), name: n, color, html: '', open: false, subs: [] })),
-  })
+  const AZUL = '#3b82f6', VIOLETA = '#8b5cf6', VERDE = '#22c55e', NARANJA = '#f4511e', CYAN = '#06b6d4', AMBAR = '#f59e0b'
+  const nav = mkSub('Navegación', CYAN, [mkSub('Top Bar', nestedColor(CYAN, 1)), mkSub('Side Bar', nestedColor(CYAN, 1))])
   return [
-    mk('General', '#3b82f6', ['Seguridad', 'Rendimiento', 'Legal', 'Código']),
-    mk('Visual', '#8b5cf6', ['Secciones', 'UX/UI', 'Funcionalidades', 'Widgets']),
+    { id: uid('p'), name: 'Anotaciones e Ideas', color: AMBAR, open: true, subs: [] },
+    { id: uid('p'), name: 'General', color: AZUL, open: true, subs: [
+      mkSub('Conceptos Básicos', AZUL), mkSub('Seguridad', AZUL), mkSub('Rendimiento', AZUL), mkSub('Legal', AZUL), mkSub('Código', AZUL),
+    ] },
+    { id: uid('p'), name: 'Visual', color: VIOLETA, open: true, subs: [
+      mkSub('Secciones', AZUL), mkSub('UX/UI', VIOLETA), mkSub('Funcionalidades', VERDE), nav, mkSub('Widgets', NARANJA),
+    ] },
   ]
 }
 
-// Normaliza datos viejos (v1.02.05 no tenía subs anidados ni color en todos los subpaneles).
+// Normaliza datos viejos (agrega isBranch/subs/color si faltaban).
 function normSub(s: any, fallback: string): GuiaSub {
   const color = s.color || fallback
-  return { id: s.id || uid('s'), name: s.name || 'Subpanel', color, html: s.html || '', open: !!s.open, subs: Array.isArray(s.subs) ? s.subs.map((x: any) => normSub(x, color)) : [] }
+  return { id: s.id || uid('s'), name: s.name || 'Subpanel', color, html: s.html || '', open: !!s.open, isBranch: s.isBranch !== false, subs: Array.isArray(s.subs) ? s.subs.map((x: any) => normSub(x, color)) : [] }
 }
 function normBanner(b: any): GuiaBanner {
   return {
@@ -63,17 +78,29 @@ function normBanner(b: any): GuiaBanner {
   }
 }
 function loadBanners(): GuiaBanner[] {
-  try { const raw = localStorage.getItem(KEY); if (raw) return (JSON.parse(raw) as any[]).map(normBanner) } catch {}
-  return []
+  let arr: any[] = []
+  try { const raw = localStorage.getItem(KEY); if (raw) arr = JSON.parse(raw) } catch {}
+  let banners = arr.map(normBanner)
+  // Retroactivo (una sola vez): recolorea los subpaneles anidados según su raíz + 15%/nivel.
+  try {
+    if (!localStorage.getItem(CFLAG)) {
+      if (banners.length) {
+        banners = banners.map(b => ({ ...b, panels: b.panels.map(p => ({ ...p, subs: p.subs.map(s => recolorTree(s, s.color, 0)) })) }))
+        localStorage.setItem(KEY, JSON.stringify(banners))
+      }
+      localStorage.setItem(CFLAG, '1')
+    }
+  } catch {}
+  return banners
 }
 
-// ---- Copiar contenido al portapapeles (texto plano, recursivo) ----
+// ---- Copiar contenido al portapapeles (texto plano, encabezados jerárquicos) ----
 const EMPTY_NOTE = '(no hay especificaciones ni que aplicar ningún cambio)'
 
 // Convierte el HTML del editor a texto legible (listas, checklists, saltos de línea).
 function htmlToText(html: string): string {
   if (!html) return ''
-  let s = html
+  const s = html
     .replace(/<li[^>]*data-checked="true"[^>]*>/gi, '\n[x] ')
     .replace(/<li[^>]*data-checked="false"[^>]*>/gi, '\n[ ] ')
     .replace(/<li[^>]*>/gi, '\n• ')
@@ -82,23 +109,24 @@ function htmlToText(html: string): string {
     .replace(/<\/(div|p|h[1-6]|ul|ol|blockquote)>/gi, '\n')
   const div = document.createElement('div')
   div.innerHTML = s
-  const text = (div.textContent || '').replace(/ /g, ' ')
+  const text = (div.textContent || '').replace(/ /g, ' ')
   return text.split('\n').map(l => l.replace(/\s+$/, '')).join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
-const indentLines = (s: string, pad: string) => s.split('\n').map(l => (l ? pad + l : l)).join('\n')
-
-function serializeSub(sub: GuiaSub, depth: number, parentPath: string[]): string {
-  const pad = '  '.repeat(depth)
-  const branch = [...parentPath, sub.name]
+// Títulos con encabezados Markdown (#, ##, ###…) según el nivel jerárquico.
+const heading = (level: number) => '#'.repeat(Math.min(Math.max(level, 1), 6))
+function serializeSub(sub: GuiaSub, level: number, parentPath: string[]): string {
+  const fullBranch = [...parentPath, sub.name]
+  const childPath = sub.isBranch ? fullBranch : parentPath
+  const label = sub.isBranch ? `${sub.name} (${fullBranch.join(' > ')})` : sub.name
   const body = htmlToText(sub.html) || EMPTY_NOTE
-  let out = `${pad}${sub.name} (${branch.join(' > ')})\n${indentLines(body, pad)}\n`
-  for (const cs of sub.subs) out += '\n' + serializeSub(cs, depth + 1, branch)
+  let out = `${heading(level)} ${label}\n${body}\n`
+  for (const cs of sub.subs) out += '\n' + serializeSub(cs, level + 1, childPath)
   return out
 }
 function serializePanel(panel: GuiaPanel): string {
-  let out = `${panel.name}\n`
+  let out = `# ${panel.name}\n`
   if (!panel.subs.length) return out + EMPTY_NOTE + '\n'
-  for (const s of panel.subs) out += '\n' + serializeSub(s, 1, [panel.name])
+  for (const s of panel.subs) out += '\n' + serializeSub(s, 2, [panel.name])
   return out
 }
 async function copyText(text: string): Promise<boolean> {
@@ -111,6 +139,28 @@ async function copyText(text: string): Promise<boolean> {
 function cloneSub(s: GuiaSub): GuiaSub { return { ...s, id: uid('s'), subs: s.subs.map(cloneSub) } }
 function clonePanel(p: GuiaPanel): GuiaPanel { return { ...p, id: uid('p'), subs: p.subs.map(cloneSub) } }
 function cloneBanner(b: GuiaBanner): GuiaBanner { return { ...b, id: uid('b'), name: b.name + ' (copia)', panels: b.panels.map(clonePanel) } }
+
+// ---- Reordenar listas por grip (drag & drop scoped por token de lista) ----
+interface GripProps { draggable: boolean; onDragStart: (e: DragEvent) => void; onClick: (e: MouseEvent) => void }
+interface DropProps { onDragOver: (e: DragEvent) => void; onDrop: (e: DragEvent) => void }
+function makeReorder<T>(token: string, list: T[], setList: (l: T[]) => void) {
+  const gripProps = (i: number): GripProps => ({
+    draggable: true,
+    onDragStart: e => { e.dataTransfer.setData('text/plain', token + '::' + i); e.dataTransfer.effectAllowed = 'move'; e.stopPropagation() },
+    onClick: e => e.stopPropagation(),
+  })
+  const dropProps = (i: number): DropProps => ({
+    onDragOver: e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' },
+    onDrop: e => {
+      e.preventDefault(); e.stopPropagation()
+      const raw = e.dataTransfer.getData('text/plain'); const sep = raw.lastIndexOf('::'); if (sep < 0) return
+      if (raw.slice(0, sep) !== token) return   // solo reordena dentro de la misma lista
+      const from = Number(raw.slice(sep + 2)); if (Number.isNaN(from) || from === i) return
+      const next = [...list]; const [m] = next.splice(from, 1); next.splice(i, 0, m); setList(next)
+    },
+  })
+  return { gripProps, dropProps }
+}
 
 // ---- Swatch de color reutilizable ----
 function ColorSwatch({ color, onChange, title = 'Cambiar color' }: { color: string; onChange: (c: string) => void; title?: string }) {
@@ -139,19 +189,25 @@ function EditableName({ value, onChange, className, placeholder }: { value: stri
 }
 
 // ============ SUBPANEL (recursivo) ============
-function SubPanel({ sub, parentPath, onChange, onDuplicate, onDelete }: {
-  sub: GuiaSub; parentPath: string[]
+function SubPanel({ sub, parentPath, rootColor, depth, onChange, onDuplicate, onDelete, gripProps, dropProps }: {
+  sub: GuiaSub; parentPath: string[]; rootColor: string; depth: number
   onChange: (s: GuiaSub) => void; onDuplicate: () => void; onDelete: () => void
+  gripProps?: GripProps; dropProps?: DropProps
 }) {
   const confirm = useConfirm()
   const toast = useToast()
-  const branch = [...parentPath, sub.name]                 // ramificación jerárquica (auto)
+  const fullBranch = [...parentPath, sub.name]
+  const childPath = sub.isBranch ? fullBranch : parentPath
+  const childRoot = depth === 0 ? sub.color : rootColor
+  const setSubs = (subs: GuiaSub[]) => onChange({ ...sub, subs })
+  const R = makeReorder(sub.id, sub.subs, setSubs)
   const onCopy = async () => {
-    if (await copyText(serializeSub(sub, 0, parentPath))) toast.success('Contenido copiado')
+    if (await copyText(serializeSub(sub, 1, parentPath))) toast.success('Contenido copiado')
     else toast.error('No se pudo copiar')
   }
-  const setSubs = (subs: GuiaSub[]) => onChange({ ...sub, subs })
-  const addNested = () => setSubs([...sub.subs, { id: uid('s'), name: 'Nuevo subpanel', color: lighten(sub.color), html: '', open: true, subs: [] }])
+  // Cambio de color: si es un subpanel principal (nivel 0), recolorea sus descendientes.
+  const onColor = (c: string) => onChange(depth === 0 ? recolorTree({ ...sub, color: c }, c, 0) : { ...sub, color: c })
+  const addNested = () => setSubs([...sub.subs, mkSub('Nuevo subpanel', nestedColor(childRoot, depth + 1))])
   const dupNested = (i: number) => setSubs([...sub.subs.slice(0, i + 1), cloneSub(sub.subs[i]), ...sub.subs.slice(i + 1)])
   const delNested = async (i: number) => {
     if (!await confirm({ title: 'Eliminar subpanel', message: `¿Eliminar «${sub.subs[i].name}» y su contenido?`, confirmLabel: 'Eliminar' })) return
@@ -159,12 +215,17 @@ function SubPanel({ sub, parentPath, onChange, onDuplicate, onDelete }: {
   }
   return (
     <div className="guia-sub" style={{ borderLeftColor: sub.color }}>
-      <div className="guia-sub-head" style={{ background: rgba(sub.color, 0.12) }} onClick={() => onChange({ ...sub, open: !sub.open })}>
+      <div className="guia-sub-head" style={{ background: rgba(sub.color, 0.12) }} onClick={() => onChange({ ...sub, open: !sub.open })} {...(dropProps || {})}>
+        {gripProps && <span className="guia-grip" {...gripProps} title="Arrastrar para reordenar"><GripVertical size={13} /></span>}
         <ChevronDown size={14} className={`guia-chev ${sub.open ? 'open' : ''}`} />
-        <ColorSwatch color={sub.color} onChange={c => onChange({ ...sub, color: c })} />
+        <ColorSwatch color={sub.color} onChange={onColor} />
         <EditableName value={sub.name} onChange={v => onChange({ ...sub, name: v })} placeholder="Subpanel" />
-        <span className="guia-branch" title="Ramificación (automática)">({branch.join(' > ')})</span>
+        {sub.isBranch && <span className="guia-branch" title="Ramificación (automática)">({fullBranch.join(' > ')})</span>}
+        {sub.subs.length > 0 && <span className="guia-count" title={`${sub.subs.length} subpanel(es) dentro`}>{sub.subs.length}</span>}
         <div className="guia-actions" onClick={e => e.stopPropagation()}>
+          <label className={`guia-branch-chk ${sub.isBranch ? 'on' : ''}`} title="Mostrar como ramificación jerárquica">
+            <input type="checkbox" checked={sub.isBranch} onChange={e => onChange({ ...sub, isBranch: e.target.checked })} /><GitBranch size={12} />
+          </label>
           <button className="guia-icon-btn" title="Copiar contenido (con sus subpaneles)" onClick={onCopy}><ClipboardCopy size={13} /></button>
           <button className="guia-icon-btn" title="Duplicar subpanel" onClick={onDuplicate}><Copy size={13} /></button>
           <button className="guia-icon-btn danger" title="Eliminar subpanel" onClick={onDelete}><Trash2 size={13} /></button>
@@ -174,7 +235,8 @@ function SubPanel({ sub, parentPath, onChange, onDuplicate, onDelete }: {
         <div className="guia-sub-body">
           <RichTextEditor docKey={sub.id} html={sub.html} onChange={h => onChange({ ...sub, html: h })} placeholder="Escribí el contenido…" minHeight={150} className="guia-rte" />
           {sub.subs.map((cs, i) => (
-            <SubPanel key={cs.id} sub={cs} parentPath={branch}
+            <SubPanel key={cs.id} sub={cs} parentPath={childPath} rootColor={childRoot} depth={depth + 1}
+              gripProps={R.gripProps(i)} dropProps={R.dropProps(i)}
               onChange={ns => setSubs(sub.subs.map((x, j) => j === i ? ns : x))}
               onDuplicate={() => dupNested(i)} onDelete={() => delNested(i)} />
           ))}
@@ -186,9 +248,10 @@ function SubPanel({ sub, parentPath, onChange, onDuplicate, onDelete }: {
 }
 
 // ============ PANEL ============
-function PanelCard({ panel, onChange, onDuplicate, onDelete }: {
+function PanelCard({ panel, onChange, onDuplicate, onDelete, gripProps, dropProps }: {
   panel: GuiaPanel
   onChange: (p: GuiaPanel) => void; onDuplicate: () => void; onDelete: () => void
+  gripProps?: GripProps; dropProps?: DropProps
 }) {
   const confirm = useConfirm()
   const toast = useToast()
@@ -197,7 +260,8 @@ function PanelCard({ panel, onChange, onDuplicate, onDelete }: {
     else toast.error('No se pudo copiar')
   }
   const setSubs = (subs: GuiaSub[]) => onChange({ ...panel, subs })
-  const addSub = () => setSubs([...panel.subs, { id: uid('s'), name: 'Nuevo subpanel', color: lighten(panel.color), html: '', open: true, subs: [] }])
+  const R = makeReorder(panel.id, panel.subs, setSubs)
+  const addSub = () => setSubs([...panel.subs, mkSub('Nuevo subpanel', panel.color)])
   const dupSub = (i: number) => setSubs([...panel.subs.slice(0, i + 1), cloneSub(panel.subs[i]), ...panel.subs.slice(i + 1)])
   const delSub = async (i: number) => {
     if (!await confirm({ title: 'Eliminar subpanel', message: `¿Eliminar «${panel.subs[i].name}» y su contenido?`, confirmLabel: 'Eliminar' })) return
@@ -205,11 +269,12 @@ function PanelCard({ panel, onChange, onDuplicate, onDelete }: {
   }
   return (
     <div className="guia-panel" style={{ borderColor: rgba(panel.color, 0.4) }}>
-      <div className="guia-panel-head" style={{ background: rgba(panel.color, 0.14) }} onClick={() => onChange({ ...panel, open: !panel.open })}>
+      <div className="guia-panel-head" style={{ background: rgba(panel.color, 0.14) }} onClick={() => onChange({ ...panel, open: !panel.open })} {...(dropProps || {})}>
+        {gripProps && <span className="guia-grip" {...gripProps} title="Arrastrar para reordenar"><GripVertical size={14} /></span>}
         <ChevronDown size={16} className={`guia-chev ${panel.open ? 'open' : ''}`} />
         <ColorSwatch color={panel.color} onChange={c => onChange({ ...panel, color: c })} title="Color del panel" />
         <EditableName value={panel.name} onChange={v => onChange({ ...panel, name: v })} className="guia-panel-name" placeholder="Panel" />
-        <span className="guia-count">{panel.subs.length}</span>
+        <span className="guia-count" title={`${panel.subs.length} subpanel(es) dentro`}>{panel.subs.length}</span>
         <div className="guia-actions" onClick={e => e.stopPropagation()}>
           <button className="guia-icon-btn" title="Copiar todo el panel (títulos y textos)" onClick={onCopy}><ClipboardCopy size={14} /></button>
           <button className="guia-icon-btn" title="Duplicar panel" onClick={onDuplicate}><Copy size={14} /></button>
@@ -219,7 +284,8 @@ function PanelCard({ panel, onChange, onDuplicate, onDelete }: {
       {panel.open && (
         <div className="guia-panel-body">
           {panel.subs.map((s, i) => (
-            <SubPanel key={s.id} sub={s} parentPath={[panel.name]}
+            <SubPanel key={s.id} sub={s} parentPath={[panel.name]} rootColor={s.color} depth={0}
+              gripProps={R.gripProps(i)} dropProps={R.dropProps(i)}
               onChange={ns => setSubs(panel.subs.map((x, j) => j === i ? ns : x))}
               onDuplicate={() => dupSub(i)} onDelete={() => delSub(i)} />
           ))}
@@ -323,6 +389,7 @@ export default function GuiaAppsPage() {
       ? { backgroundImage: `linear-gradient(rgba(0,0,0,.2),rgba(0,0,0,.45)), url(${active.bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center', color: '#fff' as const }
       : { background: active.bgColor, color: textOn(active.bgColor) }
     const setPanels = (panels: GuiaPanel[]) => updateBanner(active.id, { ...active, panels })
+    const R = makeReorder(active.id, active.panels, setPanels)
     const addPanel = () => setPanels([...active.panels, { id: uid('p'), name: 'Nuevo panel', color: '#10b981', open: true, subs: [] }])
     const dupPanel = (i: number) => setPanels([...active.panels.slice(0, i + 1), clonePanel(active.panels[i]), ...active.panels.slice(i + 1)])
     const delPanel = async (i: number) => {
@@ -338,7 +405,7 @@ export default function GuiaAppsPage() {
         </div>
         <div className="guia-detail-body">
           {active.panels.map((p, i) => (
-            <PanelCard key={p.id} panel={p}
+            <PanelCard key={p.id} panel={p} gripProps={R.gripProps(i)} dropProps={R.dropProps(i)}
               onChange={np => setPanels(active.panels.map((x, j) => j === i ? np : x))}
               onDuplicate={() => dupPanel(i)} onDelete={() => delPanel(i)} />
           ))}

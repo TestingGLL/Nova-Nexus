@@ -51,7 +51,18 @@
 .guia-panel { border: 1px solid var(--border); border-radius: 11px; overflow: hidden; background: var(--bg-card); }
 .guia-panel-head { display: flex; align-items: center; gap: 9px; padding: 11px 14px; cursor: pointer; user-select: none; color: var(--text-primary); }
 .guia-panel-name { font-size: 14px; font-weight: 600; }
-.guia-count { font-size: 11px; color: var(--text-secondary); background: rgba(127, 127, 127, 0.14); border-radius: 10px; padding: 1px 8px; }
+.guia-count { flex-shrink: 0; font-size: 11px; color: var(--text-secondary); background: rgba(127, 127, 127, 0.14); border-radius: 10px; padding: 1px 8px; }
+
+/* ---- Grip para reordenar ---- */
+.guia-grip { display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); cursor: grab; opacity: 0.5; flex-shrink: 0; border-radius: 4px; }
+.guia-grip:hover { opacity: 1; background: rgba(127, 127, 127, 0.16); }
+.guia-grip:active { cursor: grabbing; }
+
+/* ---- Check de ramificación ---- */
+.guia-branch-chk { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; cursor: pointer; color: var(--text-secondary); flex-shrink: 0; }
+.guia-branch-chk:hover { background: rgba(127, 127, 127, 0.16); }
+.guia-branch-chk.on { color: var(--accent); }
+.guia-branch-chk input { position: absolute; opacity: 0; width: 0; height: 0; }
 .guia-panel-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 9px; }
 
 /* ============ SUBPANEL (recursivo) ============ */

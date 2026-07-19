@@ -143,7 +143,8 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 ### Edición
 | Clave | Contenido |
 |---|---|
-| `nn-edicion-guia-apps` | Guía de Apps: apps/banners (imagen/color, nombre) → paneles (color) → subpaneles anidables (color, abierto/cerrado, html del editor) |
+| `nn-edicion-guia-apps` | Guía de Apps: apps/banners (imagen/color, nombre) → paneles (color) → subpaneles anidables (color, `isBranch`, abierto/cerrado, html). Reordenables por grip. Copiar = texto con encabezados jerárquicos (#, ##, …) |
+| `nn-edicion-guia-colors-v1` | Flag: recoloración retroactiva de subpaneles anidados hecha una vez (raíz + 15%/nivel) |
 | `nn-edicion-tab` | Pestaña activa de la sección Edición (`conversor`/`guia`) |
 
 > Nota: `__nn_outbox` (cola de sync) NO lleva prefijo `nn-` a propósito, para no sincronizarse a sí misma.
