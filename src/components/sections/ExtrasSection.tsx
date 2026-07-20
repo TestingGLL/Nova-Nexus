@@ -3,6 +3,7 @@ import { Plus, Trash2, Edit3, X, RotateCcw, Save, Settings, Eye, EyeOff, Check, 
 import ColorInput from '../ColorInput'
 import { useConfirm } from '../ConfirmDialog'
 import { uploadImage } from '../../lib/imageStore'
+import { useSubTab } from '../../lib/tabRoute'
 import './ExtrasSection.css'
 
 // High-contrast saturated tones — white labels read clearly on all of them.
@@ -575,7 +576,7 @@ function RatingsDetail({ panel, onBack, onUpdate }: { panel: RatingPanel; onBack
 }
 
 export default function ExtrasSection() {
-  const [activeSubtab, setActiveSubtab] = useState<'aleatorio' | 'puntuaciones'>('aleatorio')
+  const { tab: activeSubtab, setTab: setActiveSubtab, tabProps: subtabProps } = useSubTab(0, 'aleatorio', [{ id: 'aleatorio', label: 'Aleatorio' }, { id: 'puntuaciones', label: 'Puntuaciones' }])
   const [options, setOptions] = useState<WheelOption[]>(loadOptions)
   const [result, setResult] = useState<WheelOption | null>(null)
   const [elimination, setElimination] = useState(false)
@@ -628,8 +629,8 @@ export default function ExtrasSection() {
   return (
     <div className="extras-section">
       <div className="extras-subtabs">
-        <button className={`extras-subtab ${activeSubtab === 'aleatorio' ? 'active' : ''}`} onClick={() => setActiveSubtab('aleatorio')}><Settings size={13} /> Aleatorio</button>
-        <button className={`extras-subtab ${activeSubtab === 'puntuaciones' ? 'active' : ''}`} onClick={() => setActiveSubtab('puntuaciones')}><Star size={13} /> Puntuaciones</button>
+        <button className={`extras-subtab ${activeSubtab === 'aleatorio' ? 'active' : ''}`} onClick={() => setActiveSubtab('aleatorio', 'Aleatorio')} {...subtabProps('aleatorio', 'Aleatorio')}><Settings size={13} /> Aleatorio</button>
+        <button className={`extras-subtab ${activeSubtab === 'puntuaciones' ? 'active' : ''}`} onClick={() => setActiveSubtab('puntuaciones', 'Puntuaciones')} {...subtabProps('puntuaciones', 'Puntuaciones')}><Star size={13} /> Puntuaciones</button>
       </div>
 
       {activeSubtab === 'puntuaciones' && <RatingsPanel />}

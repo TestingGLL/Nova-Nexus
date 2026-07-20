@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Globe, ExternalLink, Monitor, CheckCircle, AlertCircle, Loader, Info, Bluetooth, Gamepad2, Keyboard, Mouse, Smartphone, Headphones, BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Eye, EyeOff, Trash2, FolderOpen, AlertTriangle, Wifi, Plus, X, Download, QrCode, GripVertical, MessageSquare, Send, Image as ImageIcon, Film, Music, File as FileIcon } from 'lucide-react'
 import { useToast } from '../Toast'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
+import { useSubTab } from '../../lib/tabRoute'
 import { copyToClipboard } from '../../lib/clipboard'
 import TransfersIcon from '../TransfersIcon'
 import './SoftwareSection.css'
@@ -548,17 +549,21 @@ const SOFT_TABS: { id: string; label: string; icon: React.ReactNode }[] = [
 ]
 
 export default function SoftwareSection() {
-  const [tab, setTab] = useState<string>(() => {
+  const [deepLink] = useState<string | null>(() => {
     // Deep-link desde la barra superior: abre una tab puntual (ej. Transferencias).
     try { const t = localStorage.getItem('__nn_software_tab'); if (t) { localStorage.removeItem('__nn_software_tab'); return t } } catch {}
-    return 'browser'
+    return null
   })
+  const { tab, setTab, tabProps: routeProps } = useSubTab(0, deepLink ?? 'browser', SOFT_TABS)
   // Si la sección ya estaba montada, el acceso directo llega por evento.
   useEffect(() => {
-    const onOpen = (e: Event) => { const d = (e as CustomEvent).detail; if (typeof d === 'string') setTab(d) }
+    const onOpen = (e: Event) => {
+      const d = (e as CustomEvent).detail
+      if (typeof d === 'string') setTab(d, SOFT_TABS.find(t => t.id === d)?.label ?? d)
+    }
     window.addEventListener('nn-open-software-tab', onOpen)
     return () => window.removeEventListener('nn-open-software-tab', onOpen)
-  }, [])
+  })
   const { order, tabProps } = useReorderableTabs(SOFT_TABS.map(t => t.id), 'nn-software-tab-order')
   const tabMap = Object.fromEntries(SOFT_TABS.map(t => [t.id, t]))
 
@@ -566,7 +571,7 @@ export default function SoftwareSection() {
     <div className={`software-section ${tab === 'transferencias' ? 'wide' : ''}`}>
       <div className="software-tabs">
         {order.map((id, i) => { const t = tabMap[id]; if (!t) return null; const dp = tabProps(i); return (
-          <button key={id} className={`software-tab ${tab === id ? 'active' : ''} ${dp.className}`} onClick={() => setTab(id)} draggable={dp.draggable} onDragStart={dp.onDragStart} onDragOver={dp.onDragOver} onDrop={dp.onDrop} onDragEnd={dp.onDragEnd}>
+          <button key={id} className={`software-tab ${tab === id ? 'active' : ''} ${dp.className}`} onClick={() => setTab(id, t.label)} {...routeProps(id, t.label)} draggable={dp.draggable} onDragStart={dp.onDragStart} onDragOver={dp.onDragOver} onDrop={dp.onDrop} onDragEnd={dp.onDragEnd}>
             <GripVertical size={10} className="tab-grip" />{t.icon} {t.label}
           </button>
         ) })}

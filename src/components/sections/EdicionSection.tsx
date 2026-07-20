@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { ImageIcon, Download, Upload, FolderOpen, Trash2, Check, Loader, X, BookOpen, RefreshCw } from 'lucide-react'
 import { useToast } from '../Toast'
 import GuiaAppsPage from './GuiaAppsPage'
+import { useSubTab } from '../../lib/tabRoute'
 import './EdicionSection.css'
 
 // Convierte una URL de blob a base64 (data URL) para guardarla vía Electron.
@@ -222,15 +223,18 @@ function ImageConverter() {
 // Dos páginas: el Conversor de imágenes y la Guía de Apps. El tab activo se persiste.
 type EdTab = 'conversor' | 'guia'
 export default function EdicionSection() {
-  const [tab, setTab] = useState<EdTab>(() => {
+  // El tab activo vive en la ruta de la pestaña; el último elegido queda como preferencia
+  // para cuando la sección se abre sin ruta.
+  const [saved] = useState<EdTab>(() => {
     try { return (localStorage.getItem('nn-edicion-tab') as EdTab) || 'conversor' } catch { return 'conversor' }
   })
-  const go = (t: EdTab) => { setTab(t); try { localStorage.setItem('nn-edicion-tab', t) } catch {} }
+  const { tab, setTab, tabProps } = useSubTab(0, saved, [{ id: 'conversor', label: 'Conversor' }, { id: 'guia', label: 'Guía de Apps' }])
+  const go = (t: EdTab, label: string) => { setTab(t, label); try { localStorage.setItem('nn-edicion-tab', t) } catch {} }
   return (
     <div className="edicion-section">
       <div className="edicion-tabs">
-        <button className={`edicion-tab ${tab === 'conversor' ? 'active' : ''}`} onClick={() => go('conversor')}><RefreshCw size={13} /> Conversor</button>
-        <button className={`edicion-tab ${tab === 'guia' ? 'active' : ''}`} onClick={() => go('guia')}><BookOpen size={13} /> Guía de Apps</button>
+        <button className={`edicion-tab ${tab === 'conversor' ? 'active' : ''}`} onClick={() => go('conversor', 'Conversor')} {...tabProps('conversor', 'Conversor')}><RefreshCw size={13} /> Conversor</button>
+        <button className={`edicion-tab ${tab === 'guia' ? 'active' : ''}`} onClick={() => go('guia', 'Guía de Apps')} {...tabProps('guia', 'Guía de Apps')}><BookOpen size={13} /> Guía de Apps</button>
       </div>
       {tab === 'conversor' && <ImageConverter />}
       {tab === 'guia' && <GuiaAppsPage />}

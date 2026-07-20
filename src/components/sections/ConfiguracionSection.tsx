@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Palette, RotateCcw, Sun, Moon, Layout, UserCircle, Bell, Upload, Eye, EyeOff, Tag, Plus, X, Volume2, Settings, Lock, GripVertical, Type, CheckCircle2, XCircle, Loader, Activity, Shield, KeyRound, BookOpen, Target, Image as ImageIcon, CloudUpload } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
+import { useSubTab } from '../../lib/tabRoute'
 import { getSoundsEnabled, setSoundsEnabled, getSoundsVolume, setSoundsVolume, sfx } from '../../lib/sounds'
 import { UI_SCALES, getUiScale, setUiScale } from '../../lib/uiScale'
 import { supabase, supabaseEnabled } from '../../lib/supabase'
@@ -175,7 +176,7 @@ const CFG_TABS: { id: ConfigTab; label: string; icon: React.ReactNode }[] = [
 
 export default function ConfiguracionSection() {
   const { accentColor, setAccentColor, darkMode, setDarkMode } = useTheme()
-  const [tab, setTab] = useState<ConfigTab>('personalizacion')
+  const { tab, setTab, tabProps: cfgRouteProps } = useSubTab(0, 'personalizacion', CFG_TABS)
   const { order: cfgOrder, tabProps: cfgTabProps } = useReorderableTabs(CFG_TABS.map(t => t.id), 'nn-config-tab-order')
   const cfgTabMap = Object.fromEntries(CFG_TABS.map(t => [t.id, t]))
   const [lockedSections, setLockedSections] = useState<string[]>(loadLockedSections)
@@ -235,7 +236,7 @@ export default function ConfiguracionSection() {
     <div className="config-section">
       <div className="config-tabs">
         {cfgOrder.map((id, i) => { const t = cfgTabMap[id]; if (!t) return null; const dp = cfgTabProps(i); return (
-          <button key={id} className={`config-tab ${tab === id ? 'active' : ''} ${dp.className}`} onClick={() => setTab(id as ConfigTab)} draggable={dp.draggable} onDragStart={dp.onDragStart} onDragOver={dp.onDragOver} onDrop={dp.onDrop} onDragEnd={dp.onDragEnd}>
+          <button key={id} className={`config-tab ${tab === id ? 'active' : ''} ${dp.className}`} onClick={() => setTab(id, t.label)} {...cfgRouteProps(id, t.label)} draggable={dp.draggable} onDragStart={dp.onDragStart} onDragOver={dp.onDragOver} onDrop={dp.onDrop} onDragEnd={dp.onDragEnd}>
             <GripVertical size={10} className="tab-grip" />{t.icon} {t.label}
           </button>
         ) })}

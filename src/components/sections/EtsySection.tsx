@@ -8,6 +8,7 @@ import ColorInput from '../ColorInput'
 import RichTextEditor from '../RichTextEditor'
 import { copyToClipboard } from '../../lib/clipboard'
 import { uploadImage } from '../../lib/imageStore'
+import { useSubTab } from '../../lib/tabRoute'
 import './EtsySection.css'
 
 // ============ TYPES ============
@@ -1509,7 +1510,8 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   const [sortMode, setSortMode] = useState<'name' | 'recent' | 'oldest'>('name')
   const [dashOpen, setDashOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [subtab, setSubtab] = useState<'lista' | 'gestion'>('lista')
+  // Nivel 2 de la ruta (etsy › tienda › Clientes › ...).
+  const { tab: subtab, setTab: setSubtab, tabProps: subtabProps } = useSubTab(2, 'lista', [{ id: 'lista', label: 'Clientes' }, { id: 'gestion', label: 'Gestión' }])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const confirm = useConfirm()
   const toast = useToast()
@@ -1573,8 +1575,8 @@ function ClientesTab({ store, onUpdate }: { store: StoreData; onUpdate: (s: Stor
   return (
     <div className="clientes-tab">
       <div className="clientes-subtabs">
-        <button className={subtab === 'lista' ? 'active' : ''} onClick={() => setSubtab('lista')}><Users size={13} /> Clientes</button>
-        <button className={subtab === 'gestion' ? 'active' : ''} onClick={() => setSubtab('gestion')}><Edit3 size={13} /> Gestión {dupGroups.length > 0 && <span className="clientes-dup-badge">{dupGroups.length}</span>}</button>
+        <button className={subtab === 'lista' ? 'active' : ''} onClick={() => setSubtab('lista', 'Clientes')} {...subtabProps('lista', 'Clientes')}><Users size={13} /> Clientes</button>
+        <button className={subtab === 'gestion' ? 'active' : ''} onClick={() => setSubtab('gestion', 'Gestión')} {...subtabProps('gestion', 'Gestión')}><Edit3 size={13} /> Gestión {dupGroups.length > 0 && <span className="clientes-dup-badge">{dupGroups.length}</span>}</button>
       </div>
       {subtab === 'gestion' ? (
         <div className="clientes-gestion">
@@ -1961,10 +1963,25 @@ function BannerParticles() {
   return <div className="banner-particles" aria-hidden>{Array.from({ length: 12 }).map((_, i) => <span key={i} style={{ '--p': i } as React.CSSProperties} />)}</div>
 }
 
+// Pestañas internas de una tienda (nivel 1 de la ruta de la tab).
+const STORE_TABS: { id: string; label: string }[] = [
+  { id: 'informacion', label: 'Información' },
+  { id: 'articles', label: 'Artículos' },
+  { id: 'launches', label: 'Lanzamientos' },
+  { id: 'creaciones', label: 'Creaciones' },
+  { id: 'generador', label: 'Generador de textos' },
+  { id: 'clientes', label: 'Clientes' },
+  { id: 'planificacion', label: 'Planificación' },
+  { id: 'predeterminadas', label: 'Predeterminadas' },
+  { id: 'seo', label: 'SEO' },
+  { id: 'ideas', label: 'Ideas' },
+]
+
 function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () => void; onUpdate: (store: StoreData) => void }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(store)
-  const [storeTab, setStoreTab] = useState<'informacion' | 'articles' | 'launches' | 'creaciones' | 'generador' | 'planificacion' | 'predeterminadas' | 'seo' | 'ideas' | 'clientes'>('informacion')
+  // Nivel 1 de la ruta: la pestaña de la tienda (nivel 0 es la tienda misma).
+  const { tab: storeTab, setTab: setStoreTab, tabProps: storeTabProps } = useSubTab(1, 'informacion', STORE_TABS)
   const [showReviews, setShowReviews] = useState(false)
   const [showCountries, setShowCountries] = useState(false)
   const [editStat, setEditStat] = useState<null | 'sales' | 'products' | 'followers'>(null)
@@ -2038,16 +2055,17 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
       )}
 
       <div className="store-inner-tabs">
-        <button className={storeTab === 'informacion' ? 'active' : ''} onClick={() => setStoreTab('informacion')}>Información</button>
-        <button className={storeTab === 'articles' ? 'active' : ''} onClick={() => setStoreTab('articles')}>Artículos ({store.articles.length})</button>
-        <button className={storeTab === 'launches' ? 'active' : ''} onClick={() => setStoreTab('launches')}>Lanzamientos</button>
-        <button className={storeTab === 'creaciones' ? 'active' : ''} onClick={() => setStoreTab('creaciones')}>Creaciones</button>
-        <button className={storeTab === 'generador' ? 'active' : ''} onClick={() => setStoreTab('generador')}>Generador de textos</button>
-        <button className={storeTab === 'clientes' ? 'active' : ''} onClick={() => setStoreTab('clientes')}>Clientes ({(store.clientList || []).length})</button>
-        <button className={storeTab === 'planificacion' ? 'active' : ''} onClick={() => setStoreTab('planificacion')}>Planificación</button>
-        <button className={storeTab === 'predeterminadas' ? 'active' : ''} onClick={() => setStoreTab('predeterminadas')}>Predeterminadas</button>
-        <button className={storeTab === 'seo' ? 'active' : ''} onClick={() => setStoreTab('seo')}>SEO</button>
-        <button className={storeTab === 'ideas' ? 'active' : ''} onClick={() => setStoreTab('ideas')}>Ideas</button>
+        {STORE_TABS.map(t => {
+          const count = t.id === 'articles' ? store.articles.length : t.id === 'clientes' ? (store.clientList || []).length : null
+          return (
+            <button
+              key={t.id}
+              className={storeTab === t.id ? 'active' : ''}
+              onClick={() => setStoreTab(t.id, t.label)}
+              {...storeTabProps(t.id, t.label)}
+            >{t.label}{count !== null ? ` (${count})` : ''}</button>
+          )
+        })}
       </div>
 
       {storeTab === 'informacion' && (
@@ -2104,8 +2122,17 @@ function StoreView({ store, onBack, onUpdate }: { store: StoreData; onBack: () =
 export default function EtsySection() {
   const [stores, setStores] = useState<StoreData[]>(loadStores)
   const [openTabs, setOpenTabs] = useState<string[]>([])
-  const [activeTab, setActiveTab] = useState<string | null>(null)
   const confirm = useConfirm()
+
+  // Nivel 0 de la ruta de la tab: la tienda abierta (sin segmento = la grilla de tiendas).
+  const { tab: routedStore, setTab: setRoutedStore, resetTab: backToStores, tabProps: storeProps } =
+    useSubTab(0, '', [{ id: '', label: 'Tiendas' }, ...stores.map(s => ({ id: s.id, label: s.name }))])
+  const activeTab = routedStore || null
+  const storeName = (id: string) => stores.find(s => s.id === id)?.name ?? 'Tienda'
+  const setActiveTab = (id: string | null) => { if (id) setRoutedStore(id, storeName(id)); else backToStores() }
+
+  // La tira de pestañas propia de Etsy recuerda qué tiendas quedaron abiertas en esta tab.
+  useEffect(() => { if (activeTab) setOpenTabs(prev => (prev.includes(activeTab) ? prev : [...prev, activeTab])) }, [activeTab])
 
   const openStore = (id: string) => { if (!openTabs.includes(id)) setOpenTabs([...openTabs, id]); setActiveTab(id) }
   const closeTab = (id: string, e: React.MouseEvent) => { e.stopPropagation(); const nt = openTabs.filter(t => t !== id); setOpenTabs(nt); if (activeTab === id) setActiveTab(nt.length > 0 ? nt[nt.length - 1] : null) }
@@ -2124,7 +2151,7 @@ export default function EtsySection() {
       {openTabs.length > 0 && (
         <div className="etsy-tabs">
           <button className={`etsy-tab ${activeTab === null ? 'active' : ''}`} onClick={() => setActiveTab(null)}><Store size={13} /> Tiendas</button>
-          {openTabs.map(id => { const s = stores.find(st => st.id === id); if (!s) return null; return (<button key={id} className={`etsy-tab ${activeTab === id ? 'active' : ''}`} onClick={() => setActiveTab(id)}>{s.logoImage ? <img src={s.logoImage} alt="" className="tab-logo-img" /> : <span className="tab-emoji">{s.logo}</span>} {s.name}<span className="tab-close" onClick={e => closeTab(id, e)}><X size={12} /></span></button>) })}
+          {openTabs.map(id => { const s = stores.find(st => st.id === id); if (!s) return null; return (<button key={id} className={`etsy-tab ${activeTab === id ? 'active' : ''}`} onClick={() => setActiveTab(id)} {...storeProps(id, s.name)}>{s.logoImage ? <img src={s.logoImage} alt="" className="tab-logo-img" /> : <span className="tab-emoji">{s.logo}</span>} {s.name}<span className="tab-close" onClick={e => closeTab(id, e)}><X size={12} /></span></button>) })}
         </div>
       )}
       {activeStore ? (
@@ -2134,7 +2161,7 @@ export default function EtsySection() {
           {stores.map(store => {
             const rating = storeRating(store)
             return (
-              <div key={store.id} className="card store-card" onClick={() => openStore(store.id)}>
+              <div key={store.id} className="card store-card" onClick={() => openStore(store.id)} {...storeProps(store.id, store.name)}>
                 <div className="store-card-banner-wrap">
                   {store.bannerImage ? (
                     <div className="store-card-banner has-image" style={{ backgroundImage: `url(${store.bannerImage})` }}>

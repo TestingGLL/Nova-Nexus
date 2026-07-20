@@ -37,13 +37,14 @@ src/
 | `mundialStore.ts` | Watcher global del Mundial (poll adaptativo 1s/60s) que detecta goles y dispara sonido + notificación **en toda la app**. La UI de Inicio solo se suscribe. |
 | `timerStore.ts` | Motor global del temporizador (cuenta regresiva singleton) que suena/notifica al terminar aunque estés en otra sección o minimizado. El widget de Inicio se suscribe. |
 | `useReorderableTabs.ts` | Hook para barras de pestañas reordenables por drag. |
+| `tabRoute.tsx` | Ruta interna de cada tab. `useSubTab(level, default, items)` reemplaza al `useState` de una fila de sub-pestañas: el valor activo sale de la ruta de la tab, el clic izquierdo navega en el lugar y `tabProps(id, label)` agrega clic central y menú «Abrir en nueva pestaña». Sin provider cae a estado local. |
 
 ### Componentes raíz (`src/components/`)
 | Archivo | Qué hace |
 |---|---|
 | `Sidebar.tsx` | Navegación entre secciones; orden persistido en `nn-section-order`. |
-| `MainContent.tsx` | Renderiza las **tabs abiertas** (máx 5): todas montadas, solo la activa visible (`display:none` en las demás) para no perder su estado. La barra de pestañas es `TabBar.tsx`. Cada sección es un chunk vía `React.lazy`. Overlay de bloqueo (`nn-locked-sections`) y `SectionErrorBoundary`. |
-| `TabBar.tsx` | Barra de pestañas: activar, cerrar (X / botón central / menú contextual). Estado en `lib/tabs.ts`, orquestado por `AppShell` en `App.tsx`. Sidebar abre en tab nueva por clic derecho/central. |
+| `MainContent.tsx` | Renderiza las **tabs abiertas** (máx 5): todas montadas, solo la activa visible (`display:none` en las demás) para no perder su estado. Cada tab se monta dentro de un `TabRouteProvider` (`lib/tabRoute.tsx`) que le da su ruta interna. La barra de pestañas es `TabBar.tsx`. Cada sección es un chunk vía `React.lazy`. Overlay de bloqueo (`nn-locked-sections`) y `SectionErrorBoundary`. |
+| `TabBar.tsx` | Barra de pestañas: activar, cerrar (X / botón central / menú contextual). Rotula con la ruta completa (`Finanzas › Alquiler › Servicios`). Estado en `lib/tabs.ts`, orquestado por `AppShell` en `App.tsx`. Sidebar abre en tab nueva por clic derecho/central. |
 | `Login.tsx` | Validación local + Supabase Auth, "recordar dispositivo", recuperación. |
 | `Toast.tsx` | `ToastProvider` + `useToast()` (notificaciones efímeras). |
 | `ConfirmDialog.tsx` | `ConfirmProvider` + `useConfirm()` → `Promise<boolean>`. Diálogo de confirmación para acciones destructivas (borrar tienda, grupo, proyecto, nota, tarjeta, etc.). |
@@ -85,7 +86,7 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 | `nn-ui-scale` | Escala global de tipografía/UI |
 | `nn-sounds` / `nn-sounds-vol-migrated` | Sonidos de UI on/off y volumen / flag de migración |
 | `nn-section-order` | Orden de secciones en el sidebar |
-| `nn-tabs` | Pestañas abiertas de la app `{ open: Section[], active }` (máx 5). Lógica en `src/lib/tabs.ts`; barra en `TabBar.tsx`. Persiste al reiniciar |
+| `nn-tabs` | Pestañas abiertas de la app `{ open: Tab[], active: id }` (máx 5). Cada `Tab` es `{ id, section, path[], labels[] }`: `path` son los ids de las sub-pestañas activas de afuera hacia adentro (`['alquiler','servicios']`). Lógica en `src/lib/tabs.ts`; barra en `TabBar.tsx`. Persiste al reiniciar |
 | `nn-locked-sections` | Secciones bloqueadas |
 | `nn-profile` | Perfil de usuario (avatar, nombre…) |
 | `nn-remember-login` | "Recordar dispositivo" |

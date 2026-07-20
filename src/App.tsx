@@ -11,13 +11,13 @@ import SoundFx from './components/SoundFx'
 import BackgroundServices from './components/BackgroundServices'
 import { loadNotifications } from './lib/notifications'
 import { loadSecurity, SecurityGate } from './lib/security'
-import { loadTabs, saveTabs, navigate, openInNewTab, activateTab, closeTab, closeOthers, MAX_TABS, type TabsState } from './lib/tabs'
+import { loadTabs, saveTabs, navigate, openInNewTab, activateTab, closeTab, closeOthers, setRoute, makeTab, MAX_TABS, type TabsState, type Tab } from './lib/tabs'
 import { Bell } from 'lucide-react'
 import './App.css'
 
 export type Section = 'inicio' | 'personal' | 'finanzas' | 'etsy' | 'proyectos' | 'software' | 'edicion' | 'notas' | 'extras' | 'alertas' | 'configuracion'
 
-export const APP_VERSION = '1.02.13'
+export const APP_VERSION = '1.02.14'
 
 // Cascarón de la app (ya logueado y dentro de los providers → puede usar useToast).
 function AppShell() {
@@ -28,10 +28,16 @@ function AppShell() {
 
   const update = (next: TabsState) => { setTabs(next); saveTabs(next) }
   const nav = (s: Section) => update(navigate(tabs, s))
-  const openNew = (s: Section) => { const r = openInNewTab(tabs, s); if (r.full) toast.info(`Máximo ${MAX_TABS} pestañas abiertas`); else update(r.state) }
-  const activate = (s: Section) => update(activateTab(tabs, s))
-  const close = (s: Section) => update(closeTab(tabs, s))
-  const closeRest = (s: Section) => update(closeOthers(tabs, s))
+  const openTab = (t: Tab) => { const r = openInNewTab(tabs, t); if (r.full) toast.info(`Máximo ${MAX_TABS} pestañas abiertas`); else update(r.state) }
+  const openNew = (s: Section) => openTab(makeTab(s))
+  const activate = (key: string) => update(activateTab(tabs, key))
+  const close = (key: string) => update(closeTab(tabs, key))
+  const closeRest = (key: string) => update(closeOthers(tabs, key))
+  // Navegación interna de una tab (sub-pestañas de la sección).
+  const goRoute = (key: string, path: string[], labels: string[]) => update(setRoute(tabs, key, path, labels))
+  const openRouteNew = (tab: Tab, path: string[], labels: string[]) => openTab(makeTab(tab.section, path, labels))
+  // La sección resaltada en el sidebar es la de la tab activa (sin importar su ruta interna).
+  const activeSection = (tabs.open.find(t => t.id === tabs.active) ?? tabs.open[0]).section
 
   useEffect(() => {
     const upd = () => setUnreadCount(loadNotifications().filter(n => !n.read).length)
@@ -58,7 +64,7 @@ function AppShell() {
   return (
     <div className="app">
       <Sidebar
-        activeSection={tabs.active}
+        activeSection={activeSection}
         onNavigate={nav}
         onOpenNewTab={openNew}
         isOpen={sidebarOpen}
@@ -70,6 +76,8 @@ function AppShell() {
         onActivate={activate}
         onClose={close}
         onCloseOthers={closeRest}
+        onSetRoute={goRoute}
+        onOpenRouteNewTab={openRouteNew}
         sidebarOpen={sidebarOpen}
       />
       <TopBar />

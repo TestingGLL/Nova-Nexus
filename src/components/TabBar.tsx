@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Section } from '../App'
+import { tabKey, type Tab } from '../lib/tabs'
 import './TabBar.css'
 
 const TITLES: Record<Section, string> = {
@@ -9,16 +10,21 @@ const TITLES: Record<Section, string> = {
   extras: 'Extras', alertas: 'Alertas', configuracion: 'Configuración',
 }
 
+// Rótulo de una tab: la sección más su ruta interna («Finanzas › Gastos Propios»).
+// El nombre corto de la pestaña es el último tramo; el título completo va en el tooltip.
+export function tabTitle(t: Tab): string { return [TITLES[t.section], ...t.labels].join(' › ') }
+export function tabShortLabel(t: Tab): string { return t.labels.length ? t.labels[t.labels.length - 1] : TITLES[t.section] }
+
 interface Props {
-  tabs: Section[]
-  active: Section
-  onActivate: (s: Section) => void
-  onClose: (s: Section) => void
-  onCloseOthers: (s: Section) => void
+  tabs: Tab[]
+  active: string
+  onActivate: (key: string) => void
+  onClose: (key: string) => void
+  onCloseOthers: (key: string) => void
 }
 
 export default function TabBar({ tabs, active, onActivate, onClose, onCloseOthers }: Props) {
-  const [ctx, setCtx] = useState<{ id: Section; x: number; y: number } | null>(null)
+  const [ctx, setCtx] = useState<{ id: string; x: number; y: number } | null>(null)
   useEffect(() => {
     if (!ctx) return
     const close = () => setCtx(null)
@@ -32,21 +38,24 @@ export default function TabBar({ tabs, active, onActivate, onClose, onCloseOther
   const many = tabs.length > 1
   return (
     <div className="tab-bar" role="tablist">
-      {tabs.map(s => (
-        <div
-          key={s}
-          className={`tab ${s === active ? 'active' : ''}`}
-          role="tab"
-          title={TITLES[s]}
-          onClick={() => onActivate(s)}
-          onAuxClick={e => { if (e.button === 1 && many) { e.preventDefault(); onClose(s) } }}
-          onMouseDown={e => { if (e.button === 1) e.preventDefault() }}
-          onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx({ id: s, x: e.clientX, y: e.clientY }) }}
-        >
-          <span className="tab-label">{TITLES[s]}</span>
-          {many && <button className="tab-close" onClick={e => { e.stopPropagation(); onClose(s) }} title="Cerrar pestaña"><X size={12} /></button>}
-        </div>
-      ))}
+      {tabs.map(t => {
+        const key = tabKey(t)
+        return (
+          <div
+            key={key}
+            className={`tab ${key === active ? 'active' : ''}`}
+            role="tab"
+            title={tabTitle(t)}
+            onClick={() => onActivate(key)}
+            onAuxClick={e => { if (e.button === 1 && many) { e.preventDefault(); onClose(key) } }}
+            onMouseDown={e => { if (e.button === 1) e.preventDefault() }}
+            onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setCtx({ id: key, x: e.clientX, y: e.clientY }) }}
+          >
+            <span className="tab-label">{tabShortLabel(t)}</span>
+            {many && <button className="tab-close" onClick={e => { e.stopPropagation(); onClose(key) }} title="Cerrar pestaña"><X size={12} /></button>}
+          </div>
+        )
+      })}
 
       {ctx && (
         <div className="tab-ctx" style={{ top: ctx.y, left: ctx.x }} onClick={e => e.stopPropagation()}>

@@ -11,6 +11,7 @@ import { copyToClipboard } from '../../lib/clipboard'
 import { loadPromoApps, findPromoApp } from '../../lib/promoApps'
 import { isCardEnvelope, encryptVerified, decryptVault, newVaultKey, saveCardIndex, loadCardIndex, type CardIndexEntry } from '../../lib/cardVault'
 import { uploadImage } from '../../lib/imageStore'
+import { useSubTab } from '../../lib/tabRoute'
 import DuplicateIcon from '../DuplicateIcon'
 import { notify } from '../Toast'
 import './PersonalSection.css'
@@ -820,7 +821,8 @@ function TarjetasTab() {
   // Estado del "vault" cifrado: 'loading' (leyendo), 'setup' (aún sin cifrar → crear
   // contraseña), 'locked' (cifrado → pedir contraseña), 'unlocked' (clave en memoria).
   const [vaultMode, setVaultMode] = useState<'loading' | 'setup' | 'locked' | 'unlocked'>('loading')
-  const [subtab, setSubtab] = useState<'tarjetas' | 'pedidosya'>('tarjetas')
+  // Nivel 1 de la ruta (dentro de la pestaña «Tarjetas»).
+  const { tab: subtab, setTab: setSubtab, tabProps: subtabProps } = useSubTab(1, 'tarjetas', [{ id: 'tarjetas', label: 'Tarjetas' }, { id: 'pedidosya', label: 'Promociones' }])
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
   const [error, setError] = useState('')
@@ -967,8 +969,8 @@ function TarjetasTab() {
   return (
     <div className="tarjetas-content">
       <div className="tarjetas-subtabs">
-        <button className={subtab === 'tarjetas' ? 'active' : ''} onClick={() => setSubtab('tarjetas')}><CreditCard size={13} /> Tarjetas {!unlocked && <Lock size={11} />}</button>
-        <button className={subtab === 'pedidosya' ? 'active' : ''} onClick={() => setSubtab('pedidosya')}>🏷️ Promociones</button>
+        <button className={subtab === 'tarjetas' ? 'active' : ''} onClick={() => setSubtab('tarjetas', 'Tarjetas')} {...subtabProps('tarjetas', 'Tarjetas')}><CreditCard size={13} /> Tarjetas {!unlocked && <Lock size={11} />}</button>
+        <button className={subtab === 'pedidosya' ? 'active' : ''} onClick={() => setSubtab('pedidosya', 'Promociones')} {...subtabProps('pedidosya', 'Promociones')}>🏷️ Promociones</button>
       </div>
       {subtab === 'pedidosya' ? <PedidosYaTab cards={cardIndex} /> : !unlocked ? gateScreen : (
       <>
@@ -2036,8 +2038,8 @@ function loadTabOrder(): typeof defaultTabOrder {
 }
 
 export default function PersonalSection() {
-  const [tab, setTab] = useState<PersonalTab>('salud')
   const [tabOrder, setTabOrder] = useState(loadTabOrder)
+  const { tab, setTab, tabProps: routeProps } = useSubTab(0, 'salud', tabOrder)
   const dragRef = useRef<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
   const security = useSecurity()
@@ -2052,7 +2054,7 @@ export default function PersonalSection() {
     <div className="personal-section">
       <div className="personal-tabs">
         {tabOrder.map((t, i) => (
-          <button key={t.id} className={`personal-tab ${tab === t.id ? 'active' : ''} ${dragOver === i ? 'drag-over' : ''}`} onClick={() => setTab(t.id)} draggable onDragStart={() => onDragStart(i)} onDragOver={e => onDragOver(e, i)} onDrop={() => onDrop(i)} onDragEnd={onDragEnd}>
+          <button key={t.id} className={`personal-tab ${tab === t.id ? 'active' : ''} ${dragOver === i ? 'drag-over' : ''}`} onClick={() => setTab(t.id, t.label)} {...routeProps(t.id, t.label)} draggable onDragStart={() => onDragStart(i)} onDragOver={e => onDragOver(e, i)} onDrop={() => onDrop(i)} onDragEnd={onDragEnd}>
             <GripVertical size={11} className="tab-grip" />{tabIcons[t.iconName]} {t.label}
           </button>
         ))}

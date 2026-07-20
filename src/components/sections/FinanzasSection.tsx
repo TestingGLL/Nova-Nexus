@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical, Search, Archive, Edit3, TrendingUp as InflationIcon, ArrowDownCircle, Utensils } from 'lucide-react'
 import CriptomonedasSection from './CriptomonedasSection'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
+import { useSubTab } from '../../lib/tabRoute'
 import { useDolarBlue, toArs } from '../../lib/dolarBlue'
 import { useConfirm } from '../ConfirmDialog'
 import './FinanzasSection.css'
@@ -62,12 +63,22 @@ function loadRent(): RentData {
 function saveRent(d: RentData) { localStorage.setItem('nn-rent', JSON.stringify(d)) }
 
 // ============ ALQUILER ============
+// Sub-pestañas del Alquiler: nivel 1 de la ruta de la tab (finanzas › alquiler › ...).
+const ALQ_TABS: { id: string; label: string; icon: React.ReactNode }[] = [
+  { id: 'dashboard', label: 'Resumen', icon: <BarChart3 size={13} /> },
+  { id: 'servicios', label: 'Servicios', icon: <DollarSign size={13} /> },
+  { id: 'historial', label: 'Historial', icon: <History size={13} /> },
+  { id: 'mantenimiento', label: 'Mantenimiento', icon: <Wrench size={13} /> },
+  { id: 'extras', label: 'Extras', icon: <Lightbulb size={13} /> },
+]
+
 function AlquilerView() {
   const [data, setData] = useState<RentData>(loadRent)
   const confirm = useConfirm()
   const [newCatName, setNewCatName] = useState('')
   const [showNewCat, setShowNewCat] = useState(false)
-  const [view, setView] = useState<'dashboard' | 'servicios' | 'historial' | 'mantenimiento' | 'extras'>('dashboard')
+  // Nivel 1 de la ruta (dentro de la pestaña «Alquiler»).
+  const { tab: view, setTab: setView, tabProps: viewProps } = useSubTab(1, 'dashboard', ALQ_TABS)
   const [splitOpen, setSplitOpen] = useState(false)
   const [newMaintText, setNewMaintText] = useState('')
   const [newMaintType, setNewMaintType] = useState<MaintType>('revisar')
@@ -177,14 +188,8 @@ function AlquilerView() {
   return (
     <div className="alquiler-content">
       <div className="alquiler-tabs">
-        {([
-          { v: 'dashboard', icon: <BarChart3 size={13} />, label: 'Resumen' },
-          { v: 'servicios', icon: <DollarSign size={13} />, label: 'Servicios' },
-          { v: 'historial', icon: <History size={13} />, label: 'Historial' },
-          { v: 'mantenimiento', icon: <Wrench size={13} />, label: 'Mantenimiento' },
-          { v: 'extras', icon: <Lightbulb size={13} />, label: 'Extras' },
-        ] as const).map(t => (
-          <button key={t.v} className={`alquiler-tab ${view === t.v ? 'active' : ''}`} onClick={() => setView(t.v)}>{t.icon} {t.label}</button>
+        {ALQ_TABS.map(t => (
+          <button key={t.id} className={`alquiler-tab ${view === t.id ? 'active' : ''}`} onClick={() => setView(t.id, t.label)} {...viewProps(t.id, t.label)}>{t.icon} {t.label}</button>
         ))}
       </div>
 
@@ -899,14 +904,14 @@ const FIN_TABS: { id: string; label: string; icon: React.ReactNode }[] = [
 ]
 
 export default function FinanzasSection() {
-  const [tab, setTab] = useState<string>('alquiler')
+  const { tab, setTab, tabProps: routeProps } = useSubTab(0, 'alquiler', FIN_TABS)
   const { order, tabProps } = useReorderableTabs(FIN_TABS.map(t => t.id), 'nn-finanzas-tab-order')
   const tabMap = Object.fromEntries(FIN_TABS.map(t => [t.id, t]))
   return (
     <div className="finanzas-section">
       <div className="finanzas-tabs">
         {order.map((id, i) => { const t = tabMap[id]; if (!t) return null; const dp = tabProps(i); return (
-          <button key={id} className={`finanzas-tab ${tab === id ? 'active' : ''} ${dp.className}`} onClick={() => setTab(id)} draggable={dp.draggable} onDragStart={dp.onDragStart} onDragOver={dp.onDragOver} onDrop={dp.onDrop} onDragEnd={dp.onDragEnd}>
+          <button key={id} className={`finanzas-tab ${tab === id ? 'active' : ''} ${dp.className}`} onClick={() => setTab(id, t.label)} {...routeProps(id, t.label)} draggable={dp.draggable} onDragStart={dp.onDragStart} onDragOver={dp.onDragOver} onDrop={dp.onDrop} onDragEnd={dp.onDragEnd}>
             <GripVertical size={10} className="tab-grip" />{t.icon} {t.label}
           </button>
         ) })}

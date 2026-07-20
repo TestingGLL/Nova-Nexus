@@ -2,7 +2,9 @@ import { useState, useEffect, lazy, Suspense } from 'react'
 import { Lock, Loader } from 'lucide-react'
 import type { Section } from '../App'
 import SectionErrorBoundary from './SectionErrorBoundary'
-import TabBar from './TabBar'
+import TabBar, { tabTitle } from './TabBar'
+import { tabKey, type Tab } from '../lib/tabs'
+import { TabRouteProvider } from '../lib/tabRoute'
 import { useSecurity, SecurityGate } from '../lib/security'
 import { useToast } from './Toast'
 import './MainContent.css'
@@ -23,11 +25,13 @@ const AlertasSection = lazy(() => import('./sections/AlertasSection'))
 const ConfiguracionSection = lazy(() => import('./sections/ConfiguracionSection'))
 
 interface MainContentProps {
-  openTabs: Section[]
-  active: Section
-  onActivate: (s: Section) => void
-  onClose: (s: Section) => void
-  onCloseOthers: (s: Section) => void
+  openTabs: Tab[]
+  active: string
+  onActivate: (key: string) => void
+  onClose: (key: string) => void
+  onCloseOthers: (key: string) => void
+  onSetRoute: (key: string, path: string[], labels: string[]) => void
+  onOpenRouteNewTab: (tab: Tab, path: string[], labels: string[]) => void
   sidebarOpen: boolean
 }
 
@@ -50,7 +54,7 @@ function loadLocked(): string[] {
   try { const s = localStorage.getItem('nn-locked-sections'); return s ? JSON.parse(s) : [] } catch { return [] }
 }
 
-export default function MainContent({ openTabs, active, onActivate, onClose, onCloseOthers, sidebarOpen }: MainContentProps) {
+export default function MainContent({ openTabs, active, onActivate, onClose, onCloseOthers, onSetRoute, onOpenRouteNewTab, sidebarOpen }: MainContentProps) {
   const [locked, setLocked] = useState<string[]>(loadLocked)
   const [unlockedNow, setUnlockedNow] = useState<Set<string>>(new Set())
   const [restoreNonce, setRestoreNonce] = useState(0)
@@ -81,14 +85,16 @@ export default function MainContent({ openTabs, active, onActivate, onClose, onC
   return (
     <main className={`main-content ${sidebarOpen ? '' : 'expanded'}`}>
       <TabBar tabs={openTabs} active={active} onActivate={onActivate} onClose={onClose} onCloseOthers={onCloseOthers} />
-      {openTabs.map(tabKey => {
-        const s = sectionMap[tabKey] ?? sections[0]
-        const { key, title, Component } = s
+      {openTabs.map(tab => {
+        const s = sectionMap[tab.section] ?? sections[0]
+        const { key, Component } = s
+        const routeKey = tabKey(tab)
+        const title = tabTitle(tab)
         const isLocked = locked.includes(key) && !unlockedNow.has(key)
         const secLocked = security.lockedSections.includes(key)
-        const visible = key === active
+        const visible = routeKey === active
         return (
-          <div key={`${key}-${restoreNonce}`} className="section-wrapper" style={{ display: visible ? 'flex' : 'none' }}>
+          <div key={`${routeKey}-${restoreNonce}`} className="section-wrapper" style={{ display: visible ? 'flex' : 'none' }}>
             <header className="content-header">
               <div className="header-title">
                 <h1>{title}{locked.includes(key) && <Lock size={14} className="section-lock-icon" />}</h1>
@@ -98,7 +104,13 @@ export default function MainContent({ openTabs, active, onActivate, onClose, onC
               <div style={isLocked ? { pointerEvents: 'none', opacity: 0.55, filter: 'grayscale(0.3)' } : undefined}>
                 <SectionErrorBoundary name={title}>
                   <Suspense fallback={<div className="section-loading"><Loader size={22} className="section-loading-spin" /></div>}>
-                    {secLocked ? <SecurityGate title={title}><Component /></SecurityGate> : <Component />}
+                    <TabRouteProvider
+                      tab={tab}
+                      onSetRoute={(path, labels) => onSetRoute(routeKey, path, labels)}
+                      onOpenRoute={(path, labels) => onOpenRouteNewTab(tab, path, labels)}
+                    >
+                      {secLocked ? <SecurityGate title={s.title}><Component /></SecurityGate> : <Component />}
+                    </TabRouteProvider>
                   </Suspense>
                 </SectionErrorBoundary>
               </div>
