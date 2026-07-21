@@ -1,0 +1,48 @@
+.conversion-page { max-width: 820px; }
+
+.conv-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.conv-header-left { display: flex; flex-direction: column; gap: 2px; }
+.conv-update { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
+.conv-auto { font-size: 10px; color: var(--text-secondary); opacity: 0.6; }
+.conv-refresh { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); border-radius: 8px; font-size: 12px; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+.conv-refresh:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.conv-refresh:disabled { opacity: 0.5; cursor: default; }
+.conv-refresh .spin { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+.conv-error { font-size: 13px; color: #ef4444; padding: 10px 0; }
+.conv-empty { font-size: 13px; color: var(--text-secondary); padding: 24px 0; text-align: center; }
+
+.conv-card { margin-bottom: 12px; }
+.conv-desc { font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; }
+
+.conv-table-wrap { overflow-x: auto; }
+.conv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.conv-table th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-secondary); padding: 0 10px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.conv-table th.num, .conv-table td.num { text-align: right; }
+.conv-table td { padding: 10px; border-bottom: 1px solid var(--border); color: var(--text-primary); vertical-align: middle; }
+.conv-table tbody tr:last-child td { border-bottom: none; }
+.conv-table tbody tr:hover td { background: var(--bg-hover); }
+.conv-table td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.conv-table td.num.strong { font-weight: 700; }
+.conv-table .when { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+
+.conv-name { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+.conv-flag { font-size: 15px; }
+.conv-code { display: block; font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+.conv-derived { font-size: 12px; color: var(--text-secondary); cursor: help; }
+
+/* Calculadora */
+.conv-calc-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.conv-calc-amount { width: 140px; padding: 9px 12px; border: 1px solid var(--border); background: var(--bg-primary); border-radius: 9px; font-size: 15px; font-weight: 600; color: var(--text-primary); font-family: inherit; font-variant-numeric: tabular-nums; }
+.conv-calc-amount:focus { outline: none; border-color: var(--accent); }
+.conv-calc-unit { font-size: 13px; font-weight: 700; color: var(--text-secondary); min-width: 34px; }
+.conv-calc-swap { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-secondary); border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+.conv-calc-swap:hover { border-color: var(--accent); color: var(--accent); }
+.conv-calc-row select { flex: 1; min-width: 160px; padding: 9px 10px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-primary); border-radius: 9px; font-size: 13px; font-family: inherit; cursor: pointer; }
+.conv-calc-result { display: flex; align-items: baseline; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.conv-calc-result strong { font-size: 22px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.conv-calc-result span { font-size: 12px; color: var(--text-secondary); }
+
+.conv-source { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: var(--text-secondary); margin: 14px 0 0; line-height: 1.5; }
+.conv-source svg { flex-shrink: 0; margin-top: 2px; }

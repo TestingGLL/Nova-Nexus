@@ -501,6 +501,35 @@ ipcMain.handle('get-dolar-blue', async () => {
   });
 });
 
+// ----- Cotizaciones del peso argentino (página Finanzas → Conversión) -----
+// Tres fuentes: las variantes del dólar y las monedas de dolarapi.com, más un tipo de
+// cambio USD→X para derivar las monedas que dolarapi no publica (el peso mexicano).
+ipcMain.handle('get-cotizaciones', async () => {
+  const https = require('https');
+  const getJson = (url) => new Promise((resolve) => {
+    const req = https.get(url, { timeout: 8000, headers: { 'User-Agent': 'NovaNexus/1.0', 'Accept': 'application/json' } }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve(null); } });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+
+  const [dolares, monedas, fx] = await Promise.all([
+    getJson('https://dolarapi.com/v1/dolares'),
+    getJson('https://dolarapi.com/v1/cotizaciones'),
+    getJson('https://open.er-api.com/v6/latest/USD'),
+  ]);
+  if (!Array.isArray(dolares) && !Array.isArray(monedas)) return { success: false, message: 'Sin conexión con las cotizaciones' };
+  return {
+    success: true,
+    dolares: Array.isArray(dolares) ? dolares : [],
+    monedas: Array.isArray(monedas) ? monedas : [],
+    usdRates: fx && fx.result === 'success' ? fx.rates : null,
+  };
+});
+
 ipcMain.handle('get-platform', () => {
   return { platform: process.platform, isDesktop: true };
 });

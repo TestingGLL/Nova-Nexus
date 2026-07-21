@@ -26,6 +26,13 @@ interface ElectronAPI {
   getCryptoPrices: (ids?: string) => Promise<{ success: boolean; data?: Record<string, { ars: number; usd: number; ars_24h_change?: number; last_updated_at?: number }>; message?: string }>
   getCryptoChart: (coinId: string, days: number) => Promise<{ success: boolean; data?: { prices: [number, number][] }; message?: string }>
   getDolarBlue: () => Promise<{ success: boolean; compra?: number; venta?: number; message?: string }>
+  getCotizaciones: () => Promise<{
+    success: boolean
+    dolares?: Array<{ moneda: string; casa: string; nombre: string; compra: number; venta: number; fechaActualizacion: string }>
+    monedas?: Array<{ moneda: string; casa: string; nombre: string; compra: number; venta: number; fechaActualizacion: string }>
+    usdRates?: Record<string, number> | null
+    message?: string
+  }>
   getMundialScores: () => Promise<{
     success: boolean
     matches?: Array<{

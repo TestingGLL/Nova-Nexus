@@ -30,5 +30,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCryptoPrices: (ids) => ipcRenderer.invoke('get-crypto-prices', ids),
   getCryptoChart: (coinId, days) => ipcRenderer.invoke('get-crypto-chart', coinId, days),
   getDolarBlue: () => ipcRenderer.invoke('get-dolar-blue'),
+  getCotizaciones: () => ipcRenderer.invoke('get-cotizaciones'),
   isDesktop: true,
 });

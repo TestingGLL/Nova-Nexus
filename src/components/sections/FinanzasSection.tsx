@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical, Search, Archive, Edit3, TrendingUp as InflationIcon, ArrowDownCircle, Utensils } from 'lucide-react'
+import { Home, DollarSign, Wrench, Lightbulb, BarChart3, Users, Trash2, Plus, Check, X, TrendingUp, History, Wallet, Calendar, ChevronDown, ChevronRight, Filter, Bitcoin, GripVertical, Search, Archive, Edit3, TrendingUp as InflationIcon, ArrowDownCircle, Utensils, ArrowRightLeft } from 'lucide-react'
 import CriptomonedasSection from './CriptomonedasSection'
+import ConversionPage from './ConversionPage'
 import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { useSubTab } from '../../lib/tabRoute'
 import { useDolarBlue, toArs } from '../../lib/dolarBlue'
@@ -901,6 +902,7 @@ const FIN_TABS: { id: string; label: string; icon: React.ReactNode }[] = [
   { id: 'gastos', label: 'Gastos Propios', icon: <Wallet size={14} /> },
   { id: 'gastos-usd', label: 'Gastos en USD', icon: <DollarSign size={14} /> },
   { id: 'cripto', label: 'Criptomonedas', icon: <Bitcoin size={14} /> },
+  { id: 'conversion', label: 'Conversión', icon: <ArrowRightLeft size={14} /> },
 ]
 
 export default function FinanzasSection() {
@@ -921,6 +923,7 @@ export default function FinanzasSection() {
       {tab === 'gastos' && <GastosPropiosView />}
       {tab === 'gastos-usd' && <GastosUsdView />}
       {tab === 'cripto' && <CriptomonedasSection />}
+      {tab === 'conversion' && <ConversionPage />}
     </div>
   )
 }

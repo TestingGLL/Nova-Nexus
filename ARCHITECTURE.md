@@ -61,9 +61,10 @@ listan sus sub-áreas para saltar directo.
 |---|---|---|
 | Inicio | `InicioSection.tsx` | Animated Clock · Quotes · QuickChat→Ideas · Timer/Weather/Calendar widgets · Day+Routine · Next Alerts · Mundial 2026 · Global Search · Pending Items · grid combinable de widgets |
 | Personal | `PersonalSection.tsx` | Salud (WaterCounter, ExercisePanel) · Tarjetas · Recordatorios (BlockEditor) · Lista de compras · Wishlist/Compras · **RichTextEditor (reutilizable)** · Diario · Objetivos · Hoy (rutina del día) |
-| Finanzas | `FinanzasSection.tsx` | Data model · Alquiler · Gastos propios · (Criptomonedas se monta como página) |
+| Finanzas | `FinanzasSection.tsx` | Data model · Alquiler · Gastos propios · (Criptomonedas y Conversión se montan como páginas) |
 | Etsy | `EtsySection.tsx` | Types · AddArticleModal · BrandPanel · Artículos (ArticleItem, GroupPanel) · Lanzamientos (LaunchSelectorModal, LaunchesTab) · Creaciones · Finanzas · Planificación · Clientes · StoreView |
 | Criptomonedas | `CriptomonedasSection.tsx` | Precios y gráficos (CoinGecko). Se usa dentro de Finanzas. |
+| Conversión | `ConversionPage.tsx` | Cotización del peso (compra/venta) contra USD, UYU, MXN, EUR y BRL + variantes del dólar (oficial, blue, MEP, CCL, tarjeta, cripto, mayorista) y calculadora. Datos en `src/lib/cotizaciones.ts`, refresco cada 1 h. Se usa dentro de Finanzas. |
 | Software | `SoftwareSection.tsx` | Navegador · Dispositivos (BT) · Papelera · AppData · Transferencias WiFi |
 | Edición | `EdicionSection.tsx` | Pestañas: Conversor de imágenes · **Guía de Apps** (`GuiaAppsPage.tsx`: galería de apps → tarjeta alta clickeable para entrar; adentro paneles General/Visual con subpaneles **anidables** (breadcrumb de ramificación auto) y RichTextEditor; edición de banner por engranaje) |
 | Notas | `NotasSection.tsx` | Notas con carpetas, tags, búsqueda, auto-borrado |
@@ -151,6 +152,8 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 | `nn-edicion-tab` | Pestaña activa de la sección Edición (`conversor`/`guia`) |
 
 > Nota: `__nn_outbox` (cola de sync) NO lleva prefijo `nn-` a propósito, para no sincronizarse a sí misma.
+> Ídem `nova-cotizaciones-cache` (caché de la página Conversión): son datos de mercado
+> descartables que se refrescan solos cada hora, sincronizarlos sería puro ruido.
 
 ## Handlers IPC (`electron/main.cjs` ↔ `window.electronAPI`)
 
@@ -164,6 +167,7 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 | `get-mundial-scores` | Resultados del Mundial (ESPN) |
 | `get-crypto-prices` / `get-crypto-chart` | Precios/gráficos cripto (CoinGecko) |
 | `get-dolar-blue` | Cotización dólar blue (dolarapi.com) para conversión USD→ARS |
+| `get-cotizaciones` | Variantes del dólar + monedas (dolarapi.com) y tipos de cambio USD→X (open.er-api.com) para la página Conversión |
 | `transfer-*` | Servidor de transferencia WiFi (start/stop/status/shared/received/open-folder) |
 
 ## APIs externas
@@ -172,7 +176,8 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 | ESPN | Resultados Mundial 2026 | — |
 | CoinGecko | Precios/gráficos cripto | Requiere header `User-Agent` (devuelve 403 sin él) |
 | Open-Meteo | Clima (widget) | Coords de Bahía Blanca |
-| dolarapi.com | Dólar blue | Conversión de precios USD→ARS en Etsy |
+| dolarapi.com | Dólar blue; variantes del dólar (`/v1/dolares`) y monedas USD/EUR/BRL/UYU (`/v1/cotizaciones`) | Conversión de precios USD→ARS en Etsy y página Finanzas → Conversión |
+| open.er-api.com | Tipos de cambio USD→X | Solo para derivar las monedas que dolarapi no publica (peso mexicano) |
 
 ## Sincronización en la nube (resumen)
 1. `src/lib/cloudSync.ts` sobrescribe `localStorage.setItem/removeItem` y encola cada
