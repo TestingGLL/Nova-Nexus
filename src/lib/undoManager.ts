@@ -8,6 +8,13 @@ import './cloudSync'
 const PREFIX = 'nn-'
 const COALESCE_MS = 600 // merge rapid edits to the same key (typing) into one step
 const MAX = 80
+// Cada paso guarda el valor ANTERIOR y el NUEVO completos. Con 80 pasos sobre una clave
+// grande eso se va de las manos: editando una nota de 80 kB se retenían hasta ~12 MB en
+// memoria. Además del tope de pasos, limitamos el presupuesto TOTAL de bytes y tiramos
+// los pasos más viejos hasta entrar. Un solo cambio gigante tampoco se guarda: no vale
+// la pena retener megabytes para poder deshacer un pegado enorme.
+const MAX_BYTES = 4 * 1024 * 1024   // presupuesto total de la pila
+const MAX_ENTRY_BYTES = 512 * 1024  // cambio individual más grande que se registra
 
 const getItem = window.localStorage.getItem.bind(window.localStorage)
 // Whatever setItem/removeItem currently are (cloudSync already wrapped them).
@@ -25,16 +32,28 @@ export function subscribeUndo(l: () => void) { listeners.add(l); return () => { 
 export function canUndo() { return undoStack.length > 0 }
 export function canRedo() { return redoStack.length > 0 }
 
+const sizeOf = (c: Change) => (c.prev?.length || 0) + (c.next?.length || 0)
+
+// Tira los pasos más viejos hasta entrar en el tope de pasos y en el de bytes.
+function trim() {
+  while (undoStack.length > MAX) undoStack.shift()
+  let bytes = undoStack.reduce((n, c) => n + sizeOf(c), 0)
+  while (bytes > MAX_BYTES && undoStack.length > 1) bytes -= sizeOf(undoStack.shift()!)
+}
+
 function record(key: string, prev: string | null, next: string | null) {
   if (applying || prev === next) return
+  // Un cambio enorme (pegar un documento entero, importar datos) no se registra: guardar
+  // dos copias de eso costaría más memoria de lo que vale poder deshacerlo.
+  if ((prev?.length || 0) + (next?.length || 0) > MAX_ENTRY_BYTES) return
   const now = Date.now()
   const last = undoStack[undoStack.length - 1]
   if (last && last.key === key && now - last.time < COALESCE_MS) {
     last.next = next; last.time = now // coalesce consecutive edits (e.g. typing)
   } else {
     undoStack.push({ key, prev, next, time: now })
-    if (undoStack.length > MAX) undoStack.shift()
   }
+  trim()
   redoStack = []
   emit()
 }

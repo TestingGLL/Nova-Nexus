@@ -39,6 +39,7 @@ src/
 | `useReorderableTabs.ts` | Hook para barras de pestañas reordenables por drag. |
 | `useLive.ts` | `useLiveInterval` / `useLiveEffect`: trabajo que corre SÓLO si la pestaña está activa y la ventana no está oculta. `TabVisibleContext` lo provee `MainContent`. Usarlos en vez de `setInterval` dentro de una sección (las secciones quedan montadas al cambiar de tab). |
 | `weather.ts` | Clima de Bahía Blanca compartido (un pedido para el reloj, el widget y el sidebar; caché con TTL de 10 min). |
+| `persist.ts` | `saveSoon` / `flushSoon`: escritura agrupada para lo que se tipea (una tecla reescribe la clave entera). Vuelca lo pendiente al cerrar/esconder la app. |
 | `tabRoute.tsx` | Ruta interna de cada tab. `useSubTab(level, default, items)` reemplaza al `useState` de una fila de sub-pestañas: el valor activo sale de la ruta de la tab, el clic izquierdo navega en el lugar y `tabProps(id, label)` agrega clic central y menú «Abrir en nueva pestaña». Sin provider cae a estado local. |
 
 ### Componentes raíz (`src/components/`)
@@ -154,6 +155,8 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 | `nn-edicion-tab` | Pestaña activa de la sección Edición (`conversor`/`guia`) |
 
 > Nota: `__nn_outbox` (cola de sync) NO lleva prefijo `nn-` a propósito, para no sincronizarse a sí misma.
+> Guarda sólo QUÉ claves están pendientes (`{ ts, del? }`), no una copia de su contenido: el valor
+> se lee de localStorage recién al subir. Así una nota de 80 kB no deja otros 86 kB duplicados.
 > Ídem `nova-cotizaciones-cache` (caché de la página Conversión): son datos de mercado
 > descartables que se refrescan solos cada hora, sincronizarlos sería puro ruido.
 

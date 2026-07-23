@@ -9,6 +9,7 @@ import RichTextEditor from '../RichTextEditor'
 import { copyToClipboard } from '../../lib/clipboard'
 import { uploadImage } from '../../lib/imageStore'
 import { useSubTab } from '../../lib/tabRoute'
+import { saveSoon, flushSoon } from '../../lib/persist'
 import './EtsySection.css'
 import { useLiveInterval } from '../../lib/useLive'
 
@@ -130,6 +131,7 @@ const defaultStores: StoreData[] = [
 ]
 
 function loadStores(): StoreData[] {
+  flushSoon('nn-etsy-stores')   // idem: volcar lo diferido antes de leer
   try {
     const saved = localStorage.getItem('nn-etsy-stores')
     if (saved) {
@@ -148,7 +150,8 @@ function loadStores(): StoreData[] {
   } catch {}
   return defaultStores
 }
-function saveStores(stores: StoreData[]) { localStorage.setItem('nn-etsy-stores', JSON.stringify(stores)) }
+// Diferida: las descripciones se editan con el editor de textos, que avisa por tecla.
+function saveStores(stores: StoreData[]) { saveSoon('nn-etsy-stores', JSON.stringify(stores)) }
 
 // Individual reviews (1-5★). Seeded from legacy data (starCounts, or the numeric
 // review count as 5★) so existing stores keep their reviews at 5 stars.

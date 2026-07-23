@@ -78,6 +78,12 @@ robocopy "dist" "build-output/win-unpacked/resources/app/dist" /MIR
   `lib/weather.ts` y `lib/cotizaciones.ts` (un pedido en vuelo, TTL, suscriptores).
 - **Supabase se carga con `import()`** (`getSupabase()`), no estáticamente: son ~200 kB
   que si no, viajan en el bundle inicial.
+- **Lo que se TIPEA se guarda con `saveSoon()`** (`src/lib/persist.ts`), no con
+  `localStorage.setItem` directo: cada tecla reescribe la clave entera (todas las notas,
+  toda la Guía de Apps). `saveSoon` agrupa la ráfaga en una sola escritura y vuelca lo
+  pendiente al cerrar/esconder la app. Si un `load*()` lee esa clave, llamá antes a
+  `flushSoon(clave)` para no leer un valor viejo. Para un toggle o un borrado (una sola
+  escritura) seguí usando `setItem` directo.
 
 ## Privacidad / seguridad (no romper)
 - **`.env` está en `.gitignore` y nunca se commitea** (credenciales de Supabase). En el repo

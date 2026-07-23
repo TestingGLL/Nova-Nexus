@@ -3,6 +3,7 @@ import { Plus, Trash2, Search, FolderPlus, Folder, ChevronRight, ChevronDown, Ta
 import DuplicateIcon from '../DuplicateIcon'
 import { useConfirm } from '../ConfirmDialog'
 import RichTextEditor from '../RichTextEditor'
+import { saveSoon, flushSoon } from '../../lib/persist'
 import './NotasSection.css'
 
 interface Note {
@@ -35,6 +36,7 @@ function tagColor(tag: string): string {
 function defaultAutoDeleteDays(): number { try { const s = localStorage.getItem('nn-notes-autodelete-days'); return s ? Number(s) : 7 } catch { return 7 } }
 
 function loadNotes(): Note[] {
+  flushSoon('nn-notas')   // que no se lea un valor viejo si hay una escritura diferida
   try {
     const s = localStorage.getItem('nn-notas')
     if (s) {
@@ -50,7 +52,8 @@ function loadNotes(): Note[] {
   } catch {}
   return []
 }
-function saveNotes(n: Note[]) { localStorage.setItem('nn-notas', JSON.stringify(n)) }
+// Diferida: al tipear en una nota esto se llama por tecla y reescribe TODAS las notas.
+function saveNotes(n: Note[]) { saveSoon('nn-notas', JSON.stringify(n)) }
 
 function loadFolders(): NoteFolder[] {
   try { const s = localStorage.getItem('nn-notas-folders'); return s ? JSON.parse(s) : [] } catch { return [] }

@@ -18,7 +18,7 @@ import './App.css'
 
 export type Section = 'inicio' | 'personal' | 'finanzas' | 'etsy' | 'proyectos' | 'software' | 'edicion' | 'notas' | 'extras' | 'alertas' | 'configuracion'
 
-export const APP_VERSION = '1.02.17'
+export const APP_VERSION = '1.02.18'
 
 // Cascarón de la app (ya logueado y dentro de los providers → puede usar useToast).
 function AppShell() {

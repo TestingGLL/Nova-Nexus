@@ -17,18 +17,34 @@ let pullDone = false
 let draining = false
 let drainTimer: ReturnType<typeof setTimeout> | null = null
 
-type Outbox = Record<string, { v: string | null; ts: number }>
+// El outbox guarda SÓLO qué claves están pendientes, no una copia de su contenido.
+// Antes guardaba el valor entero: editar una nota de 80 kB dejaba otros 86 kB duplicados
+// en `__nn_outbox`, y CADA tecla re-parseaba y re-serializaba todo eso. Ahora la entrada
+// pesa unos pocos bytes y el valor se lee de localStorage recién al subir (que además es
+// más correcto: se sube el último valor, no el de hace 20 teclas).
+type Outbox = Record<string, { ts: number; del?: true }>
 
-function loadOutbox(): Outbox { try { return JSON.parse(origGetItem(OUTBOX_KEY) || '{}') } catch { return {} } }
+function loadOutbox(): Outbox {
+  try {
+    const raw = JSON.parse(origGetItem(OUTBOX_KEY) || '{}')
+    const out: Outbox = {}
+    for (const [k, e] of Object.entries(raw as Record<string, any>)) {
+      if (!e || typeof e !== 'object') continue
+      // Formato viejo `{ v, ts }` → nos quedamos con el timestamp y el marcador de borrado.
+      out[k] = e.del || e.v === null ? { ts: e.ts || 0, del: true } : { ts: e.ts || 0 }
+    }
+    return out
+  } catch { return {} }
+}
 function saveOutbox(o: Outbox) { try { origSetItem(OUTBOX_KEY, JSON.stringify(o)) } catch {} }
 function outboxSize() { return Object.keys(loadOutbox()).length }
 
 function shouldSync(key: string) { return key.startsWith(PREFIX) }
 function safeParse(v: string): unknown { try { return JSON.parse(v) } catch { return v } }
 
-function queueChange(key: string, value: string | null) {
+function queueChange(key: string, deleted: boolean) {
   const o = loadOutbox()
-  o[key] = { v: value, ts: Date.now() }
+  o[key] = deleted ? { ts: Date.now(), del: true } : { ts: Date.now() }
   saveOutbox(o)
   scheduleDrain()
 }
@@ -61,8 +77,15 @@ async function drain() {
   if (keys.length === 0) return
   draining = true
   try {
-    const upserts = keys.filter(k => snapshot[k].v !== null).map(k => ({ user_id: uid, key: k, value: safeParse(snapshot[k].v as string), updated_at: new Date(snapshot[k].ts).toISOString() }))
-    const deletes = keys.filter(k => snapshot[k].v === null)
+    // El valor se lee ACÁ (no se guardó copia en el outbox). Si la clave ya no está,
+    // se trata como borrado, que es exactamente lo que corresponde.
+    const upserts: { user_id: string; key: string; value: unknown; updated_at: string }[] = []
+    const deletes: string[] = []
+    for (const k of keys) {
+      const cur = snapshot[k].del ? null : origGetItem(k)
+      if (cur === null) deletes.push(k)
+      else upserts.push({ user_id: uid, key: k, value: safeParse(cur), updated_at: new Date(snapshot[k].ts).toISOString() })
+    }
     if (upserts.length) { const { error } = await supabase.from(CLOUD_TABLE).upsert(upserts, { onConflict: 'user_id,key' }); if (error) throw error }
     for (const k of deletes) { const { error } = await supabase.from(CLOUD_TABLE).delete().eq('user_id', uid).eq('key', k); if (error) throw error }
     // Clear drained keys, but keep any that changed again during the upload.
@@ -81,11 +104,11 @@ async function drain() {
 // regardless of connection/auth state (so offline edits are never lost).
 window.localStorage.setItem = (key: string, value: string) => {
   origSetItem(key, value)
-  if (shouldSync(key)) { queueChange(key, value); announce(key) }
+  if (shouldSync(key)) { queueChange(key, false); announce(key) }
 }
 window.localStorage.removeItem = (key: string) => {
   origRemoveItem(key)
-  if (shouldSync(key)) { queueChange(key, null); announce(key) }
+  if (shouldSync(key)) { queueChange(key, true); announce(key) }
 }
 
 // ---- Aviso de cambios en la MISMA ventana ----
@@ -142,7 +165,7 @@ export async function startCloudSync(): Promise<boolean> {
       // First run with an empty cloud: seed it from current local data.
       for (let i = 0; i < window.localStorage.length; i++) {
         const key = window.localStorage.key(i)
-        if (key && shouldSync(key) && !outbox[key]) queueChange(key, origGetItem(key))
+        if (key && shouldSync(key) && !outbox[key]) queueChange(key, false)
       }
     }
     pullDone = true

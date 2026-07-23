@@ -6,6 +6,7 @@ import { useToast } from '../Toast'
 import { useConfirm } from '../ConfirmDialog'
 import { uploadImage, fileToDataUrl } from '../../lib/imageStore'
 import { useSubTab, type SubTabHandlers } from '../../lib/tabRoute'
+import { saveSoon, flushSoon } from '../../lib/persist'
 import './GuiaAppsPage.css'
 
 // ============ GUÍA DE APPS ============
@@ -106,6 +107,7 @@ function migrateStructure(b: GuiaBanner): GuiaBanner {
 }
 
 function loadBanners(): GuiaBanner[] {
+  flushSoon(KEY)   // idem: volcar lo diferido antes de leer
   let arr: any[] = []
   try { const raw = localStorage.getItem(KEY); if (raw) arr = JSON.parse(raw) } catch {}
   let banners = arr.map(normBanner)
@@ -454,7 +456,8 @@ export default function GuiaAppsPage() {
   const confirm = useConfirm()
   const toast = useToast()
 
-  const save = (next: GuiaBanner[]) => { setBanners(next); try { localStorage.setItem(KEY, JSON.stringify(next)) } catch {} }
+  // Diferida: el editor de cada subpanel llama a esto por tecla, y serializa TODAS las apps.
+  const save = (next: GuiaBanner[]) => { setBanners(next); saveSoon(KEY, JSON.stringify(next)) }
   const updateBanner = (id: string, b: GuiaBanner) => save(banners.map(x => x.id === id ? b : x))
   const addBanner = () => save([...banners, { id: uid('b'), name: 'Nueva app', bgType: 'color', bgColor: '#6366f1', panels: seedPanels() }])
   const dupBanner = (id: string) => { const i = banners.findIndex(b => b.id === id); if (i < 0) return; save([...banners.slice(0, i + 1), cloneBanner(banners[i]), ...banners.slice(i + 1)]) }
