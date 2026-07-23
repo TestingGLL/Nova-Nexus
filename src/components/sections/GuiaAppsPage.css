@@ -51,6 +51,18 @@
 .guia-panel { border: 1px solid var(--border); border-radius: 11px; overflow: hidden; background: var(--bg-card); }
 .guia-panel-head { display: flex; align-items: center; gap: 9px; padding: 11px 14px; cursor: pointer; user-select: none; color: var(--text-primary); }
 .guia-panel-name { font-size: 14px; font-weight: 600; }
+.guia-panel.selected { box-shadow: 0 0 0 1px currentColor inset; }
+
+/* Casilla para elegir varios paneles a la vez (copiar/limpiar juntos) */
+.guia-panel-chk { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; }
+.guia-panel-chk input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); margin: 0; }
+
+/* Barra de paneles seleccionados */
+.guia-selbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; margin-bottom: 10px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 10px; }
+.guia-selbar-count { font-size: 12px; font-weight: 700; color: var(--accent); margin-right: 2px; }
+.guia-selbar button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); border-radius: 7px; font-size: 12px; cursor: pointer; font-family: inherit; }
+.guia-selbar button:hover { border-color: var(--accent); color: var(--accent); }
+.guia-selbar-close { margin-left: auto; }
 .guia-count { flex-shrink: 0; font-size: 11px; color: var(--text-secondary); background: rgba(127, 127, 127, 0.14); border-radius: 10px; padding: 1px 8px; }
 
 /* ---- Grip para reordenar ---- */

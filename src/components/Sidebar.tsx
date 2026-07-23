@@ -19,6 +19,7 @@ import {
   PlusSquare,
 } from 'lucide-react'
 import type { Section } from '../App'
+import { uploadImage } from '../lib/imageStore'
 import './Sidebar.css'
 
 interface SidebarProps {
@@ -170,12 +171,15 @@ export default function Sidebar({ activeSection, onNavigate, onOpenNewTab, isOpe
     setEditingProfile(false)
   }
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // El avatar se sube a Storage y se guarda la URL (igual que en Configuración → Usuario).
+  // Si no hay nube/sesión, `uploadImage` cae solo a un data URL y la migración lo levanta
+  // después. Antes esto guardaba SIEMPRE el data URL y nunca llegaba a la nube.
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => setDraft({ ...draft, avatar: reader.result as string })
-    reader.readAsDataURL(file)
+    const avatar = await uploadImage(file, 'avatar')
+    setDraft(d => ({ ...d, avatar }))
   }
 
   return (

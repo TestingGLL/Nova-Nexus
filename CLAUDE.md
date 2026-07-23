@@ -57,6 +57,11 @@ robocopy "dist" "build-output/win-unpacked/resources/app/dist" /MIR
   (contentEditable no controlado: siembra HTML por `docKey`, reporta por `onChange`). Se usa
   en toda edición rica (descripciones, notas, diarios, etc.). El `BlockEditor` (Anotaciones
   estilo Notion) sigue en `PersonalSection.tsx`.
+  **Ojo con el editor:** el `contentEditable` está en el CONTENEDOR, no en cada bloque (uno
+  por bloque impide que la selección del mouse cruce bloques). Como contrapartida, toda
+  edición que cruce bloques se intercepta en un listener **nativo** de `beforeinput` y se
+  aplica a mano, para que React siga siendo el dueño de la estructura. No pasar eso a
+  `onBeforeInput` de React: su evento sintético no cubre los borrados.
 - **Canvas:** los widgets con canvas (reloj, ruleta, gráficos) usan `ResizeObserver` y
   guardas de tamaño `> 0` para no romper cuando están ocultos (no quitar esas guardas).
 

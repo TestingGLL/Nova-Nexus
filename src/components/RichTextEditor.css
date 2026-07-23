@@ -25,7 +25,8 @@
 .rte-pop-emoji button:hover { background: var(--bg-hover); }
 
 /* ===== Bloques ===== */
-.rte-blocks { padding: 8px 8px 10px; display: flex; flex-direction: column; gap: 1px; }
+/* El contenedor es el único contentEditable (permite seleccionar a través de bloques). */
+.rte-blocks { padding: 8px 8px 10px; display: flex; flex-direction: column; gap: 1px; outline: none; }
 .rte-block-row { display: flex; align-items: flex-start; gap: 2px; border-radius: 7px; border: 1px solid transparent; }
 .rte-block-row:hover { background: var(--bg-hover); }
 .rte-block-row.drag-over { border-color: var(--accent); }
@@ -38,7 +39,8 @@
 
 .rte-block { flex: 1; min-width: 0; padding: 5px 6px; font-size: 14px; color: var(--text-primary); line-height: 1.6; outline: none; overflow-wrap: anywhere; border-radius: 5px; }
 .rte-block:empty::before { content: attr(data-ph); color: var(--text-secondary); opacity: 0.55; }
-.rte-block:focus { background: var(--bg-primary); }
+/* El bloque ya no es foco propio: se marca el que tiene el cursor (clase .active). */
+.rte-block.active { background: var(--bg-primary); }
 .rte-block h1 { font-size: 22px; font-weight: 700; margin: 4px 0; }
 .rte-block h2 { font-size: 18px; font-weight: 700; margin: 4px 0; }
 .rte-block h3 { font-size: 15px; font-weight: 600; margin: 3px 0; }

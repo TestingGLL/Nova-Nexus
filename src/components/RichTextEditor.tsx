@@ -6,10 +6,20 @@ import './RichTextEditor.css'
 
 // ===== Editor de Textos unificado de la app =====
 // Se usa en todas las ediciones ricas (descripciones, notas, anotaciones, diarios,
-// objetivos, etc.). Internamente es un editor por BLOQUES (cada bloque es un
-// contentEditable independiente, reordenable), pero de cara afuera mantiene el
-// contrato simple `html + onChange`: siembra su HTML cuando cambia `docKey` y
-// reporta el HTML combinado por `onChange`.
+// objetivos, etc.). Internamente es un editor por BLOQUES (reordenables), pero de cara
+// afuera mantiene el contrato simple `html + onChange`: siembra su HTML cuando cambia
+// `docKey` y reporta el HTML combinado por `onChange`.
+//
+// IMPORTANTE — un solo contentEditable: el `contentEditable` vive en el CONTENEDOR, no
+// en cada bloque. Con un contentEditable por bloque el navegador trata a cada uno como
+// una isla de edición y NO deja arrastrar una selección de un bloque a otro (sólo se
+// podía seleccionar bloque entero). Con un único host de edición la selección es nativa
+// y continua, y copiar/pegar a través de varios bloques funciona solo.
+//
+// A cambio, cualquier edición que CRUCE bloques la aplicamos nosotros (interceptamos
+// `beforeinput`): si dejáramos que el navegador fusione o borre <div>s por su cuenta,
+// el DOM dejaría de coincidir con lo que React cree que hay y explotaría al reconciliar.
+// Así React sigue siendo el único dueño de la estructura de bloques.
 
 export const RTE_TEXT_COLORS = ['#1d1d1f', '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b', '#ffffff']
 export const RTE_HIGHLIGHTS = ['#fff59d', '#c5e1a5', '#80deea', '#90caf9', '#f48fb1', '#ffcc80', '#e0e0e0']
@@ -21,6 +31,7 @@ interface Block { id: string; html: string }
 const BLOCK_LEVEL = /^\s*<(h[1-6]|ul|ol|blockquote|hr|details|div|p)/i
 let blkSeq = 0
 const newBlockId = () => 'rb-' + (blkSeq++) + '-' + Math.random().toString(36).slice(2, 5)
+const escapeText = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 // HTML combinado → lista de bloques (cada elemento de nivel de bloque es un bloque).
 function htmlToBlocks(html: string): Block[] {
@@ -73,19 +84,13 @@ interface Props {
   className?: string
 }
 
-// Un bloque: contentEditable que siembra su innerHTML solo al montar (por id) para
-// no perder el cursor; reporta cambios por onInput.
-function BlockRow({ block, placeholder, selected, onInput, onEnter, onBackspaceEmpty, onDuplicate, onSelectAll, onToggleSelect, onClearSelect, onHrClick, onFocus, onDragStart, onDragEnd, onDragOver, onDrop, onRemove, onGripMenu, dragOver }: {
+// Un bloque: simple <div> dentro del contenedor editable. Siembra su innerHTML sólo
+// cuando cambia su id (no en cada cambio de html) para no pisarle el cursor al usuario.
+// Toda la lógica de edición vive en el contenedor, que es el único contentEditable.
+function BlockRow({ block, placeholder, selected, onToggleSelect, onClearSelect, onDragStart, onDragEnd, onDragOver, onDrop, onRemove, onGripMenu, dragOver }: {
   block: Block; placeholder?: string; selected: boolean
-  onInput: (html: string) => void
-  onEnter: () => void
-  onBackspaceEmpty: () => void
-  onDuplicate: () => void
-  onSelectAll: () => void
   onToggleSelect: () => void
   onClearSelect: () => void
-  onHrClick: (el: HTMLElement, x: number, y: number) => void
-  onFocus: () => void
   onDragStart: () => void; onDragEnd: () => void; onDragOver: () => void; onDrop: () => void
   onRemove: () => void
   onGripMenu: (e: React.MouseEvent) => void
@@ -94,108 +99,6 @@ function BlockRow({ block, placeholder, selected, onInput, onEnter, onBackspaceE
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => { if (ref.current && ref.current.innerHTML !== block.html) ref.current.innerHTML = block.html }, [block.id])
 
-  // 4+ guiones en el bloque → línea fina de separación (hr).
-  const handleInput = () => {
-    const sel = window.getSelection()
-    const node = sel?.anchorNode
-    if (node && node.nodeType === Node.TEXT_NODE && /^-{4,}$/.test((node.textContent || '').trim())) {
-      const range = document.createRange(); range.selectNode(node)
-      sel!.removeAllRanges(); sel!.addRange(range)
-      document.execCommand('insertHTML', false, '<hr class="rte-hr">')
-    }
-    // Red de seguridad: cualquier <li> de checklist creado por cualquier vía (incluida la
-    // nativa del navegador) debe tener data-checked para que se dibuje su casilla.
-    ref.current?.querySelectorAll('.rte-checklist li:not([data-checked])').forEach(li => li.setAttribute('data-checked', 'false'))
-    onInput(ref.current?.innerHTML || '')
-  }
-
-  // Resuelve el <li> de checklist en el caret (con fallback si el caret quedó a nivel del
-  // <ul> o del bloque) y, si estamos dentro de una checklist, crea otra casilla debajo
-  // (o sale de la checklist si la casilla está vacía). Devuelve true si lo manejó.
-  const tryChecklistEnter = (): boolean => {
-    const sel = window.getSelection()
-    let n: Node | null = sel?.anchorNode || null
-    let li: HTMLElement | null = null
-    while (n && n !== ref.current) { if (n.nodeName === 'LI') { li = n as HTMLElement; break } n = n.parentNode }
-    if (!li && ref.current) {
-      const ul = ref.current.querySelector('.rte-checklist') as HTMLElement | null
-      if (ul) {
-        const a = sel?.anchorNode
-        if (a === ul) {
-          const kids = Array.from(ul.children) as HTMLElement[]
-          li = kids[Math.max(0, (sel?.anchorOffset ?? kids.length) - 1)] || (ul.lastElementChild as HTMLElement | null)
-        } else if (a === ref.current || (a && ul.contains(a))) {
-          li = ul.lastElementChild as HTMLElement | null
-        }
-      }
-    }
-    if (!(li && li.closest('.rte-checklist'))) return false
-    if ((li.textContent || '').trim() === '') {
-      // Casilla vacía + Enter → salir de la checklist y crear un bloque normal debajo.
-      const ul = li.parentElement
-      li.remove()
-      if (ul && !ul.querySelector('li')) ul.remove()
-      onInput(ref.current?.innerHTML || '')
-      onEnter()
-      return true
-    }
-    const nli = document.createElement('li')
-    nli.setAttribute('data-checked', 'false')
-    nli.innerHTML = '<br>'
-    li.after(nli)
-    const range = document.createRange()
-    range.setStart(nli, 0); range.collapse(true)
-    sel?.removeAllRanges(); sel?.addRange(range)
-    onInput(ref.current?.innerHTML || '')
-    return true
-  }
-
-  // Enter también llega como beforeinput 'insertParagraph'. Capturarlo acá hace que la
-  // creación de casillas funcione aunque el keydown no traiga key='Enter' (algunos IME
-  // /teclados/entornos). Si el keydown ya lo manejó (preventDefault), esto no se dispara.
-  const handleBeforeInput = (e: React.FormEvent<HTMLDivElement>) => {
-    const ne = e.nativeEvent as InputEvent
-    if (ne.inputType === 'insertParagraph' && !ne.isComposing) {
-      if (tryChecklistEnter()) e.preventDefault()
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); onSelectAll(); return }
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); onDuplicate(); return }
-    const isEnter = e.key === 'Enter' || e.code === 'Enter' || e.keyCode === 13
-    if (isEnter && !e.shiftKey) {
-      // En una checklist, Enter crea explícitamente otra casilla (desmarcada) debajo.
-      if (tryChecklistEnter()) { e.preventDefault(); return }
-      // Otras listas (ul/ol normales): Enter nativo sigue creando ítems.
-      const sel = window.getSelection()
-      let n: Node | null = sel?.anchorNode || null
-      let li: HTMLElement | null = null
-      while (n && n !== ref.current) { if (n.nodeName === 'LI') { li = n as HTMLElement; break } n = n.parentNode }
-      if (li) return
-      e.preventDefault(); onEnter()
-    } else if (e.key === 'Backspace' && (ref.current?.textContent || '') === '' && !/(<hr|<img|<details)/i.test(ref.current?.innerHTML || '')) {
-      e.preventDefault(); onBackspaceEmpty()
-    }
-  }
-  // Clic sobre una línea divisoria (hr) → menú de color/eliminar; sobre el triángulo
-  // de un encabezado desplegable → abre/cierra.
-  const handleClick = (e: React.MouseEvent) => {
-    const t = e.target as HTMLElement
-    if (t.tagName === 'HR') { e.preventDefault(); onHrClick(t, e.clientX, e.clientY); return }
-    // Clic sobre la casilla de un ítem de checklist (zona izquierda) → marcar/desmarcar.
-    const li = t.closest('.rte-checklist li') as HTMLElement | null
-    if (li && (e.nativeEvent as MouseEvent).offsetX < 24) {
-      e.preventDefault()
-      const checked = li.getAttribute('data-checked') === 'true'
-      li.setAttribute('data-checked', checked ? 'false' : 'true')
-      onInput(ref.current?.innerHTML || '')
-      return
-    }
-    if (t.tagName === 'SUMMARY' && (e.nativeEvent as MouseEvent).offsetX < 20) {
-      const d = t.parentElement as HTMLDetailsElement; d.open = !d.open; e.preventDefault()
-    }
-  }
   // Ctrl/Cmd + clic → (des)selecciona el bloque (sin colocar el cursor); clic normal
   // limpia la selección para editar con normalidad.
   const handleRowMouseDown = (e: React.MouseEvent) => {
@@ -205,23 +108,9 @@ function BlockRow({ block, placeholder, selected, onInput, onEnter, onBackspaceE
 
   return (
     <div className={`rte-block-row ${dragOver ? 'drag-over' : ''} ${selected ? 'selected' : ''}`} onMouseDown={handleRowMouseDown} onDragOver={e => { e.preventDefault(); onDragOver() }} onDrop={onDrop}>
-      <span className="rte-block-grip" draggable onMouseDown={e => e.stopPropagation()} onDragStart={onDragStart} onDragEnd={onDragEnd} onContextMenu={onGripMenu} title="Arrastrar para reordenar (mueve la selección) · clic derecho para convertir a encabezado"><GripVertical size={13} /></span>
-      <div
-        ref={ref}
-        data-rte-block={block.id}
-        className="rte-block"
-        contentEditable
-        suppressContentEditableWarning
-        spellCheck
-        lang="es-419"
-        data-ph={placeholder}
-        onInput={handleInput}
-        onBeforeInput={handleBeforeInput}
-        onKeyDown={handleKeyDown}
-        onClick={handleClick}
-        onFocus={onFocus}
-      />
-      <button type="button" className="rte-block-del" onClick={onRemove} title="Eliminar bloque"><X size={12} /></button>
+      <span className="rte-block-grip" contentEditable={false} draggable onMouseDown={e => e.stopPropagation()} onDragStart={onDragStart} onDragEnd={onDragEnd} onContextMenu={onGripMenu} title="Arrastrar para reordenar (mueve la selección) · clic derecho para convertir a encabezado"><GripVertical size={13} /></span>
+      <div ref={ref} data-rte-block={block.id} className="rte-block" data-ph={placeholder} />
+      <button type="button" contentEditable={false} className="rte-block-del" onMouseDown={e => e.stopPropagation()} onClick={onRemove} title="Eliminar bloque"><X size={12} /></button>
     </div>
   )
 }
@@ -245,6 +134,77 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
 
   const commit = (next: Block[]) => { setBlocks(next); onChange(blocksToHtml(next)) }
   const blockEl = (id: string) => wrapRef.current?.querySelector(`[data-rte-block="${id}"]`) as HTMLElement | null
+
+  // ---- Resolución de bloques desde la selección (hay un solo contentEditable) ----
+  const blockOf = (node: Node | null): HTMLElement | null => {
+    let n: Node | null = node
+    while (n && n !== wrapRef.current) {
+      if (n.nodeType === Node.ELEMENT_NODE && (n as HTMLElement).hasAttribute?.('data-rte-block')) return n as HTMLElement
+      n = n.parentNode
+    }
+    return null
+  }
+  const idOf = (el: HTMLElement | null) => el?.getAttribute('data-rte-block') || null
+  const curEl = () => blockOf(window.getSelection()?.anchorNode || null)
+
+  // Estado de la selección actual respecto de los bloques.
+  const selInfo = () => {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return null
+    const r = sel.getRangeAt(0)
+    const startEl = blockOf(r.startContainer)
+    const endEl = blockOf(r.endContainer)
+    if (!startEl || !endEl) return null
+    return { sel, r, startEl, endEl, multi: startEl !== endEl }
+  }
+
+  const fragHtml = (f: DocumentFragment) => { const d = document.createElement('div'); d.appendChild(f); return d.innerHTML }
+  // Contenido del bloque ANTES del inicio del rango / DESPUÉS del final del rango.
+  const headOf = (el: HTMLElement, r: Range) => { const x = document.createRange(); x.selectNodeContents(el); x.setEnd(r.startContainer, r.startOffset); return fragHtml(x.cloneContents()) }
+  const tailOf = (el: HTMLElement, r: Range) => { const x = document.createRange(); x.selectNodeContents(el); x.setStart(r.endContainer, r.endOffset); return fragHtml(x.cloneContents()) }
+
+  // Deja el cursor donde quedó la marca (y quita la marca).
+  const CARET = '<span data-rte-caret></span>'
+  const placeCaret = (el: HTMLElement) => {
+    const m = el.querySelector('[data-rte-caret]')
+    if (!m) { el.focus?.(); return }
+    const t = document.createTextNode('')
+    m.replaceWith(t)
+    try {
+      const r = document.createRange(); r.setStart(t, 0); r.collapse(true)
+      const s = window.getSelection(); s?.removeAllRanges(); s?.addRange(r)
+    } catch {}
+  }
+
+  // Reemplaza una selección que CRUZA bloques por `insert` (texto plano o ''). Lo hacemos
+  // a mano en vez de dejárselo al navegador: él fusionaría/eliminaría los <div> de los
+  // bloques por su cuenta y el DOM dejaría de coincidir con el estado de React.
+  const replaceAcrossBlocks = (info: NonNullable<ReturnType<typeof selInfo>>, insert = '') => {
+    const { r, startEl, endEl } = info
+    const startId = idOf(startEl), endId = idOf(endEl)
+    if (!startId || !endId) return
+    const si = blocks.findIndex(b => b.id === startId)
+    const ei = blocks.findIndex(b => b.id === endId)
+    if (si < 0 || ei < 0 || ei <= si) return
+    const merged = headOf(startEl, r) + (insert ? escapeText(insert) : '') + CARET + tailOf(endEl, r)
+    // El bloque que sobrevive conserva su id, así que React no lo re-siembra: le
+    // escribimos el DOM directamente y avisamos del cambio.
+    startEl.innerHTML = merged
+    placeCaret(startEl)
+    const next = blocks.filter((_, i) => i <= si || i > ei).map(b => b.id === startId ? { ...b, html: startEl.innerHTML } : b)
+    commit(next.length ? next : [{ id: newBlockId(), html: '' }])
+  }
+
+  // Fusiona dos bloques contiguos (Backspace al principio / Delete al final).
+  const mergeBlocks = (firstId: string, secondId: string) => {
+    const a = blockEl(firstId), b = blockEl(secondId)
+    if (!a || !b) return
+    const ai = blocks.findIndex(x => x.id === firstId)
+    if (ai < 0) return
+    a.innerHTML = a.innerHTML + CARET + b.innerHTML
+    placeCaret(a)
+    commit(blocks.filter(x => x.id !== secondId).map(x => x.id === firstId ? { ...x, html: a.innerHTML } : x))
+  }
 
   const updateBlock = (id: string, html: string) => commit(blocks.map(b => b.id === id ? { ...b, html } : b))
   const addAfter = (id: string) => {
@@ -300,6 +260,216 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
     if (toIdx < 0) return
     commit([...rest.slice(0, toIdx), ...moving, ...rest.slice(toIdx)])
   }
+
+  // ---- Entrada de texto (el contenedor es el único contentEditable) ----
+
+  // Lee del DOM el bloque tocado y sincroniza el estado. No reestructura nada: los
+  // cambios de estructura los manejamos explícitamente más abajo.
+  const syncBlock = (el: HTMLElement | null) => {
+    const id = idOf(el)
+    if (!id || !el) return
+    // Red de seguridad: cualquier <li> de checklist creado por cualquier vía (incluida la
+    // nativa del navegador) debe tener data-checked para que se dibuje su casilla.
+    el.querySelectorAll('.rte-checklist li:not([data-checked])').forEach(li => li.setAttribute('data-checked', 'false'))
+    updateBlock(id, el.innerHTML)
+  }
+
+  const handleInput = () => {
+    const el = curEl()
+    // 4+ guiones solos en una línea → línea fina de separación (hr).
+    const sel = window.getSelection()
+    const node = sel?.anchorNode
+    if (el && node && node.nodeType === Node.TEXT_NODE && /^-{4,}$/.test((node.textContent || '').trim())) {
+      const range = document.createRange(); range.selectNode(node)
+      sel!.removeAllRanges(); sel!.addRange(range)
+      document.execCommand('insertHTML', false, '<hr class="rte-hr">')
+    }
+    syncBlock(el)
+  }
+
+  // «* » (o «- ») al principio de un bloque → lo convierte en lista con viñetas.
+  const tryAutoList = (): boolean => {
+    const sel = window.getSelection()
+    if (!sel || !sel.isCollapsed) return false
+    const el = curEl()
+    const node = sel.anchorNode
+    if (!el || !node || node.nodeType !== Node.TEXT_NODE) return false
+    // Sólo si lo único escrito en el bloque hasta el caret es el marcador.
+    const before = (node.textContent || '').slice(0, sel.anchorOffset)
+    if (!/^[*-]$/.test(before.trim()) || (el.textContent || '').trim() !== before.trim()) return false
+    if (el.querySelector('ul, ol, hr, img, details')) return false
+    el.innerHTML = ''
+    try {
+      const r = document.createRange(); r.setStart(el, 0); r.collapse(true)
+      sel.removeAllRanges(); sel.addRange(r)
+    } catch { return false }
+    document.execCommand('insertUnorderedList')
+    syncBlock(el)
+    return true
+  }
+
+  // Resuelve el <li> de checklist en el caret (con fallback si el caret quedó a nivel del
+  // <ul> o del bloque) y, si estamos dentro de una checklist, crea otra casilla debajo
+  // (o sale de la checklist si la casilla está vacía). Devuelve true si lo manejó.
+  const tryChecklistEnter = (): boolean => {
+    const el = curEl()
+    if (!el) return false
+    const sel = window.getSelection()
+    let n: Node | null = sel?.anchorNode || null
+    let li: HTMLElement | null = null
+    while (n && n !== el) { if (n.nodeName === 'LI') { li = n as HTMLElement; break } n = n.parentNode }
+    if (!li) {
+      const ul = el.querySelector('.rte-checklist') as HTMLElement | null
+      if (ul) {
+        const a = sel?.anchorNode
+        if (a === ul) {
+          const kids = Array.from(ul.children) as HTMLElement[]
+          li = kids[Math.max(0, (sel?.anchorOffset ?? kids.length) - 1)] || (ul.lastElementChild as HTMLElement | null)
+        } else if (a === el || (a && ul.contains(a))) {
+          li = ul.lastElementChild as HTMLElement | null
+        }
+      }
+    }
+    if (!(li && li.closest('.rte-checklist'))) return false
+    if ((li.textContent || '').trim() === '') {
+      // Casilla vacía + Enter → salir de la checklist y crear un bloque normal debajo.
+      const ul = li.parentElement
+      li.remove()
+      if (ul && !ul.querySelector('li')) ul.remove()
+      syncBlock(el)
+      addAfter(idOf(el)!)
+      return true
+    }
+    const nli = document.createElement('li')
+    nli.setAttribute('data-checked', 'false')
+    nli.innerHTML = '<br>'
+    li.after(nli)
+    const range = document.createRange()
+    range.setStart(nli, 0); range.collapse(true)
+    sel?.removeAllRanges(); sel?.addRange(range)
+    syncBlock(el)
+    return true
+  }
+
+  // ¿El caret está pegado al principio / al final del contenido del bloque?
+  const atEdge = (el: HTMLElement, r: Range, edge: 'start' | 'end') => {
+    const x = document.createRange(); x.selectNodeContents(el)
+    if (edge === 'start') { x.setEnd(r.startContainer, r.startOffset); return x.toString().length === 0 }
+    x.setStart(r.endContainer, r.endOffset); return x.toString().length === 0
+  }
+
+  // Todo lo que MUTA pasa por acá. Si la selección cruza bloques, lo aplicamos nosotros.
+  // OJO: se engancha como listener NATIVO (ver el efecto de abajo). El `onBeforeInput` de
+  // React es un evento sintético que sólo cubre inserción de texto: no se dispara para
+  // los borrados, que es justo el caso que necesitamos interceptar.
+  const handleBeforeInput = (ne: InputEvent) => {
+    const e = { preventDefault: () => ne.preventDefault() }
+    if (ne.isComposing) return
+    const info = selInfo()
+    if (!info) return
+    const t = ne.inputType
+
+    if (info.multi) {
+      e.preventDefault()
+      if (t === 'insertParagraph') {
+        // Enter con selección de varios bloques: se borra lo seleccionado y se parte ahí.
+        replaceAcrossBlocks(info)
+        setTimeout(() => { const el = curEl(); if (el) addAfter(idOf(el)!) }, 0)
+        return
+      }
+      const text = t === 'insertFromPaste' ? (ne.dataTransfer?.getData('text/plain') || '') : (ne.data || '')
+      replaceAcrossBlocks(info, text)
+      return
+    }
+
+    // ---- Dentro de un solo bloque ----
+    if (t === 'insertParagraph') { if (tryChecklistEnter()) e.preventDefault(); return }
+    if (t === 'insertText' && ne.data === ' ') { if (tryAutoList()) e.preventDefault(); return }
+    // Backspace al principio / Delete al final: el navegador fusionaría los <div> por su
+    // cuenta, así que fusionamos nosotros para que React siga al día.
+    if (info.sel.isCollapsed && (t === 'deleteContentBackward' || t === 'deleteContentForward')) {
+      const id = idOf(info.startEl); if (!id) return
+      const i = blocks.findIndex(b => b.id === id)
+      if (t === 'deleteContentBackward' && i > 0 && atEdge(info.startEl, info.r, 'start')) {
+        e.preventDefault()
+        const prev = blocks[i - 1]
+        if ((info.startEl.textContent || '') === '' && !/(<hr|<img|<details)/i.test(info.startEl.innerHTML)) removeBlock(id)
+        else mergeBlocks(prev.id, id)
+        return
+      }
+      if (t === 'deleteContentForward' && i >= 0 && i < blocks.length - 1 && atEdge(info.startEl, info.r, 'end')) {
+        e.preventDefault(); mergeBlocks(id, blocks[i + 1].id)
+      }
+    }
+  }
+
+  // Sin lista de dependencias a propósito: se re-engancha en cada render para que el
+  // handler siempre vea los `blocks` actuales.
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const h = (e: Event) => handleBeforeInput(e as InputEvent)
+    el.addEventListener('beforeinput', h)
+    return () => el.removeEventListener('beforeinput', h)
+  })
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); selectAll(); return }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+      e.preventDefault()
+      const id = idOf(curEl()); if (id) duplicateBlock(id)
+      return
+    }
+    const isEnter = e.key === 'Enter' || e.code === 'Enter' || e.keyCode === 13
+    if (isEnter && !e.shiftKey) {
+      const info = selInfo()
+      if (info?.multi) return  // lo resuelve beforeinput
+      if (tryChecklistEnter()) { e.preventDefault(); return }
+      // Otras listas (ul/ol normales): Enter nativo sigue creando ítems.
+      const el = curEl()
+      const sel = window.getSelection()
+      let n: Node | null = sel?.anchorNode || null
+      while (n && n !== el) { if (n.nodeName === 'LI') return; n = n.parentNode }
+      const id = idOf(el)
+      if (id) { e.preventDefault(); addAfter(id) }
+    }
+  }
+
+  // Clic sobre una línea divisoria (hr) → menú de color/eliminar; sobre la casilla de una
+  // checklist → marcar/desmarcar; sobre el triángulo de un desplegable → abre/cierra.
+  const handleClick = (e: React.MouseEvent) => {
+    const t = e.target as HTMLElement
+    if (t.tagName === 'HR') {
+      e.preventDefault()
+      setHrMenu({ el: t, x: Math.min(e.clientX, window.innerWidth - 210), y: Math.min(e.clientY, window.innerHeight - 180) })
+      return
+    }
+    const li = t.closest('.rte-checklist li') as HTMLElement | null
+    if (li && (e.nativeEvent as MouseEvent).offsetX < 24) {
+      e.preventDefault()
+      li.setAttribute('data-checked', li.getAttribute('data-checked') === 'true' ? 'false' : 'true')
+      syncBlock(blockOf(li))
+      return
+    }
+    if (t.tagName === 'SUMMARY' && (e.nativeEvent as MouseEvent).offsetX < 20) {
+      const d = t.parentElement as HTMLDetailsElement; d.open = !d.open; e.preventDefault()
+    }
+  }
+
+  // Seguir con qué bloque está el cursor (para la toolbar) sin re-renderizar: el
+  // resaltado del bloque activo se pinta tocando la clase directamente.
+  useEffect(() => {
+    const onSel = () => {
+      const el = curEl()
+      const id = idOf(el)
+      if (id) activeId.current = id
+      wrapRef.current?.querySelectorAll('.rte-block.active').forEach(x => { if (x !== el) x.classList.remove('active') })
+      el?.classList.add('active')
+    }
+    document.addEventListener('selectionchange', onSel)
+    return () => document.removeEventListener('selectionchange', onSel)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ---- Selección múltiple de bloques ----
   const toggleSelect = (id: string) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -465,7 +635,20 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
         </div>
       )}
 
-      <div className="rte-blocks" ref={wrapRef} style={minHeight ? { minHeight } : undefined}>
+      {/* Un único contentEditable para TODOS los bloques: así la selección del mouse
+          puede cruzarlos con naturalidad (ver la nota del encabezado del archivo). */}
+      <div
+        className="rte-blocks"
+        ref={wrapRef}
+        style={minHeight ? { minHeight } : undefined}
+        contentEditable
+        suppressContentEditableWarning
+        spellCheck
+        lang="es-419"
+        onInput={handleInput}
+        onKeyDown={handleKeyDown}
+        onClick={handleClick}
+      >
         {blocks.map((b, i) => (
           <BlockRow
             key={b.id}
@@ -473,15 +656,8 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
             placeholder={i === 0 ? (placeholder || 'Escribí...') : undefined}
             dragOver={dragOverId === b.id}
             selected={selected.has(b.id)}
-            onInput={h => updateBlock(b.id, h)}
-            onEnter={() => addAfter(b.id)}
-            onBackspaceEmpty={() => removeBlock(b.id)}
-            onDuplicate={() => duplicateBlock(b.id)}
-            onSelectAll={selectAll}
             onToggleSelect={() => toggleSelect(b.id)}
             onClearSelect={clearSelect}
-            onHrClick={(el, x, y) => setHrMenu({ el, x: Math.min(x, window.innerWidth - 210), y: Math.min(y, window.innerHeight - 180) })}
-            onFocus={() => { activeId.current = b.id }}
             onRemove={() => removeBlock(b.id)}
             onGripMenu={e => {
               e.preventDefault(); setMenu(null); setCtxMenu(null); setHrMenu(null)
@@ -496,7 +672,7 @@ export default function RichTextEditor({ html, onChange, docKey, placeholder, mi
             onDrop={() => reorder(b.id)}
           />
         ))}
-        <button type="button" className="rte-add-block" onClick={() => addAfter(blocks[blocks.length - 1]?.id || '')}><Plus size={12} /> Agregar bloque</button>
+        <button type="button" contentEditable={false} className="rte-add-block" onMouseDown={e => e.preventDefault()} onClick={() => addAfter(blocks[blocks.length - 1]?.id || '')}><Plus size={12} /> Agregar bloque</button>
       </div>
 
       {ctxMenu && (

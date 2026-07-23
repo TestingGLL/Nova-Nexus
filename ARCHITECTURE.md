@@ -66,7 +66,7 @@ listan sus sub-áreas para saltar directo.
 | Criptomonedas | `CriptomonedasSection.tsx` | Precios y gráficos (CoinGecko). Se usa dentro de Finanzas. |
 | Conversión | `ConversionPage.tsx` | Cotización del peso (compra/venta) contra USD, UYU, MXN, EUR y BRL + variantes del dólar (oficial, blue, MEP, CCL, tarjeta, cripto, mayorista) y calculadora. Datos en `src/lib/cotizaciones.ts`, refresco cada 1 h. Se usa dentro de Finanzas. |
 | Software | `SoftwareSection.tsx` | Navegador · Dispositivos (BT) · Papelera · AppData · Transferencias WiFi |
-| Edición | `EdicionSection.tsx` | Pestañas: Conversor de imágenes · **Guía de Apps** (`GuiaAppsPage.tsx`: galería de apps → tarjeta alta clickeable para entrar; adentro paneles General/Visual con subpaneles **anidables** (breadcrumb de ramificación auto) y RichTextEditor; edición de banner por engranaje) |
+| Edición | `EdicionSection.tsx` | Pestañas: Conversor de imágenes · **Guía de Apps** (`GuiaAppsPage.tsx`: galería de apps → tarjeta alta clickeable para entrar, o clic derecho/central para abrir la app en su **propia pestaña** (ruta nivel 1); adentro paneles General/Visual con subpaneles **anidables** (breadcrumb de ramificación auto) y RichTextEditor; casilla por panel para **elegir varios y copiarlos/limpiarlos juntos**; **pincel** en panel y subpanel que vacía su texto y el de todo lo que cuelga; edición de banner por engranaje) |
 | Notas | `NotasSection.tsx` | Notas con carpetas, tags, búsqueda, auto-borrado |
 | Proyectos | `ProyectosSection.tsx` | Proyectos (lista / kanban) |
 | Extras | `ExtrasSection.tsx` | Aleatorio: ruleta (SpinWheel) y grilla random |
@@ -108,7 +108,7 @@ Al agregar una funcionalidad nueva, usar una clave `nn-` y sumarla a esta tabla.
 | `nn-cards` / `nn-cards-view` | Tarjetas **cifradas** (AES-GCM, envelope; ver `lib/cardVault.ts`) / vista `list`|`grid` |
 | `nn-cards-index` | Índice NO sensible de tarjetas (id/nombre/color) para mostrar nombres sin descifrar |
 | `nn-promo-apps` | Opciones del campo «Aplicación» de Promociones (ver `lib/promoApps.ts`) |
-| `nn-images` (bucket) | Imágenes en Supabase Storage; en localStorage se guarda solo la URL (ver `lib/imageStore.ts` y `SUPABASE_STORAGE.md`) |
+| `nn-images` (bucket) | Imágenes en Supabase Storage; en localStorage se guarda solo la URL (ver `lib/imageStore.ts` y `SUPABASE_STORAGE.md`). La migración y el conteo recorren **todas** las claves `nn-*` en profundidad (cualquier `data:image`, esté donde esté), no una lista fija de campos |
 | `nn-shopping` / `nn-custom-categories` | Listas de compras / categorías |
 | `nn-shopping-sort` / `nn-shopping-collapsed` | Orden de las listas (`manual`/`alpha`) / listas contraídas |
 | `nn-wishlist` | Compras / wishlist |

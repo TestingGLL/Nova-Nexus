@@ -1,10 +1,11 @@
 import { useState, useRef, type DragEvent, type MouseEvent } from 'react'
-import { Plus, Trash2, ChevronDown, Settings, Image as ImageIcon, Palette, X, ArrowLeft, Check, ClipboardCopy, GripVertical, GitBranch } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, Settings, Image as ImageIcon, Palette, X, ArrowLeft, Check, ClipboardCopy, GripVertical, GitBranch, Paintbrush } from 'lucide-react'
 import RichTextEditor from '../RichTextEditor'
 import DuplicateIcon from '../DuplicateIcon'
 import { useToast } from '../Toast'
 import { useConfirm } from '../ConfirmDialog'
 import { uploadImage, fileToDataUrl } from '../../lib/imageStore'
+import { useSubTab, type SubTabHandlers } from '../../lib/tabRoute'
 import './GuiaAppsPage.css'
 
 // ============ GUÍA DE APPS ============
@@ -172,6 +173,15 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+// ---- Limpiar contenido (pincel): vacía el texto del nodo y de todo lo que cuelga de él,
+// sin tocar la estructura (nombres, colores y subpaneles quedan como están).
+function clearSubTree(s: GuiaSub): GuiaSub { return { ...s, html: '', subs: s.subs.map(clearSubTree) } }
+function clearPanelTree(p: GuiaPanel): GuiaPanel { return { ...p, subs: p.subs.map(clearSubTree) } }
+// Cuántos subpaneles del árbol tienen texto (para avisar en la confirmación).
+function countFilled(subs: GuiaSub[]): number {
+  return subs.reduce((n, s) => n + (s.html && htmlToText(s.html) ? 1 : 0) + countFilled(s.subs), 0)
+}
+
 // Clonado con ids nuevos (para "duplicar").
 function cloneSub(s: GuiaSub): GuiaSub { return { ...s, id: uid('s'), subs: s.subs.map(cloneSub) } }
 function clonePanel(p: GuiaPanel): GuiaPanel { return { ...p, id: uid('p'), subs: p.subs.map(cloneSub) } }
@@ -242,6 +252,15 @@ function SubPanel({ sub, parentPath, rootColor, depth, onChange, onDuplicate, on
     if (await copyText(serializeSub(sub, 1, parentPath))) toast.success('Contenido copiado')
     else toast.error('No se pudo copiar')
   }
+  // Pincel: vacía el texto de este subpanel y de todos los que tenga dentro.
+  const onClear = async () => {
+    const n = countFilled([sub])
+    if (!n) { toast.info('Este subpanel ya está vacío'); return }
+    const inner = sub.subs.length ? ' y los subpaneles que contiene' : ''
+    if (!await confirm({ title: 'Limpiar contenido', message: `¿Borrar el contenido de «${sub.name}»${inner}? Son ${n} texto(s). La estructura no se toca.`, confirmLabel: 'Limpiar' })) return
+    onChange(clearSubTree(sub))
+    toast.success('Contenido limpiado')
+  }
   // Cambio de color: si es un subpanel principal (nivel 0), recolorea sus descendientes.
   const onColor = (c: string) => onChange(depth === 0 ? recolorTree({ ...sub, color: c }, c, 0) : { ...sub, color: c })
   const addNested = () => setSubs([...sub.subs, mkSub('Nuevo subpanel', nestedColor(childRoot, depth + 1))])
@@ -264,6 +283,7 @@ function SubPanel({ sub, parentPath, rootColor, depth, onChange, onDuplicate, on
             <input type="checkbox" checked={sub.isBranch} onChange={e => onChange({ ...sub, isBranch: e.target.checked })} /><GitBranch size={12} />
           </label>
           <button className="guia-icon-btn" title="Copiar contenido (con sus subpaneles)" onClick={onCopy}><ClipboardCopy size={13} /></button>
+          <button className="guia-icon-btn" title="Limpiar el contenido (este subpanel y los que tenga dentro)" onClick={onClear}><Paintbrush size={13} /></button>
           <button className="guia-icon-btn" title="Duplicar subpanel" onClick={onDuplicate}><DuplicateIcon size={13} /></button>
           <button className="guia-icon-btn danger" title="Eliminar subpanel" onClick={onDelete}><Trash2 size={13} /></button>
         </div>
@@ -290,16 +310,25 @@ function SubPanel({ sub, parentPath, rootColor, depth, onChange, onDuplicate, on
 }
 
 // ============ PANEL ============
-function PanelCard({ panel, onChange, onDuplicate, onDelete, gripProps, dropProps }: {
+function PanelCard({ panel, onChange, onDuplicate, onDelete, gripProps, dropProps, selected, onToggleSelect }: {
   panel: GuiaPanel
   onChange: (p: GuiaPanel) => void; onDuplicate: () => void; onDelete: () => void
   gripProps?: GripProps; dropProps?: DropProps
+  selected: boolean; onToggleSelect: () => void
 }) {
   const confirm = useConfirm()
   const toast = useToast()
   const onCopy = async () => {
     if (await copyText(serializePanel(panel))) toast.success('Contenido copiado')
     else toast.error('No se pudo copiar')
+  }
+  // Pincel: vacía el texto de todos los subpaneles del panel (a cualquier profundidad).
+  const onClear = async () => {
+    const n = countFilled(panel.subs)
+    if (!n) { toast.info('Este panel ya está vacío'); return }
+    if (!await confirm({ title: 'Limpiar contenido', message: `¿Borrar el contenido de todos los subpaneles de «${panel.name}»? Son ${n} texto(s). La estructura no se toca.`, confirmLabel: 'Limpiar' })) return
+    onChange(clearPanelTree(panel))
+    toast.success('Contenido limpiado')
   }
   const setSubs = (subs: GuiaSub[]) => onChange({ ...panel, subs })
   const R = makeReorder(panel.id, panel.subs, setSubs)
@@ -310,15 +339,19 @@ function PanelCard({ panel, onChange, onDuplicate, onDelete, gripProps, dropProp
     setSubs(panel.subs.filter((_, j) => j !== i))
   }
   return (
-    <div className="guia-panel" style={{ borderColor: rgba(panel.color, 0.4) }}>
+    <div className={`guia-panel ${selected ? 'selected' : ''}`} style={{ borderColor: selected ? panel.color : rgba(panel.color, 0.4) }}>
       <div className="guia-panel-head" style={{ background: rgba(panel.color, 0.14) }} onClick={() => onChange({ ...panel, open: !panel.open })} {...(dropProps || {})}>
         {gripProps && <span className="guia-grip" {...gripProps} title="Arrastrar para reordenar"><GripVertical size={14} /></span>}
+        <label className="guia-panel-chk" title="Seleccionar este panel (para copiar varios juntos)" onClick={e => e.stopPropagation()}>
+          <input type="checkbox" checked={selected} onChange={onToggleSelect} />
+        </label>
         <ChevronDown size={16} className={`guia-chev ${panel.open ? 'open' : ''}`} />
         <ColorSwatch color={panel.color} onChange={c => onChange({ ...panel, color: c })} title="Color del panel" />
         <EditableName value={panel.name} onChange={v => onChange({ ...panel, name: v })} className="guia-panel-name" placeholder="Panel" />
         <span className="guia-count" title={`${panel.subs.length} subpanel(es) dentro`}>{panel.subs.length}</span>
         <div className="guia-actions" onClick={e => e.stopPropagation()}>
           <button className="guia-icon-btn" title="Copiar todo el panel (títulos y textos)" onClick={onCopy}><ClipboardCopy size={14} /></button>
+          <button className="guia-icon-btn" title="Limpiar el contenido de todos sus subpaneles" onClick={onClear}><Paintbrush size={14} /></button>
           <button className="guia-icon-btn" title="Duplicar panel" onClick={onDuplicate}><DuplicateIcon size={14} /></button>
           <button className="guia-icon-btn danger" title="Eliminar panel" onClick={onDelete}><Trash2 size={14} /></button>
         </div>
@@ -393,12 +426,15 @@ function BannerEditModal({ banner, onChange, onDuplicate, onDelete, onClose }: {
 }
 
 // ============ TARJETA DE BANNER (galería) ============
-function BannerCard({ banner, onEnter, onGear }: { banner: GuiaBanner; onEnter: () => void; onGear: () => void }) {
+function BannerCard({ banner, onEnter, onGear, tabProps }: {
+  banner: GuiaBanner; onEnter: () => void; onGear: () => void
+  tabProps?: SubTabHandlers
+}) {
   const bg = banner.bgType === 'image' && banner.bgImage
     ? { backgroundImage: `linear-gradient(rgba(0,0,0,.15),rgba(0,0,0,.45)), url(${banner.bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center', color: '#fff' as const }
     : { background: banner.bgColor, color: textOn(banner.bgColor) }
   return (
-    <div className="guia-card" style={bg} onClick={onEnter} title="Entrar">
+    <div className="guia-card" style={bg} onClick={onEnter} title="Entrar (clic derecho o central: abrir en una pestaña aparte)" {...(tabProps || {})}>
       <button className="guia-card-gear" title="Editar (nombre, color, imagen)" onClick={e => { e.stopPropagation(); onGear() }}><Settings size={18} /></button>
       <span className="guia-card-name">{banner.name}</span>
     </div>
@@ -408,9 +444,15 @@ function BannerCard({ banner, onEnter, onGear }: { banner: GuiaBanner; onEnter: 
 // ============ PÁGINA ============
 export default function GuiaAppsPage() {
   const [banners, setBanners] = useState<GuiaBanner[]>(loadBanners)
-  const [activeId, setActiveId] = useState<string | null>(null)   // null = galería; id = dentro de una app
+  // La app abierta vive en la RUTA de la pestaña (nivel 1: la sección Edición ocupa el
+  // nivel 0 con «Guía de Apps»), así cada app se puede abrir en su propia pestaña con
+  // clic derecho/central. '' = la galería.
+  const { tab: activeId, setTab: setActive, resetTab: backToGallery, tabProps: appProps } =
+    useSubTab(1, '', [{ id: '', label: 'Guía de Apps' }, ...banners.map(b => ({ id: b.id, label: b.name }))])
   const [gearId, setGearId] = useState<string | null>(null)       // banner en edición (modal engranaje)
+  const [selPanels, setSelPanels] = useState<Set<string>>(new Set())  // paneles principales tildados
   const confirm = useConfirm()
+  const toast = useToast()
 
   const save = (next: GuiaBanner[]) => { setBanners(next); try { localStorage.setItem(KEY, JSON.stringify(next)) } catch {} }
   const updateBanner = (id: string, b: GuiaBanner) => save(banners.map(x => x.id === id ? b : x))
@@ -419,7 +461,7 @@ export default function GuiaAppsPage() {
   const delBanner = async (id: string) => {
     const b = banners.find(x => x.id === id); if (!b) return
     if (!await confirm({ title: 'Eliminar app', message: `¿Eliminar «${b.name}» y todo su contenido?`, confirmLabel: 'Eliminar' })) return
-    save(banners.filter(x => x.id !== id)); setGearId(null); if (activeId === id) setActiveId(null)
+    save(banners.filter(x => x.id !== id)); setGearId(null); if (activeId === id) backToGallery()
   }
 
   const active = banners.find(b => b.id === activeId) || null
@@ -438,16 +480,43 @@ export default function GuiaAppsPage() {
       if (!await confirm({ title: 'Eliminar panel', message: `¿Eliminar «${active.panels[i].name}» y sus subpaneles?`, confirmLabel: 'Eliminar' })) return
       setPanels(active.panels.filter((_, j) => j !== i))
     }
+    // Selección múltiple de paneles principales: copiar varios de una (en el orden en que
+    // están en pantalla, no en el que se fueron tildando).
+    const togglePanel = (id: string) => setSelPanels(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+    const chosen = active.panels.filter(p => selPanels.has(p.id))
+    const copySelected = async () => {
+      if (!chosen.length) return
+      if (await copyText(chosen.map(serializePanel).join('\n\n'))) toast.success(`${chosen.length} panel(es) copiado(s)`)
+      else toast.error('No se pudo copiar')
+    }
+    const clearSelected = async () => {
+      if (!chosen.length) return
+      const n = chosen.reduce((t, p) => t + countFilled(p.subs), 0)
+      if (!n) { toast.info('Los paneles elegidos ya están vacíos'); return }
+      if (!await confirm({ title: 'Limpiar contenido', message: `¿Borrar el contenido de ${chosen.length} panel(es)? Son ${n} texto(s). La estructura no se toca.`, confirmLabel: 'Limpiar' })) return
+      setPanels(active.panels.map(p => selPanels.has(p.id) ? clearPanelTree(p) : p))
+      toast.success('Contenido limpiado')
+    }
     return (
       <div className="guia-apps">
         <div className="guia-detail-head" style={headBg}>
-          <button className="guia-back" onClick={() => setActiveId(null)} title="Volver"><ArrowLeft size={18} /></button>
+          <button className="guia-back" onClick={backToGallery} title="Volver"><ArrowLeft size={18} /></button>
           <span className="guia-detail-name">{active.name}</span>
           <button className="guia-card-gear inline" title="Editar (nombre, color, imagen)" onClick={() => setGearId(active.id)}><Settings size={18} /></button>
         </div>
+        {chosen.length > 0 && (
+          <div className="guia-selbar">
+            <span className="guia-selbar-count">{chosen.length} panel{chosen.length > 1 ? 'es' : ''} seleccionado{chosen.length > 1 ? 's' : ''}</span>
+            <button onClick={copySelected}><ClipboardCopy size={13} /> Copiar juntos</button>
+            <button onClick={clearSelected}><Paintbrush size={13} /> Limpiar</button>
+            <button onClick={() => setSelPanels(new Set(active.panels.map(p => p.id)))}>Seleccionar todos</button>
+            <button className="guia-selbar-close" onClick={() => setSelPanels(new Set())} title="Cancelar selección"><X size={13} /></button>
+          </div>
+        )}
         <div className="guia-detail-body">
           {active.panels.map((p, i) => (
             <PanelCard key={p.id} panel={p} gripProps={R.gripProps(i)} dropProps={R.dropProps(i)}
+              selected={selPanels.has(p.id)} onToggleSelect={() => togglePanel(p.id)}
               onChange={np => setPanels(active.panels.map((x, j) => j === i ? np : x))}
               onDuplicate={() => dupPanel(i)} onDelete={() => delPanel(i)} />
           ))}
@@ -464,7 +533,7 @@ export default function GuiaAppsPage() {
       <div className="guia-top">
         <div className="guia-intro">
           <h3>Guía de Apps</h3>
-          <p>Cada tarjeta es una app: hacé clic para entrar. Usá el engranaje ⚙ para cambiar su nombre, color o imagen.</p>
+          <p>Cada tarjeta es una app: hacé clic para entrar (clic derecho o central para abrirla en una pestaña aparte). Usá el engranaje ⚙ para cambiar su nombre, color o imagen.</p>
         </div>
         <button className="guia-new-banner" onClick={addBanner}><Plus size={16} /> Nueva app</button>
       </div>
@@ -478,7 +547,7 @@ export default function GuiaAppsPage() {
       ) : (
         <div className="guia-gallery">
           {banners.map(b => (
-            <BannerCard key={b.id} banner={b} onEnter={() => setActiveId(b.id)} onGear={() => setGearId(b.id)} />
+            <BannerCard key={b.id} banner={b} onEnter={() => setActive(b.id, b.name)} onGear={() => setGearId(b.id)} tabProps={appProps(b.id, b.name)} />
           ))}
         </div>
       )}

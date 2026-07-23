@@ -10,7 +10,7 @@ import { hasPendingSync } from '../../lib/cloudSync'
 import { loadSecurity, saveSecurity, DEFAULT_SECURITY_PASSWORD, type SecurityConfig } from '../../lib/security'
 import { BUILTIN_PROJECT_LABELS, loadCustomProjectLabels, saveCustomProjectLabels, type ProjectLabel } from '../../lib/projectLabels'
 import { loadPromoApps, savePromoApps, isDefaultPromoApp, type PromoAppDef } from '../../lib/promoApps'
-import { uploadImage, migrateImagesToStorage, getImageMigrationStatus, type ImageMigrationStatus } from '../../lib/imageStore'
+import { uploadImage, migrateImagesToStorage, getImageMigrationStatus, explainFailure, type ImageMigrationStatus } from '../../lib/imageStore'
 import ColorInput from '../ColorInput'
 import { APP_VERSION } from '../../App'
 import './ConfiguracionSection.css'
@@ -72,31 +72,43 @@ function SistemaEstado() {
   )
 }
 
+const fmtBytes = (n: number) => n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`
+
 function ImagenesEstado() {
   const [status, setStatus] = useState<ImageMigrationStatus>(() => getImageMigrationStatus())
   const [running, setRunning] = useState(false)
   const [msg, setMsg] = useState<{ stat: Stat; text: string } | null>(null)
-
-  const supaSession = supabaseEnabled && !!supabase
+  // Sesión REAL en la nube (antes sólo se miraba si Supabase estaba configurado, así que
+  // el botón se ofrecía habilitado aunque no hubiera con qué subir).
+  const [session, setSession] = useState<boolean | null>(null)
   const online = typeof navigator !== 'undefined' ? navigator.onLine : true
+  const configured = supabaseEnabled && !!supabase
+
+  useEffect(() => {
+    let active = true
+    if (!configured || !supabase) { setSession(false); return }
+    supabase.auth.getSession().then(({ data }) => { if (active) setSession(!!data.session) }).catch(() => active && setSession(false))
+    return () => { active = false }
+  }, [configured])
 
   const refresh = () => setStatus(getImageMigrationStatus())
 
   const runMigration = async () => {
-    setRunning(true); setMsg({ stat: 'checking', text: 'Migrando imágenes a la nube…' })
+    setRunning(true); setMsg({ stat: 'checking', text: 'Subiendo imágenes a la nube…' })
     try {
-      await migrateImagesToStorage()
-      const after = getImageMigrationStatus()
-      setStatus(after)
-      if (after.pending === 0) setMsg({ stat: 'ok', text: 'Listo: todas las imágenes están en la nube.' })
-      else setMsg({ stat: 'warn', text: `Quedaron ${after.pending} pendiente(s). Revisá sesión y conexión, y reintentá.` })
-    } catch {
-      setMsg({ stat: 'bad', text: 'No se pudo migrar. Revisá tu conexión e inicio de sesión.' })
+      const r = await migrateImagesToStorage()
+      setStatus(r.status)
+      if (r.status.pending === 0) setMsg({ stat: 'ok', text: r.migrated ? `Listo: ${r.migrated} imagen(es) subida(s). No queda ninguna pendiente.` : 'Listo: todas las imágenes ya estaban en la nube.' })
+      else setMsg({ stat: r.migrated ? 'warn' : 'bad', text: `${r.migrated ? `Se subieron ${r.migrated}, pero quedaron` : 'Quedaron'} ${r.status.pending} sin subir. ${r.reason ? explainFailure(r.reason, r.detail) : ''}` })
+    } catch (e) {
+      setMsg({ stat: 'bad', text: `No se pudo migrar: ${e instanceof Error ? e.message : 'error desconocido'}` })
     } finally { setRunning(false) }
   }
 
-  const overall: Stat = !supaSession ? 'warn' : status.total === 0 ? 'ok' : status.pending === 0 ? 'ok' : 'warn'
-  const overallText = !supaSession ? 'Nube no configurada'
+  const blocked = !configured ? 'Nube no configurada' : session === false ? 'Sin sesión iniciada' : !online ? 'Sin conexión' : null
+  const overall: Stat = blocked ? 'warn' : status.total === 0 ? 'ok' : status.pending === 0 ? 'ok' : 'warn'
+  const overallText = blocked
+    ? `${blocked}${status.pending ? ` · ${status.pending} imagen(es) sin subir` : ''}`
     : status.total === 0 ? 'Sin imágenes cargadas'
     : status.pending === 0 ? `Todo en la nube · ${status.cloud} imagen(es)`
     : `${status.pending} pendiente(s) de subir`
@@ -104,17 +116,18 @@ function ImagenesEstado() {
   return (
     <div className="card config-card">
       <div className="card-title"><ImageIcon size={16} /> Imágenes en la nube</div>
-      <p className="config-desc">Avatar, banners de Etsy y de rutinas se guardan en Supabase Storage (no como texto pesado en el dispositivo). Acá ves cuántas ya subieron.</p>
+      <p className="config-desc">Todas las imágenes de la app (avatar, banners de Etsy, rutinas, puntuaciones, Guía de Apps…) se guardan en Supabase Storage y no como texto pesado en el dispositivo. Acá ves cuántas ya subieron.</p>
       <div className="estado-list">
         <EstadoRow label="Estado general" stat={overall} text={overallText} />
+        <EstadoRow label="Sesión en la nube" stat={session === null ? 'checking' : session ? 'ok' : 'warn'} text={session === null ? 'Verificando…' : session ? 'Iniciada' : 'Sin sesión'} />
         <EstadoRow label="En la nube (URL)" stat={status.cloud > 0 ? 'ok' : 'warn'} text={`${status.cloud} imagen(es)`} />
-        <EstadoRow label="Pendientes (en el dispositivo)" stat={status.pending === 0 ? 'ok' : 'warn'} text={status.pending === 0 ? 'Ninguna' : `${status.pending} por subir`} />
+        <EstadoRow label="Pendientes (en el dispositivo)" stat={status.pending === 0 ? 'ok' : 'warn'} text={status.pending === 0 ? 'Ninguna' : `${status.pending} por subir · ${fmtBytes(status.bytes)}`} />
       </div>
       {msg && <div className={`estado-msg ${msg.stat}`}>{msg.text}</div>}
       <div className="estado-actions">
         <button className="reset-btn" onClick={refresh} disabled={running}><RotateCcw size={14} /> Volver a chequear</button>
-        <button className="reset-btn" onClick={runMigration} disabled={running || !supaSession || !online || status.pending === 0}>
-          <CloudUpload size={14} className={running ? 'estado-spin' : ''} /> {running ? 'Migrando…' : 'Migrar ahora'}
+        <button className="reset-btn" onClick={runMigration} disabled={running || !!blocked || status.pending === 0} title={blocked || (status.pending === 0 ? 'No hay imágenes pendientes' : 'Subir las imágenes pendientes')}>
+          <CloudUpload size={14} className={running ? 'estado-spin' : ''} /> {running ? 'Subiendo…' : 'Subir pendientes'}
         </button>
       </div>
     </div>
