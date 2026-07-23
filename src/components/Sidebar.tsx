@@ -21,6 +21,8 @@ import {
 import type { Section } from '../App'
 import { uploadImage } from '../lib/imageStore'
 import './Sidebar.css'
+import { useWeather, ensureWeather, WEATHER_TTL } from '../lib/weather'
+import { useLiveInterval } from '../lib/useLive'
 
 interface SidebarProps {
   activeSection: Section
@@ -94,21 +96,12 @@ function wIcon(code: number): string {
 
 function ClimaHora({ isOpen }: { isOpen: boolean }) {
   const [now, setNow] = useState(new Date())
-  const [w, setW] = useState<{ temp: number; code: number } | null>(null)
-  useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
-  useEffect(() => {
-    let active = true
-    const fetchW = async () => {
-      try {
-        const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-38.7196&longitude=-62.2724&current=temperature_2m,weather_code&timezone=auto')
-        const j = await res.json()
-        if (active && j.current) setW({ temp: Math.round(j.current.temperature_2m ?? 0), code: j.current.weather_code ?? 0 })
-      } catch {}
-    }
-    fetchW()
-    const id = setInterval(fetchW, 600000)
-    return () => { active = false; clearInterval(id) }
-  }, [])
+  // Clima compartido con el reloj y el widget de Inicio (ver lib/weather.ts): antes
+  // este componente pedía el mismo endpoint por su cuenta.
+  const { weather } = useWeather()
+  const w = weather ? { temp: weather.temp, code: weather.code } : null
+  useLiveInterval(() => setNow(new Date()), 30000, { catchUp: false })
+  useLiveInterval(() => { void ensureWeather() }, WEATHER_TTL)
   const hh = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })
   return (
     <div className={`sidebar-clima ${isOpen ? '' : 'collapsed'}`} title={w ? `${hh} · ${w.temp}° ${wDesc(w.code)}` : hh}>

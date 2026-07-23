@@ -11,13 +11,14 @@ import SoundFx from './components/SoundFx'
 import BackgroundServices from './components/BackgroundServices'
 import { loadNotifications } from './lib/notifications'
 import { loadSecurity, SecurityGate } from './lib/security'
+import { subscribeKey } from './lib/cloudSync'
 import { loadTabs, saveTabs, navigate, openInNewTab, activateTab, closeTab, closeOthers, setRoute, makeTab, MAX_TABS, type TabsState, type Tab } from './lib/tabs'
 import { Bell } from 'lucide-react'
 import './App.css'
 
 export type Section = 'inicio' | 'personal' | 'finanzas' | 'etsy' | 'proyectos' | 'software' | 'edicion' | 'notas' | 'extras' | 'alertas' | 'configuracion'
 
-export const APP_VERSION = '1.02.16'
+export const APP_VERSION = '1.02.17'
 
 // Cascarón de la app (ya logueado y dentro de los providers → puede usar useToast).
 function AppShell() {
@@ -39,11 +40,12 @@ function AppShell() {
   // La sección resaltada en el sidebar es la de la tab activa (sin importar su ruta interna).
   const activeSection = (tabs.open.find(t => t.id === tabs.active) ?? tabs.open[0]).section
 
+  // Antes esto releía y parseaba `nn-notifications` cada 2 s. Ahora se entera sólo
+  // cuando la clave cambia realmente (ver subscribeKey en lib/cloudSync.ts).
   useEffect(() => {
     const upd = () => setUnreadCount(loadNotifications().filter(n => !n.read).length)
     upd()
-    const id = setInterval(upd, 2000)
-    return () => clearInterval(id)
+    return subscribeKey('nn-notifications', upd)
   }, [])
 
   // On first load the app can mis-lay-out under the zoomed root until a reflow. Force a

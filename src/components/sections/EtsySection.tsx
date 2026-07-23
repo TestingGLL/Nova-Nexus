@@ -10,6 +10,7 @@ import { copyToClipboard } from '../../lib/clipboard'
 import { uploadImage } from '../../lib/imageStore'
 import { useSubTab } from '../../lib/tabRoute'
 import './EtsySection.css'
+import { useLiveInterval } from '../../lib/useLive'
 
 // ============ TYPES ============
 
@@ -1334,7 +1335,7 @@ function PlanificacionTab() {
   const [range, setRange] = useState<'month' | '3months'>('month')
   // Recompute "today" periodically so upcoming dates stay current in real time.
   const [, setTick] = useState(0)
-  useEffect(() => { const id = setInterval(() => setTick(t => t + 1), 3600_000); return () => clearInterval(id) }, [])
+  useLiveInterval(() => setTick(t => t + 1), 3600_000, { catchUp: false })
   const data = commercialDates[country]
   const now = new Date()
   const currentMMDD = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`

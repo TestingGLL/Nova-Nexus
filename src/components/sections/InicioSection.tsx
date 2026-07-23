@@ -7,6 +7,8 @@ import ColorInput from '../ColorInput'
 import { upcomingHolidays } from '../../lib/holidays'
 import { loadCardIndex } from '../../lib/cardVault'
 import './InicioSection.css'
+import { useWeather, ensureWeather, WEATHER_TTL } from '../../lib/weather'
+import { useLiveInterval } from '../../lib/useLive'
 
 // ============ ANIMATED CLOCK ============
 
@@ -30,16 +32,13 @@ function AnimatedClock() {
   const saveFont = (f: string) => { setFont(f); localStorage.setItem('nn-clock-font', f) }
   const toggleWeather = () => { const v = !showWeather; setShowWeather(v); localStorage.setItem('nn-clock-weather', v ? '1' : '0') }
 
+  // Clima compartido (ver lib/weather.ts): un solo pedido para el reloj, el widget de
+  // Clima y el mini-clima del sidebar, en vez de tres pedidos iguales por separado.
+  const sharedWeather = useWeather()
+  useLiveInterval(() => { if (showWeather) void ensureWeather() }, WEATHER_TTL)
   useEffect(() => {
-    if (!showWeather) return
-    const fetchW = async () => {
-      try {
-        const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-38.7196&longitude=-62.2724&current=temperature_2m,weather_code&timezone=America%2FArgentina%2FBuenos_Aires')
-        const d = await r.json(); setClockWeather({ temp: Math.round(d.current.temperature_2m), desc: weatherCodeDesc(d.current.weather_code) })
-      } catch {}
-    }
-    fetchW(); const id = setInterval(fetchW, 600_000); return () => clearInterval(id)
-  }, [showWeather])
+    if (showWeather && sharedWeather.weather) setClockWeather({ temp: sharedWeather.weather.temp, desc: sharedWeather.weather.desc })
+  }, [showWeather, sharedWeather.weather])
 
   useEffect(() => {
     if ('queryLocalFonts' in window) {
@@ -50,14 +49,13 @@ function AnimatedClock() {
     }
   }, [])
 
-  useEffect(() => {
-    const update = () => {
-      const now = new Date()
-      setTime(now.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }))
-      setDate(now.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))
-    }
-    update(); const id = setInterval(update, 1000); return () => clearInterval(id)
-  }, [])
+  // El reloj sólo tickea si se está viendo (a 1 Hz oculto no le sirve a nadie). Al
+  // volver se pone en hora enseguida, sin esperar al próximo segundo.
+  useLiveInterval(() => {
+    const now = new Date()
+    setTime(now.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }))
+    setDate(now.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))
+  }, 1000)
 
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return
@@ -287,22 +285,6 @@ function TimerWidget() {
   )
 }
 
-// WMO weather codes (Open-Meteo) → Spanish descriptions.
-function weatherCodeDesc(code: number): string {
-  if (code === 0) return 'Despejado'
-  if (code === 1) return 'Mayormente despejado'
-  if (code === 2) return 'Parcialmente nublado'
-  if (code === 3) return 'Nublado'
-  if (code === 45 || code === 48) return 'Niebla'
-  if (code >= 51 && code <= 57) return 'Llovizna'
-  if (code >= 61 && code <= 67) return 'Lluvia'
-  if (code >= 71 && code <= 77) return 'Nieve'
-  if (code >= 80 && code <= 82) return 'Chaparrones'
-  if (code >= 85 && code <= 86) return 'Nevadas'
-  if (code >= 95) return 'Tormenta'
-  return 'Despejado'
-}
-
 type WeatherKind = 'rain' | 'snow' | 'sun' | 'clouds' | 'storm'
 function weatherKind(desc: string): WeatherKind {
   const d = desc.toLowerCase()
@@ -321,30 +303,12 @@ function WeatherDecoration({ kind }: { kind: WeatherKind }) {
 }
 
 function WeatherWidget() {
-  const [weather, setWeather] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState('')
-  const fetchWeather = useCallback(async () => {
-    try {
-      // Open-Meteo: free, no key, accurate. Bahía Blanca coordinates.
-      const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=-38.7196&longitude=-62.2724&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code&timezone=America%2FArgentina%2FBuenos_Aires')
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      const c = data.current
-      setWeather({
-        temp: Math.round(c.temperature_2m),
-        feelsLike: Math.round(c.apparent_temperature),
-        desc: weatherCodeDesc(c.weather_code),
-        humidity: c.relative_humidity_2m,
-        wind: Math.round(c.wind_speed_10m),
-      })
-      setLastUpdate(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }))
-      setError(false)
-    } catch { setError(true) }
-    setLoading(false)
-  }, [])
-  useEffect(() => { fetchWeather(); const id = setInterval(fetchWeather, 600_000); return () => clearInterval(id) }, [fetchWeather])
+  // Usa el clima compartido: no dispara su propio pedido (ver lib/weather.ts).
+  const { weather, error, loading, refresh } = useWeather()
+  const fetchWeather = useCallback(() => { void refresh(true) }, [refresh])   // botón de reintentar
+  const lastUpdate = weather ? new Date(weather.at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : ''
+  // Pide sólo si venció el cacheado, y sólo mientras se está viendo la pestaña.
+  useLiveInterval(() => { void ensureWeather() }, WEATHER_TTL)
   const kind = weather ? weatherKind(weather.desc) : 'sun'
   return (<div className={`card weather-card weather-${kind}`}>{weather && !loading && <WeatherDecoration kind={kind} />}<div className="card-title"><CloudSun size={16} /> Clima — Bahía Blanca</div>{loading && <p className="weather-loading">Cargando...</p>}{error && !loading && <div className="weather-error"><p>Error.</p><button className="timer-btn" onClick={fetchWeather}><RotateCcw size={14} /></button></div>}{weather && !loading && <div className="weather-data"><div className="weather-main"><span className="weather-temp">{weather.temp}°C</span><span className="weather-desc">{weather.desc}</span></div><div className="weather-details"><div className="weather-detail"><Thermometer size={13} /> Sensación {weather.feelsLike}°C</div><div className="weather-detail"><Droplets size={13} /> Humedad {weather.humidity}%</div><div className="weather-detail"><Wind size={13} /> Viento {weather.wind} km/h</div></div><span className="weather-updated">Act: {lastUpdate}</span></div>}</div>)
 }
@@ -454,7 +418,7 @@ function DayRoutineWidget() {
 
 function NextAlertsWidget() {
   const [, setTick] = useState(0)
-  useEffect(() => { const id = setInterval(() => setTick(t => t + 1), 5000); return () => clearInterval(id) }, [])
+  useLiveInterval(() => setTick(t => t + 1), 5000, { catchUp: false })
   const notifs = loadNotifications().filter(n => !n.read).slice(0, 4)
   let reminders: any[] = []
   try { reminders = (JSON.parse(localStorage.getItem('nn-reminders') || '[]')).filter((r: any) => !r.done).slice(0, 3) } catch {}

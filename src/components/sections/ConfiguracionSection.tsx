@@ -5,8 +5,9 @@ import { useReorderableTabs } from '../../lib/useReorderableTabs'
 import { useSubTab } from '../../lib/tabRoute'
 import { getSoundsEnabled, setSoundsEnabled, getSoundsVolume, setSoundsVolume, sfx } from '../../lib/sounds'
 import { UI_SCALES, getUiScale, setUiScale } from '../../lib/uiScale'
-import { supabase, supabaseEnabled } from '../../lib/supabase'
+import { getSupabase, supabaseEnabled } from '../../lib/supabase'
 import { hasPendingSync } from '../../lib/cloudSync'
+import { syncMundialEnabled } from '../../lib/mundialStore'
 import { loadSecurity, saveSecurity, DEFAULT_SECURITY_PASSWORD, type SecurityConfig } from '../../lib/security'
 import { BUILTIN_PROJECT_LABELS, loadCustomProjectLabels, saveCustomProjectLabels, type ProjectLabel } from '../../lib/projectLabels'
 import { loadPromoApps, savePromoApps, isDefaultPromoApp, type PromoAppDef } from '../../lib/promoApps'
@@ -39,8 +40,10 @@ function SistemaEstado() {
     const on = () => setOnline(true), off = () => setOnline(false)
     window.addEventListener('online', on); window.addEventListener('offline', off)
     ;(async () => {
-      if (!supabaseEnabled || !supabase) { if (active) setSupa({ stat: 'warn', text: 'No configurado' }); return }
+      if (!supabaseEnabled) { if (active) setSupa({ stat: 'warn', text: 'No configurado' }); return }
       try {
+        const supabase = await getSupabase()
+        if (!supabase) { if (active) setSupa({ stat: 'warn', text: 'No configurado' }); return }
         const { data, error } = await supabase.auth.getSession()
         if (!active) return
         if (error) setSupa({ stat: 'bad', text: 'Error de conexión' })
@@ -82,12 +85,15 @@ function ImagenesEstado() {
   // el botón se ofrecía habilitado aunque no hubiera con qué subir).
   const [session, setSession] = useState<boolean | null>(null)
   const online = typeof navigator !== 'undefined' ? navigator.onLine : true
-  const configured = supabaseEnabled && !!supabase
+  const configured = supabaseEnabled
 
   useEffect(() => {
     let active = true
-    if (!configured || !supabase) { setSession(false); return }
-    supabase.auth.getSession().then(({ data }) => { if (active) setSession(!!data.session) }).catch(() => active && setSession(false))
+    if (!configured) { setSession(false); return }
+    getSupabase()
+      .then(c => c ? c.auth.getSession() : null)
+      .then(r => { if (active) setSession(!!r?.data.session) })
+      .catch(() => { if (active) setSession(false) })
     return () => { active = false }
   }, [configured])
 
@@ -243,6 +249,8 @@ export default function ConfiguracionSection() {
     if (next.has(id)) next.delete(id); else next.add(id)
     setHiddenWidgets(next)
     localStorage.setItem('nn-hidden-widgets', JSON.stringify([...next]))
+    // El Mundial sondea resultados en segundo plano: arrancarlo/pararlo según el ajuste.
+    syncMundialEnabled()
   }
 
   return (

@@ -5,6 +5,8 @@ import SectionErrorBoundary from './SectionErrorBoundary'
 import TabBar, { tabTitle } from './TabBar'
 import { tabKey, type Tab } from '../lib/tabs'
 import { TabRouteProvider } from '../lib/tabRoute'
+import { TabVisibleContext } from '../lib/useLive'
+import { subscribeKey } from '../lib/cloudSync'
 import { useSecurity, SecurityGate } from '../lib/security'
 import { useToast } from './Toast'
 import './MainContent.css'
@@ -72,12 +74,11 @@ export default function MainContent({ openTabs, active, onActivate, onClose, onC
     return () => window.removeEventListener('nn-state-restored', onRestore)
   }, [toast])
 
-  // Locked sections can change from Configuración (same window). Poll, solo actualiza si cambió.
+  // Las secciones bloqueadas se cambian desde Configuración. Antes esto sondeaba cada
+  // 2 s comparando por JSON.stringify; ahora avisa la propia escritura de la clave.
   useEffect(() => {
     const sync = () => setLocked(prev => { const next = loadLocked(); return JSON.stringify(prev) === JSON.stringify(next) ? prev : next })
-    const id = setInterval(sync, 2000)
-    window.addEventListener('storage', sync)
-    return () => { clearInterval(id); window.removeEventListener('storage', sync) }
+    return subscribeKey('nn-locked-sections', sync)
   }, [])
 
   const security = useSecurity()
@@ -104,13 +105,17 @@ export default function MainContent({ openTabs, active, onActivate, onClose, onC
               <div style={isLocked ? { pointerEvents: 'none', opacity: 0.55, filter: 'grayscale(0.3)' } : undefined}>
                 <SectionErrorBoundary name={title}>
                   <Suspense fallback={<div className="section-loading"><Loader size={22} className="section-loading-spin" /></div>}>
-                    <TabRouteProvider
-                      tab={tab}
-                      onSetRoute={(path, labels) => onSetRoute(routeKey, path, labels)}
-                      onOpenRoute={(path, labels) => onOpenRouteNewTab(tab, path, labels)}
-                    >
-                      {secLocked ? <SecurityGate title={s.title}><Component /></SecurityGate> : <Component />}
-                    </TabRouteProvider>
+                    {/* `visible` apaga los timers y las cargas de las pestañas que no
+                        se están viendo (quedan montadas para no perder su estado). */}
+                    <TabVisibleContext.Provider value={visible}>
+                      <TabRouteProvider
+                        tab={tab}
+                        onSetRoute={(path, labels) => onSetRoute(routeKey, path, labels)}
+                        onOpenRoute={(path, labels) => onOpenRouteNewTab(tab, path, labels)}
+                      >
+                        {secLocked ? <SecurityGate title={s.title}><Component /></SecurityGate> : <Component />}
+                      </TabRouteProvider>
+                    </TabVisibleContext.Provider>
                   </Suspense>
                 </SectionErrorBoundary>
               </div>

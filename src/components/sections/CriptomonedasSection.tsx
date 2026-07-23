@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { TrendingUp, TrendingDown, RefreshCw, Clock, Search } from 'lucide-react'
 import './CriptomonedasSection.css'
+import { useLiveInterval } from '../../lib/useLive'
 
 interface CoinDef { id: string; symbol: string; name: string; color: string }
 
@@ -176,11 +177,8 @@ export default function CriptomonedasSection() {
     setLoading(false)
   }, [])
 
-  useEffect(() => {
-    fetchPrices()
-    const id = setInterval(fetchPrices, 3600_000)
-    return () => clearInterval(id)
-  }, [fetchPrices])
+  // Se piden recién al abrir la pestaña, y se refrescan sólo mientras se la mira.
+  useLiveInterval(fetchPrices, 3600_000)
 
   const selected = selectedCoin ? COINS.find(c => c.id === selectedCoin) : null
 

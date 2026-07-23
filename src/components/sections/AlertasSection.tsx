@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Bell, Trash2, CheckCircle, AlertTriangle, Info, Calendar, Clock, Filter, Tag, Home, User, Heart, Briefcase } from 'lucide-react'
 import { loadNotifications, saveNotifications, addNotification } from '../../lib/notifications'
 import type { Notification, NotifLabel } from '../../lib/notifications'
 import './AlertasSection.css'
+import { useLiveInterval } from '../../lib/useLive'
 
 // Re-exported for backward compatibility with existing importers.
 export { loadNotifications, saveNotifications, addNotification }
@@ -55,10 +56,7 @@ export default function AlertasSection() {
   const [config, setConfig] = useState<AlertConfig>(loadConfig)
   const [showConfig, setShowConfig] = useState(false)
 
-  useEffect(() => {
-    const interval = setInterval(() => setNotifications(loadNotifications()), 2000)
-    return () => clearInterval(interval)
-  }, [])
+  useLiveInterval(() => setNotifications(loadNotifications()), 2000)
 
   const markRead = (id: string) => {
     const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n)

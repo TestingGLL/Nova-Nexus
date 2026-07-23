@@ -37,6 +37,8 @@ src/
 | `mundialStore.ts` | Watcher global del Mundial (poll adaptativo 1s/60s) que detecta goles y dispara sonido + notificación **en toda la app**. La UI de Inicio solo se suscribe. |
 | `timerStore.ts` | Motor global del temporizador (cuenta regresiva singleton) que suena/notifica al terminar aunque estés en otra sección o minimizado. El widget de Inicio se suscribe. |
 | `useReorderableTabs.ts` | Hook para barras de pestañas reordenables por drag. |
+| `useLive.ts` | `useLiveInterval` / `useLiveEffect`: trabajo que corre SÓLO si la pestaña está activa y la ventana no está oculta. `TabVisibleContext` lo provee `MainContent`. Usarlos en vez de `setInterval` dentro de una sección (las secciones quedan montadas al cambiar de tab). |
+| `weather.ts` | Clima de Bahía Blanca compartido (un pedido para el reloj, el widget y el sidebar; caché con TTL de 10 min). |
 | `tabRoute.tsx` | Ruta interna de cada tab. `useSubTab(level, default, items)` reemplaza al `useState` de una fila de sub-pestañas: el valor activo sale de la ruta de la tab, el clic izquierdo navega en el lugar y `tabProps(id, label)` agrega clic central y menú «Abrir en nueva pestaña». Sin provider cae a estado local. |
 
 ### Componentes raíz (`src/components/`)

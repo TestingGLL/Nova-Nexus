@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Mail, Lock, Eye, EyeOff, KeyRound, Loader } from 'lucide-react'
 import { APP_VERSION } from '../App'
-import { supabase, supabaseEnabled } from '../lib/supabase'
+import { getSupabase, supabaseEnabled } from '../lib/supabase'
 import { startCloudSync } from '../lib/cloudSync'
 import { migrateImagesToStorage } from '../lib/imageStore'
 import './Login.css'
@@ -61,16 +61,21 @@ export default function Login({ onLogin }: LoginProps) {
 
     // Cloud sync (optional): authenticate with Supabase and pull/push data.
     // If Supabase isn't configured or auth fails, continue in local-only mode.
-    if (supabaseEnabled && supabase) {
+    if (supabaseEnabled) {
       setConnecting(true)
       try {
-        let res = await supabase.auth.signInWithPassword({ email: VALID_EMAIL, password: VALID_PASS })
-        if (res.error) {
-          // First run: create the single user, then sign in.
-          await supabase.auth.signUp({ email: VALID_EMAIL, password: VALID_PASS })
-          res = await supabase.auth.signInWithPassword({ email: VALID_EMAIL, password: VALID_PASS })
+        // El SDK se descarga recién acá (ver lib/supabase.ts): la pantalla de login
+        // no lo necesita para dibujarse.
+        const supabase = await getSupabase()
+        if (supabase) {
+          let res = await supabase.auth.signInWithPassword({ email: VALID_EMAIL, password: VALID_PASS })
+          if (res.error) {
+            // First run: create the single user, then sign in.
+            await supabase.auth.signUp({ email: VALID_EMAIL, password: VALID_PASS })
+            res = await supabase.auth.signInWithPassword({ email: VALID_EMAIL, password: VALID_PASS })
+          }
+          if (!res.error) { await startCloudSync(); void migrateImagesToStorage() }
         }
-        if (!res.error) { await startCloudSync(); void migrateImagesToStorage() }
       } catch {}
       setConnecting(false)
     }

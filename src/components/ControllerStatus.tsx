@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { subscribeKey } from '../lib/cloudSync'
 import { Gamepad2, Keyboard, Mouse, Smartphone, Headphones, Bluetooth, BatteryLow, BatteryMedium, BatteryFull, BatteryWarning, Zap } from 'lucide-react'
 import './ControllerStatus.css'
 
@@ -36,6 +37,10 @@ function BatteryIcon({ level }: { level: number }) {
   return <BatteryFull size={13} className="ctrl-bat-icon full" />
 }
 
+function loadHidden(): string[] {
+  try { const s = localStorage.getItem('nn-hidden-devices'); return s ? JSON.parse(s) : [] } catch { return [] }
+}
+
 export default function ControllerStatus() {
   const [bt, setBt] = useState<BtDevice[]>([])
   const [gamepads, setGamepads] = useState<{ id: string; index: number }[]>([])
@@ -58,22 +63,22 @@ export default function ControllerStatus() {
   }, [pollBt])
 
   // Gamepad API — supplements with USB / actively-used controllers not on Bluetooth.
+  // La API ya avisa por eventos connect/disconnect: no hace falta sondear cada 2 s.
   useEffect(() => {
     const read = () => {
       const gps = navigator.getGamepads ? Array.from(navigator.getGamepads()) : []
       setGamepads(gps.filter((g): g is Gamepad => !!g).map(g => ({ id: g.id, index: g.index })))
     }
     read()
-    const onConn = () => read()
-    window.addEventListener('gamepadconnected', onConn)
-    window.addEventListener('gamepaddisconnected', onConn)
-    const id = setInterval(read, 2000)
-    return () => { window.removeEventListener('gamepadconnected', onConn); window.removeEventListener('gamepaddisconnected', onConn); clearInterval(id) }
+    window.addEventListener('gamepadconnected', read)
+    window.addEventListener('gamepaddisconnected', read)
+    return () => { window.removeEventListener('gamepadconnected', read); window.removeEventListener('gamepaddisconnected', read) }
   }, [])
 
   // Devices the user hid in Software → Dispositivos must not appear in the top-bar HUD.
-  let hidden: string[] = []
-  try { const s = localStorage.getItem('nn-hidden-devices'); hidden = s ? JSON.parse(s) : [] } catch {}
+  // Se lee al montar y cuando la clave cambia (antes se leía y parseaba en CADA render).
+  const [hidden, setHidden] = useState<string[]>(loadHidden)
+  useEffect(() => subscribeKey('nn-hidden-devices', () => setHidden(loadHidden())), [])
   const btVisible = bt.filter(d => !hidden.includes(norm(d.name)))
 
   // Build display list. Number duplicate names so two identical controllers both show distinctly.

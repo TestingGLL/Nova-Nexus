@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { getSupabase, supabaseEnabled } from './supabase'
 
 // Almacenamiento de imágenes en Supabase Storage (bucket público `nn-images`).
 // Guardamos solo la URL en localStorage (no el data URL), así las imágenes no
@@ -33,6 +33,7 @@ export interface UploadResult { url: string; uploaded: boolean; reason?: UploadF
 // Intento real de subida, con el motivo del fallo. `uploadImage` es la versión simple.
 export async function tryUploadImage(file: File, folder = 'misc'): Promise<UploadResult> {
   try {
+    const supabase = await getSupabase()
     if (!supabase) return { url: await fileToDataUrl(file), uploaded: false, reason: 'sin-nube' }
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return { url: await fileToDataUrl(file), uploaded: false, reason: 'sin-conexion' }
     const { data: { session } } = await supabase.auth.getSession()
@@ -188,6 +189,7 @@ export async function migrateImagesToStorage(): Promise<MigrationReport> {
   const fail = (r: UploadFailure, d?: string) => { failed++; if (!reason) { reason = r; detail = d } }
 
   try {
+    const supabase = supabaseEnabled ? await getSupabase() : null
     if (!supabase) fail('sin-nube')
     else if (typeof navigator !== 'undefined' && navigator.onLine === false) fail('sin-conexion')
     else {

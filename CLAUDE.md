@@ -65,6 +65,20 @@ robocopy "dist" "build-output/win-unpacked/resources/app/dist" /MIR
 - **Canvas:** los widgets con canvas (reloj, ruleta, gráficos) usan `ResizeObserver` y
   guardas de tamaño `> 0` para no romper cuando están ocultos (no quitar esas guardas).
 
+## Rendimiento (no romper)
+- **Nada de `setInterval` suelto en una sección.** Las secciones abiertas en pestañas
+  quedan MONTADAS aunque no se vean, así que un intervalo normal sigue corriendo para
+  siempre en segundo plano. Usar `useLiveInterval` / `useLiveEffect` de `src/lib/useLive.ts`:
+  sólo corren si la pestaña está activa y la ventana no está oculta. Excepción a propósito:
+  `BackgroundServices` y `mundialStore`, que deben seguir vivos para las alertas.
+- **Nada de sondear `localStorage`.** Para enterarse de que cambió una clave `nn-*` usar
+  `subscribeKey(clave, fn)` de `src/lib/cloudSync.ts` (avisa en esta ventana y en otras).
+  El evento `storage` del navegador solo, no alcanza: no se dispara en la misma ventana.
+- **Datos remotos: un módulo compartido con caché, no un fetch por componente.** Ver
+  `lib/weather.ts` y `lib/cotizaciones.ts` (un pedido en vuelo, TTL, suscriptores).
+- **Supabase se carga con `import()`** (`getSupabase()`), no estáticamente: son ~200 kB
+  que si no, viajan en el bundle inicial.
+
 ## Privacidad / seguridad (no romper)
 - **`.env` está en `.gitignore` y nunca se commitea** (credenciales de Supabase). En el repo
   solo va `.env.example`.

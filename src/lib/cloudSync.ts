@@ -1,4 +1,4 @@
-import { supabase, supabaseEnabled, CLOUD_TABLE } from './supabase'
+import { getSupabase, supabaseEnabled, CLOUD_TABLE } from './supabase'
 
 // Offline-first localStorage <-> Supabase sync.
 // Every `nn-*` change goes into a PERSISTENT outbox (survives app restarts and
@@ -40,6 +40,8 @@ function scheduleDrain(delay = 700) {
 
 async function ensureAuth(): Promise<string | null> {
   if (userId) return userId
+  if (!supabaseEnabled) return null
+  const supabase = await getSupabase()
   if (!supabase) return null
   try {
     const { data: { session } } = await supabase.auth.getSession()
@@ -50,9 +52,10 @@ async function ensureAuth(): Promise<string | null> {
 
 // Upload everything in the outbox; only clear entries that weren't re-touched meanwhile.
 async function drain() {
-  if (draining || !supabaseEnabled || !supabase) return
+  if (draining || !supabaseEnabled) return
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return
   const uid = await ensureAuth(); if (!uid) return
+  const supabase = await getSupabase(); if (!supabase) return
   const snapshot = loadOutbox()
   const keys = Object.keys(snapshot)
   if (keys.length === 0) return
@@ -78,11 +81,32 @@ async function drain() {
 // regardless of connection/auth state (so offline edits are never lost).
 window.localStorage.setItem = (key: string, value: string) => {
   origSetItem(key, value)
-  if (shouldSync(key)) queueChange(key, value)
+  if (shouldSync(key)) { queueChange(key, value); announce(key) }
 }
 window.localStorage.removeItem = (key: string) => {
   origRemoveItem(key)
-  if (shouldSync(key)) queueChange(key, null)
+  if (shouldSync(key)) { queueChange(key, null); announce(key) }
+}
+
+// ---- Aviso de cambios en la MISMA ventana ----
+// El evento `storage` del navegador sólo se dispara en OTRAS pestañas, así que varios
+// componentes se enteraban de los cambios sondeando localStorage cada 2 s (releyendo y
+// parseando JSON aunque no hubiera cambiado nada). Como acá ya interceptamos todas las
+// escrituras `nn-*`, avisamos directamente y esos sondeos desaparecen.
+const keyListeners = new Map<string, Set<() => void>>()
+function announce(key: string) {
+  const ls = keyListeners.get(key)
+  if (ls) ls.forEach(l => { try { l() } catch {} })
+}
+
+// Escucha los cambios de una clave `nn-*` hechos en esta ventana y en otras.
+export function subscribeKey(key: string, fn: () => void): () => void {
+  let set = keyListeners.get(key)
+  if (!set) { set = new Set(); keyListeners.set(key, set) }
+  set.add(fn)
+  const onStorage = (e: StorageEvent) => { if (e.key === key) fn() }
+  window.addEventListener('storage', onStorage)
+  return () => { set!.delete(fn); window.removeEventListener('storage', onStorage) }
 }
 
 // Retry when the connection comes back, and periodically as a safety net.
@@ -100,9 +124,10 @@ if (typeof window !== 'undefined') {
 // Pull cloud data into localStorage on login. Keys with pending local changes
 // (in the outbox) are NOT overwritten — your offline edits win and get uploaded.
 export async function startCloudSync(): Promise<boolean> {
-  if (!supabaseEnabled || !supabase) return false
+  if (!supabaseEnabled) return false
   if (typeof navigator !== 'undefined' && navigator.onLine === false) { scheduleDrain(2000); return false }
   const uid = await ensureAuth(); if (!uid) return false
+  const supabase = await getSupabase(); if (!supabase) return false
   try {
     const { data, error } = await supabase.from(CLOUD_TABLE).select('key,value').eq('user_id', uid)
     if (error) throw error

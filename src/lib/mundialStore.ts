@@ -119,12 +119,30 @@ function loop() {
   })
 }
 
+// El widget del Mundial se puede ocultar desde Configuración → Paneles. Si está oculto
+// no hay nada que mostrar ni a quién avisarle, así que no se sondea: antes esto pedía
+// resultados desde el arranque y para siempre (cada 1 s con un partido en vivo), aunque
+// el widget estuviera apagado y el Mundial ni siquiera se estuviera jugando.
+function widgetEnabled(): boolean {
+  try {
+    const s = localStorage.getItem('nn-hidden-widgets')
+    return s ? !(JSON.parse(s) as string[]).includes('mundial') : true
+  } catch { return true }
+}
+
 export function startMundial() {
   if (started) return
+  if (!widgetEnabled()) return
   started = true
   loop()
   fetchArg()
   argTimer = setInterval(fetchArg, 600000)
+}
+
+// Volver a evaluar si corresponde sondear (al cambiar el ajuste del widget).
+export function syncMundialEnabled() {
+  if (widgetEnabled()) startMundial()
+  else stopMundial()
 }
 export function stopMundial() {
   started = false
